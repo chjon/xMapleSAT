@@ -30,6 +30,20 @@ def intersect(c1, c2):
 			i2 += 1
 	return intersection
 
+class Counter:
+	def __init__(self, clause_id):
+		self.count         = 0
+		self.min_clause_id = clause_id
+		self.max_clause_id = clause_id
+
+	def update(self, clause_id):
+		self.count += 1
+		self.min_clause_id = min(self.min_clause_id, clause_id)
+		self.max_clause_id = max(self.max_clause_id, clause_id)
+
+	def span(self):
+		return self.max_clause_id - self.min_clause_id
+
 # Count the number of times each subexpression occurs
 def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 	for i1, c1 in enumerate(clauses):
@@ -42,12 +56,11 @@ def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 				intersection not in found
 			):
 				found.add(intersection)
-				if intersection in subexprs:
-					subexprs[intersection] += 1
-				else: subexprs[intersection] = 1
+				if intersection not in subexprs: subexprs[intersection] = Counter(i1)
+				subexprs[intersection].update(i2)
 	return subexprs
 
-def main(base_cnf, learnt_cnf, min_subexpr_len):
+def main(base_cnf, learnt_cnf, min_subexpr_len, num_to_output):
 	# Load clauses
 	clauses = []
 	load_cnf(clauses, base_cnf)
@@ -57,20 +70,26 @@ def main(base_cnf, learnt_cnf, min_subexpr_len):
 	subexprs = {}
 	count_subexprs(subexprs, clauses, min_subexpr_len)
 
-	# Sort counts by count
-	subexprs = {k: v for k, v in sorted(subexprs.items(), key=lambda item: -item[1])}
-
-	# Output counts
+	# Calculate totals
+	maxLen = max(len(key) for key in subexprs.keys())
+	totals = []
+	for i in range(maxLen): totals.append([0, 0., 0.]) # num, count, span
+	for item in subexprs.items():
+		totals[len(item[0]) - 1][0] += 1
+		totals[len(item[0]) - 1][1] += item[1].count
+		totals[len(item[0]) - 1][2] += item[1].span()
+	
+	# Output averages
 	print("Found {} distinct subexpressions with length >= {}".format(len(subexprs), min_subexpr_len))
-	num_to_output = 10
-	for i, item in enumerate(subexprs.items()):
-		if i == num_to_output: break
-		keystr = ' '.join([str(j) for j in item[0]])
-		print("{}: {}".format(keystr, item[1]))
+	print("length, num, avg_count, avg_span")
+	for i, total in enumerate(totals):
+		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
+		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
 
 if __name__ == '__main__':
-	base_cnf   = sys.argv[1]
-	learnt_cnf = base_cnf[0:-len('.cnf')] + '_learnt.cnf'
-	min_subexpr_len = int(sys.argv[2])
+	base_cnf        = sys.argv[1]
+	learnt_cnf      = base_cnf[0:-len('.cnf')] + '_learnt.cnf'
+	min_subexpr_len = int(sys.argv[2]) #  1 means output everything
+	num_to_output   = int(sys.argv[3]) # -1 means output everything
 
-	main(base_cnf, learnt_cnf, min_subexpr_len)
+	main(base_cnf, learnt_cnf, min_subexpr_len, num_to_output)
