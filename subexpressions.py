@@ -60,7 +60,7 @@ def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 				subexprs[intersection].update(i2)
 	return subexprs
 
-def main(base_cnf, learnt_cnf, min_subexpr_len, num_to_output):
+def main(base_cnf, learnt_cnf, min_subexpr_len):
 	# Load clauses
 	clauses = []
 	load_cnf(clauses, base_cnf)
@@ -90,6 +90,5 @@ if __name__ == '__main__':
 	base_cnf        = sys.argv[1]
 	learnt_cnf      = base_cnf[0:-len('.cnf')] + '_learnt.cnf'
 	min_subexpr_len = int(sys.argv[2]) #  1 means output everything
-	num_to_output   = int(sys.argv[3]) # -1 means output everything
 
-	main(base_cnf, learnt_cnf, min_subexpr_len, num_to_output)
+	main(base_cnf, learnt_cnf, min_subexpr_len)
