@@ -41,8 +41,11 @@ class Counter:
 		self.min_clause_id = min(self.min_clause_id, clause_id)
 		self.max_clause_id = max(self.max_clause_id, clause_id)
 
-	def span(self):
-		return self.max_clause_id - self.min_clause_id
+	def span(self, numOriginalClauses):
+		first = max(self.min_clause_id - numOriginalClauses, 0)
+		last  = max(self.max_clause_id - numOriginalClauses, 0)
+		if first == last: return 0
+		return last - first + 1
 
 # Count the number of times each subexpression occurs
 def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
@@ -60,15 +63,16 @@ def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 				subexprs[intersection].update(i2)
 	return subexprs
 
-def main(base_cnf, learnt_cnf, min_subexpr_len):
+def main(base_cnf, learnt_cnf, num_to_output):
 	# Load clauses
 	clauses = []
 	load_cnf(clauses, base_cnf)
+	numOriginalClauses = len(clauses)
 	load_cnf(clauses, learnt_cnf)
 
 	# Count subexpressions
 	subexprs = {}
-	count_subexprs(subexprs, clauses, min_subexpr_len)
+	count_subexprs(subexprs, clauses)
 
 	# Calculate totals
 	maxLen = max(len(key) for key in subexprs.keys())
@@ -77,18 +81,44 @@ def main(base_cnf, learnt_cnf, min_subexpr_len):
 	for item in subexprs.items():
 		totals[len(item[0]) - 1][0] += 1
 		totals[len(item[0]) - 1][1] += item[1].count
-		totals[len(item[0]) - 1][2] += item[1].span()
+		totals[len(item[0]) - 1][2] += item[1].span(numOriginalClauses)
 	
 	# Output averages
-	print("Found {} distinct subexpressions with length >= {}".format(len(subexprs), min_subexpr_len))
+	print("Found {} distinct subexpressions".format(len(subexprs)))
+	print("length, num, avg_count, avg_span")
+	for i, total in enumerate(totals):
+		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
+		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
+
+	# Sort subexpressions
+	subexprs = { item[0]: item[1] for item in sorted(subexprs.items(), key=lambda item: -item[1].count) }
+
+	# Output most frequent subexpressions
+	print("Top {} most frequent subexpressions".format(min(num_to_output, len(subexprs))))
+	print("length, count, span")
+	for i, item in enumerate(subexprs.items()):
+		if i == num_to_output: break
+		print("{} {} {}".format(len(item[0]), item[1].count, item[1].span(numOriginalClauses)))
+	
+	# Calculate totals
+	totals = []
+	for i in range(maxLen): totals.append([0, 0., 0.]) # num, count, span
+	for i, item in enumerate(subexprs.items()):
+		if i == num_to_output: break
+		totals[len(item[0]) - 1][0] += 1
+		totals[len(item[0]) - 1][1] += item[1].count
+		totals[len(item[0]) - 1][2] += item[1].span(numOriginalClauses)
+	
+	# Output averages
+	print("Summary of top {} most frequent subexpressions".format(min(num_to_output, len(subexprs))))
 	print("length, num, avg_count, avg_span")
 	for i, total in enumerate(totals):
 		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
 		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
 
 if __name__ == '__main__':
-	base_cnf        = sys.argv[1]
-	learnt_cnf      = base_cnf[0:-len('.cnf')] + '_learnt.cnf'
-	min_subexpr_len = int(sys.argv[2]) #  1 means output everything
+	base_cnf      = sys.argv[1]
+	learnt_cnf    = base_cnf[0:-len('.cnf')] + '_learnt.cnf'
+	num_to_output = int(sys.argv[2]) # -1 means output everything
 
-	main(base_cnf, learnt_cnf, min_subexpr_len)
+	main(base_cnf, learnt_cnf, num_to_output)
