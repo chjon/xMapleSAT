@@ -42,10 +42,7 @@ class Counter:
 		self.max_clause_id = max(self.max_clause_id, clause_id)
 
 	def span(self, numOriginalClauses):
-		first = max(self.min_clause_id - numOriginalClauses, 0)
-		last  = max(self.max_clause_id - numOriginalClauses, 0)
-		if first == last: return 0
-		return last - first + 1
+		return max(self.max_clause_id - numOriginalClauses, 0) - max(self.min_clause_id - numOriginalClauses, 0)
 
 # Count the number of times each subexpression occurs
 def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
@@ -63,6 +60,22 @@ def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 				subexprs[intersection].update(i2)
 	return subexprs
 
+def outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output):
+	# Calculate totals
+	totals = []
+	for i in range(maxLen): totals.append([0, 0., 0.]) # num, count, span
+	for i, item in enumerate(subexprs.items()):
+		if i == num_to_output: break
+		totals[len(item[0]) - 1][0] += 1
+		totals[len(item[0]) - 1][1] += item[1].count
+		totals[len(item[0]) - 1][2] += item[1].span(numOriginalClauses)
+	
+	# Output averages
+	print("length, num, avg_count, avg_span")
+	for i, total in enumerate(totals):
+		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
+		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
+
 def main(base_cnf, learnt_cnf, num_to_output):
 	# Load clauses
 	clauses = []
@@ -76,45 +89,25 @@ def main(base_cnf, learnt_cnf, num_to_output):
 
 	# Calculate totals
 	maxLen = max(len(key) for key in subexprs.keys())
-	totals = []
-	for i in range(maxLen): totals.append([0, 0., 0.]) # num, count, span
-	for item in subexprs.items():
-		totals[len(item[0]) - 1][0] += 1
-		totals[len(item[0]) - 1][1] += item[1].count
-		totals[len(item[0]) - 1][2] += item[1].span(numOriginalClauses)
+	outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output)
 	
 	# Output averages
-	print("Found {} distinct subexpressions".format(len(subexprs)))
-	print("length, num, avg_count, avg_span")
-	for i, total in enumerate(totals):
-		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
-		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
+	print("Summary of all {} subexpressions".format(len(subexprs)))
+	outputAverage(subexprs, maxLen, numOriginalClauses, -1)
 
-	# Sort subexpressions
+	# Sort subexpressions by frequency
 	subexprs = { item[0]: item[1] for item in sorted(subexprs.items(), key=lambda item: -item[1].count) }
-
-	# Output most frequent subexpressions
-	print("Top {} most frequent subexpressions".format(min(num_to_output, len(subexprs))))
-	print("length, count, span")
-	for i, item in enumerate(subexprs.items()):
-		if i == num_to_output: break
-		print("{} {} {}".format(len(item[0]), item[1].count, item[1].span(numOriginalClauses)))
-	
-	# Calculate totals
-	totals = []
-	for i in range(maxLen): totals.append([0, 0., 0.]) # num, count, span
-	for i, item in enumerate(subexprs.items()):
-		if i == num_to_output: break
-		totals[len(item[0]) - 1][0] += 1
-		totals[len(item[0]) - 1][1] += item[1].count
-		totals[len(item[0]) - 1][2] += item[1].span(numOriginalClauses)
 	
 	# Output averages
 	print("Summary of top {} most frequent subexpressions".format(min(num_to_output, len(subexprs))))
-	print("length, num, avg_count, avg_span")
-	for i, total in enumerate(totals):
-		if total[0] == 0: print("{} {} {} {}".format(i + 1, total[0], total[1], total[2]))
-		else:             print("{} {} {} {}".format(i + 1, total[0], total[1] / total[0], total[2] / total[0]))
+	outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output)
+
+	# Sort subexpressions by span
+	subexprs = { item[0]: item[1] for item in sorted(subexprs.items(), key=lambda item: item[1].span(numOriginalClauses)) }
+	
+	# Output averages
+	print("Summary of top {} least span subexpressions".format(min(num_to_output, len(subexprs))))
+	outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output)
 
 if __name__ == '__main__':
 	base_cnf      = sys.argv[1]
