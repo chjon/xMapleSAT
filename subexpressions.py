@@ -57,7 +57,7 @@ def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
 			):
 				found.add(intersection)
 				if intersection not in subexprs: subexprs[intersection] = Counter(i1)
-				subexprs[intersection].update(i2)
+				subexprs[intersection].update(i1)
 	return subexprs
 
 def outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output):
@@ -89,7 +89,6 @@ def main(base_cnf, learnt_cnf, num_to_output):
 
 	# Calculate totals
 	maxLen = max(len(key) for key in subexprs.keys())
-	outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output)
 	
 	# Output averages
 	print("Summary of all {} subexpressions".format(len(subexprs)))
@@ -104,7 +103,7 @@ def main(base_cnf, learnt_cnf, num_to_output):
 
 	# Sort subexpressions by span
 	subexprs = { item[0]: item[1] for item in sorted(subexprs.items(), key=lambda item: item[1].span(numOriginalClauses)) }
-	
+
 	# Output averages
 	print("Summary of top {} least span subexpressions".format(min(num_to_output, len(subexprs))))
 	outputAverage(subexprs, maxLen, numOriginalClauses, num_to_output)
