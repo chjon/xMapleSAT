@@ -324,7 +324,7 @@ Lit Solver::pickBranchLit()
             }
 #endif
             next = order_heap.removeMin();
-            if (isExtensionVar(next)) break;
+            if (isExtVar(next)) break;
         }
 
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
@@ -674,16 +674,16 @@ void Solver::reduceDB()
     sort(learnts, reduceDB_lt(ca));
 #endif
 
-    // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
+    // Don't delete binary, locked, or extension clauses. From the rest, delete clauses from the first half
     // and clauses with activity smaller than 'extra_lim':
 #if LBD_BASED_CLAUSE_DELETION
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
-        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2 && !isExtensionClause(c))
+        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2 && !isExtClause(c))
 #else
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
-        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim) && !isExtensionClause(c))
+        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim) && !isExtClause(c))
 #endif
             removeClause(learnts[i]);
         else
@@ -749,13 +749,11 @@ bool Solver::simplify()
     return true;
 }
 
-void Solver::addClauseToWindow(std::vector<int>& window, double clauseActivity, int clauseIndex) {
-    const unsigned int maxWindowSize = 20;
+static void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex, unsigned int maxWindowSize) {
     int tmp = 0;
-    unsigned int i = 0;
-    for (i = 0; i < window.size() && i < maxWindowSize; i++) {
+    double clauseActivity = ca[clauseIndex].activity();
+    for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
         if (clauseIndex == window[i]) return;
-        // FIXME: activity is the variable activity!
         if (clauseActivity > ca[window[i]].activity()) {
             tmp = window[i];
             window[i] = clauseIndex;
@@ -763,25 +761,21 @@ void Solver::addClauseToWindow(std::vector<int>& window, double clauseActivity, 
             clauseIndex = tmp;
         }
     }
-    if (window.size() != maxWindowSize) {
-        window.push_back(clauseIndex);
-    }
+    if (window.size() != maxWindowSize) window.push_back(clauseIndex);
 }
 
-Var Solver::addExtensionVar() {
-    // Step 1: Get the activity for every clause, in the same order as the clause db
-    // Step 2: Use a window of size k (num desired to compare) to store the indices of the top k activity clauses
+std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
+    // Step 1: Use a window of size k (num desired to compare) to store the indices of the top k activity clauses
     std::vector<int> window;
-    for (int i = 0; i < nClauses(); i++) {
-        double clauseActivity = ca[i].activity();
-        addClauseToWindow(window, clauseActivity, i);
-    }
+    const unsigned int maxWindowSize = 20;
+    for (int i = 0; i < s.nClauses(); i++)
+        addClauseToWindow(s.ca, window, i, maxWindowSize);
 
-    // Step 3: Look for short common patterns between the clauses identified in step 2
-    // For now, just take 3 variables randomly
+    // Step 2: Look for short common patterns between the clauses identified in step 1
+    // For now, just take 2 variables randomly
     std::set<Var> varsInClauses;
     for (unsigned int i = 0; i < window.size(); i++) {
-        const Clause& c = ca[window[i]];
+        const Clause& c = s.ca[window[i]];
         for (int j = 0; j < c.size(); j++) {
             varsInClauses.insert(var(c[j]));
         }
@@ -794,8 +788,7 @@ Var Solver::addExtensionVar() {
     std::vector<Var> newClauseVars;
     for (int i = 0; i < 2; i++) {
         while (true) {
-            int randIndex = (int)((random() / (double)RAND_MAX) * varsInClausesVec.size());
-            Var chosenVar = varsInClausesVec[randIndex];
+            Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
             if (std::find(newClauseVars.begin(), newClauseVars.end(), chosenVar) == newClauseVars.end()) {
                 newClauseVars.push_back(chosenVar);
                 break;
@@ -803,24 +796,30 @@ Var Solver::addExtensionVar() {
         }
     }
 
-    // Step 4: Add extension variable
-    // x = a v b
-    // (-x v a v b)(-a v x)(-b v x)
-    Var extVar = newVar();
-    addClause(mkLit(extVar, true ), mkLit(newClauseVars[0], false), mkLit(newClauseVars[1], false));
-    addClause(mkLit(extVar, false), mkLit(newClauseVars[0], true));
-    addClause(mkLit(extVar, false), mkLit(newClauseVars[1], true));
+    // Step 3: Add extension variables
+    std::vector<Var> extVars(1);
+    extVars[0] = s.newVar();
+    s.addClause(mkLit(extVars[0], true ), mkLit(newClauseVars[0], false), mkLit(newClauseVars[1], false));
+    s.addClause(mkLit(extVars[0], false), mkLit(newClauseVars[0], true));
+    s.addClause(mkLit(extVars[0], false), mkLit(newClauseVars[1], true));
 
-    // We want to branch on our extension variable
-    activity[extVar] = activity[order_heap[0]] * 1.5;
-    #if ANTI_EXPLORATION
-    canceled[extVar] = conflicts;
-    #endif
-    if (order_heap.inHeap(extVar)) {
-        order_heap.decrease(extVar);
+    return extVars;
+}
+
+void Solver::addExtVars(std::vector<Var>(*extVarHeuristic)(Solver&)) {
+    // Add extension variables according to heuristic
+    std::vector<Var> extVars = extVarHeuristic(*this);
+
+    // Prioritize branching on our extension variables
+    const double desiredActivity = activity[order_heap[0]] * 1.5;
+    for (unsigned int i = 0; i < extVars.size(); i++) {
+        Var extVar = extVars[i];
+        activity[extVar] = desiredActivity;
+        #if ANTI_EXPLORATION
+        canceled[extVar] = conflicts;
+        #endif
+        if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
     }
-
-    return extVar;
 }
 
 /*_________________________________________________________________________________________________
@@ -960,7 +959,7 @@ lbool Solver::search(int nof_conflicts)
                 // Add extension variable
                 if (conflicts - prevExtensionConflict > 2000) {
                     prevExtensionConflict = conflicts;
-                    addExtensionVar();
+                    addExtVars(extVarsFromCommonSubexprs);
                 }
                 next = pickBranchLit();
 

@@ -304,13 +304,13 @@ protected:
     int      level            (Var x) const;
     double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
-    bool     isExtensionClause(const Clause& c) const;
-    bool     isExtensionVar   (Var x) const;
-    Var      addExtensionVar  ();
-    void     addClauseToWindow(std::vector<int>& window, double clauseActivity, int clauseIndex);
+    bool     isExtClause      (const Clause& c) const;
+    bool     isExtVar         (Var x) const;
+    void     addExtVars       (std::vector<Var>(*extVarHeuristic)(Solver&));
 
     // Static helpers:
     //
+    static std::vector<Var> extVarsFromCommonSubexprs(Solver&);
 
     // Returns a random float 0 <= x < 1. Seed must never be 0.
     static inline double drand(double& seed) {
@@ -373,17 +373,15 @@ inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(
 inline bool     Solver::locked          (const Clause& c) const { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
 
-inline bool     Solver::isExtensionVar   (Var x) const {
-    for (int j = 0; j < extensionVars.size(); j++) {
+inline bool     Solver::isExtVar   (Var x) const {
+    for (int j = 0; j < extensionVars.size(); j++)
         if (x == extensionVars[j]) return true;
-    }
     return false;
 }
 
-inline bool     Solver::isExtensionClause(const Clause& c) const {
-    for (int i = 0; i < c.size(); i++) {
-        if (isExtensionVar(var(c[i]))) return true;
-    }
+inline bool     Solver::isExtClause(const Clause& c) const {
+    for (int i = 0; i < c.size(); i++)
+        if (isExtVar(var(c[i]))) return true;
     return false;
 }
 
