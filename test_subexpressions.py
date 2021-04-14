@@ -76,6 +76,26 @@ def test_count_subexprs():
 
 	return testResult.result_str()
 
+def test_span_subexprs():
+	def expect_span_subexprs(testResult, actual, numOriginalClauses, expected):
+		return expect(testResult, {item[0]: item[1].span(numOriginalClauses) for item in actual.items()}, expected)
+    
+	testResult = TestResult(0, 0)
+
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1]], 1), 0, {frozenset({1}): 1})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1]], 1), 1, {frozenset({1}): 1})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1]], 1), 2, {frozenset({1}): 0})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1, 2]], 1), 0, {frozenset({1}): 1})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1, 2]], 1), 1, {frozenset({1}): 1})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1], [1, 2]], 1), 2, {frozenset({1}): 0})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1, 2], [1], [1, 2, 3]], 2), 0, {frozenset({1, 2}): 2})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1, 2], [1], [1, 2, 3]], 2), 1, {frozenset({1, 2}): 2})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1, 2], [1], [1, 2, 3]], 2), 2, {frozenset({1, 2}): 1})
+	expect_span_subexprs(testResult, subexpressions.count_subexprs({}, [[1, 2], [1], [1, 2, 3]], 2), 3, {frozenset({1, 2}): 0})
+
+	return testResult.result_str()
+
 if __name__ == "__main__":
 	print("test_intersect: " + test_intersect())
 	print("test_count_subexprs: " + test_count_subexprs())
+	print("test_span_subexprs: " + test_span_subexprs())

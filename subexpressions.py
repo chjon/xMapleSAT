@@ -42,7 +42,7 @@ class Counter:
 		self.max_clause_id = max(self.max_clause_id, clause_id)
 
 	def span(self, numOriginalClauses):
-		return max(self.max_clause_id - numOriginalClauses, 0) - max(self.min_clause_id - numOriginalClauses, 0)
+		return max(self.max_clause_id + 1 - numOriginalClauses, 0) - max(self.min_clause_id + 1 - numOriginalClauses, 0)
 
 # Count the number of times each subexpression occurs
 def count_subexprs(subexprs, clauses, min_subexpr_len = 1):
