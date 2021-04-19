@@ -676,13 +676,11 @@ void Solver::reduceDB()
 
     // Don't delete binary, locked, or extension clauses. From the rest, delete clauses from the first half
     // and clauses with activity smaller than 'extra_lim':
-#if LBD_BASED_CLAUSE_DELETION
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
+#if LBD_BASED_CLAUSE_DELETION
         if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2 && !isExtClause(c))
 #else
-    for (i = j = 0; i < learnts.size(); i++){
-        Clause& c = ca[learnts[i]];
         if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim) && !isExtClause(c))
 #endif
             removeClause(learnts[i]);
@@ -761,18 +759,19 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int
             clauseIndex = tmp;
         }
     }
-    if (window.size() != maxWindowSize) window.push_back(clauseIndex);
+    if (window.size() != maxWindowSize) {
+        window.push_back(clauseIndex);
+    }
 }
 
 std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
-    // Step 1: Use a window of size k (num desired to compare) to store the indices of the top k activity clauses
-    std::vector<int> window;
+    // Step 1: Find the variables in the top k activity clauses
     const unsigned int maxWindowSize = 20;
+    std::vector<int> window;
     for (int i = 0; i < s.nClauses(); i++)
-        addClauseToWindow(s.ca, window, i, maxWindowSize);
+        addClauseToWindow(s.ca, window, s.clauses[i], maxWindowSize);
 
-    // Step 2: Look for short common patterns between the clauses identified in step 1
-    // For now, just take 2 variables randomly
+    // Get all variables in active clauses
     std::set<Var> varsInClauses;
     for (unsigned int i = 0; i < window.size(); i++) {
         const Clause& c = s.ca[window[i]];
@@ -780,11 +779,15 @@ std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
             varsInClauses.insert(var(c[j]));
         }
     }
+
+    // Copy all variables to vector
     std::vector<Var> varsInClausesVec;
     for (std::set<Var>::iterator it = varsInClauses.begin(); it != varsInClauses.end(); it++) {
         varsInClausesVec.push_back(*it);
     }
 
+    // Step 2: Look for short common patterns between the clauses identified in step 1
+    // For now, just take 2 variables randomly
     std::vector<Var> newClauseVars;
     for (int i = 0; i < 2; i++) {
         while (true) {
@@ -806,14 +809,21 @@ std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
     return extVars;
 }
 
+// Add extension variables to our data structures and prioritize branching on them.
+// This calls a heuristic function which is responsible for identifying extension variable
+// definitions and adding the appropriate clauses and variables.
 void Solver::addExtVars(std::vector<Var>(*extVarHeuristic)(Solver&)) {
     // Add extension variables according to heuristic
     std::vector<Var> extVars = extVarHeuristic(*this);
 
-    // Prioritize branching on our extension variables
+    // Do some bookkeeping with the new extension variables
     const double desiredActivity = activity[order_heap[0]] * 1.5;
     for (unsigned int i = 0; i < extVars.size(); i++) {
         Var extVar = extVars[i];
+        // Add extension variables to our data structures
+        extensionVars.push_back(extVar);
+
+        // Prioritize branching on our extension variables
         activity[extVar] = desiredActivity;
         #if ANTI_EXPLORATION
         canceled[extVar] = conflicts;
@@ -842,6 +852,11 @@ lbool Solver::search(int nof_conflicts)
     int         conflictC = 0;
     vec<Lit>    learnt_clause;
     starts++;
+
+    if (conflicts - prevExtensionConflict > 2000) {
+        prevExtensionConflict = conflicts;
+        addExtVars(extVarsFromCommonSubexprs);
+    }
 
     for (;;){
         CRef confl = propagate();
@@ -955,12 +970,6 @@ lbool Solver::search(int nof_conflicts)
             if (next == lit_Undef){
                 // New variable decision:
                 decisions++;
-
-                // Add extension variable
-                if (conflicts - prevExtensionConflict > 2000) {
-                    prevExtensionConflict = conflicts;
-                    addExtVars(extVarsFromCommonSubexprs);
-                }
                 next = pickBranchLit();
 
                 if (next == lit_Undef)

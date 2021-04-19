@@ -220,7 +220,7 @@ protected:
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
-    vec<int>            extensionVars;    // Extension variables
+    std::vector<Var>    extensionVars;    // Extension variables
     long unsigned int   prevExtensionConflict;
 
     ClauseAllocator     ca;
@@ -374,8 +374,8 @@ inline bool     Solver::locked          (const Clause& c) const { return value(c
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
 
 inline bool     Solver::isExtVar   (Var x) const {
-    for (int j = 0; j < extensionVars.size(); j++)
-        if (x == extensionVars[j]) return true;
+    for (unsigned int j = 0; j < extensionVars.size(); j++)
+        if (x == extensionVars[j]) return false;
     return false;
 }
 
