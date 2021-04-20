@@ -122,6 +122,7 @@ Solver::Solver() :
   , order_heap         (VarOrderLt(activity))
   , progress_estimate  (0)
   , remove_satisfied   (true)
+  , originalNumVars    (0)
   , prevExtensionConflict(0)
 
     // Resource constraints:
@@ -817,13 +818,10 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     // For now, just take 2 variables randomly
     std::vector<Var> newClauseVars;
     for (int i = 0; i < 2; i++) {
-        while (true) {
-            Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
-            if (std::find(newClauseVars.begin(), newClauseVars.end(), chosenVar) == newClauseVars.end()) {
-                newClauseVars.push_back(chosenVar);
-                break;
-            }
-        }
+        Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
+        while (std::find(newClauseVars.begin(), newClauseVars.end(), chosenVar) != newClauseVars.end())
+            chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
+        newClauseVars.push_back(chosenVar);
     }
 
     // Step 3: Add extension variables
@@ -850,8 +848,7 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
         std::vector<Lit>& extClause = extClauses[i];
         add_tmp.clear();
         for (unsigned int j = 0; j < extClause.size(); j++) {
-            // Add extension variables
-            while (nVars() < var(extClause[j])) {
+            while (nVars() <= var(extClause[j])) {
                 // Add extension variables to our data structures
                 Var extVar = newVar();
                 extensionVars.push_back(extVar);
@@ -859,7 +856,8 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
                 // Prioritize branching on our extension variables
                 activity[extVar] = desiredActivity;
 #if ANTI_EXPLORATION
-                canceled[extVar] = conflicts;
+                // This causes a segfault
+                // canceled[extVar] = conflicts;
 #endif
                 if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
             }
@@ -1100,6 +1098,7 @@ lbool Solver::solve_()
 
     // Search:
     int curr_restarts = 0;
+    originalNumVars = nVars();
     while (status == l_Undef){
         double rest_base = luby_restart ? luby(restart_inc, curr_restarts) : pow(restart_inc, curr_restarts);
         status = search(rest_base * restart_first);
