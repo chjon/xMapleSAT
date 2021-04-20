@@ -828,29 +828,11 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
 
     // Step 3: Add extension variables
     std::vector< std::vector<Lit> > extClauses;
-    Var extVar = (Var)s.nVars();
+    Var extVar = s.nVars();
     std::vector<Lit> extClause;
-    {
-        extClause.push_back(mkLit(extVar, true));
-        extClause.push_back(mkLit(newClauseVars[0], false));
-        extClause.push_back(mkLit(newClauseVars[1], false));
-        extClauses.push_back(extClause);
-    }
-
-    {
-        extClause.clear();
-        extClause.push_back(mkLit(extVar, false));
-        extClause.push_back(mkLit(newClauseVars[0], true));
-        extClauses.push_back(extClause);
-    }
-
-    {
-        extClause.clear();
-        extClause.push_back(mkLit(extVar, false));
-        extClause.push_back(mkLit(newClauseVars[1], true));
-        extClauses.push_back(extClause);
-    }
-
+    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, true ), mkLit(newClauseVars[0], false), mkLit(newClauseVars[1], false)));
+    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, false), mkLit(newClauseVars[0], true )));
+    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, false), mkLit(newClauseVars[1], true )));
     return extClauses;
 }
 

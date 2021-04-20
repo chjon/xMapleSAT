@@ -308,6 +308,9 @@ protected:
     bool     isExtVar         (Var x) const;
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
     bool     addExtClause     (vec<Lit>& lits);
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p);
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q);
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q, Lit r);
 
     // Static helpers:
     //
@@ -373,6 +376,9 @@ inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
+inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p)               { c.clear(); c.push_back(p);                                 return c; }
+inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p, Lit q)        { c.clear(); c.push_back(p); c.push_back(q);                 return c; }
+inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p, Lit q, Lit r) { c.clear(); c.push_back(p); c.push_back(q); c.push_back(r); return c; }
 
 inline bool     Solver::isExtVar   (Var x) const {
     for (unsigned int j = 0; j < extensionVars.size(); j++)
