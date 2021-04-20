@@ -306,11 +306,12 @@ protected:
     bool     withinBudget     ()      const;
     bool     isExtClause      (const Clause& c) const;
     bool     isExtVar         (Var x) const;
-    void     addExtVars       (std::vector<Var>(*extVarHeuristic)(Solver&));
+    void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
+    bool     addExtClause     (vec<Lit>& lits);
 
     // Static helpers:
     //
-    static std::vector<Var> extVarsFromCommonSubexprs(Solver&);
+    static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
 
     // Returns a random float 0 <= x < 1. Seed must never be 0.
     static inline double drand(double& seed) {
@@ -375,7 +376,7 @@ inline void     Solver::newDecisionLevel()                      { trail_lim.push
 
 inline bool     Solver::isExtVar   (Var x) const {
     for (unsigned int j = 0; j < extensionVars.size(); j++)
-        if (x == extensionVars[j]) return false;
+        if (x == extensionVars[j]) return true;
     return false;
 }
 

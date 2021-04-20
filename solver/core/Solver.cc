@@ -205,6 +205,33 @@ bool Solver::addClause_(vec<Lit>& ps)
     return true;
 }
 
+bool Solver::addExtClause (vec<Lit>& ps) {
+    assert(decisionLevel() == 0);
+    if (!ok) return false;
+
+    // Check if clause is satisfied and remove false/duplicate literals:
+    sort(ps);
+    Lit p; int i, j;
+    for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
+        if (value(ps[i]) == l_True || ps[i] == ~p)
+            return true;
+        else if (value(ps[i]) != l_False && ps[i] != p)
+            ps[j++] = p = ps[i];
+    ps.shrink(i - j);
+
+    if (ps.size() == 0)
+        return ok = false;
+    else if (ps.size() == 1){
+        uncheckedEnqueue(ps[0]);
+        return ok = (propagate() == CRef_Undef);
+    }else{
+        CRef cr = ca.alloc(ps, true);
+        learnts.push(cr);
+        attachClause(cr);
+    }
+
+    return true;
+}
 
 void Solver::attachClause(CRef cr) {
     const Clause& c = ca[cr];
@@ -764,7 +791,7 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int
     }
 }
 
-std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
+std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int maxWindowSize = 20;
     std::vector<int> window;
@@ -800,35 +827,65 @@ std::vector<Var> Solver::extVarsFromCommonSubexprs(Solver& s) {
     }
 
     // Step 3: Add extension variables
-    std::vector<Var> extVars(1);
-    extVars[0] = s.newVar();
-    s.addClause(mkLit(extVars[0], true ), mkLit(newClauseVars[0], false), mkLit(newClauseVars[1], false));
-    s.addClause(mkLit(extVars[0], false), mkLit(newClauseVars[0], true));
-    s.addClause(mkLit(extVars[0], false), mkLit(newClauseVars[1], true));
+    std::vector< std::vector<Lit> > extClauses;
+    Var extVar = (Var)s.nVars();
+    std::vector<Lit> extClause;
+    {
+        extClause.push_back(mkLit(extVar, true));
+        extClause.push_back(mkLit(newClauseVars[0], false));
+        extClause.push_back(mkLit(newClauseVars[1], false));
+        extClauses.push_back(extClause);
+    }
 
-    return extVars;
+    {
+        extClause.clear();
+        extClause.push_back(mkLit(extVar, false));
+        extClause.push_back(mkLit(newClauseVars[0], true));
+        extClauses.push_back(extClause);
+    }
+
+    {
+        extClause.clear();
+        extClause.push_back(mkLit(extVar, false));
+        extClause.push_back(mkLit(newClauseVars[1], true));
+        extClauses.push_back(extClause);
+    }
+
+    return extClauses;
 }
 
 // Add extension variables to our data structures and prioritize branching on them.
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
-void Solver::addExtVars(std::vector<Var>(*extVarHeuristic)(Solver&)) {
-    // Add extension variables according to heuristic
-    std::vector<Var> extVars = extVarHeuristic(*this);
+void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)) {
+    // Get extension variables according to heuristic
+    std::vector< std::vector<Lit> > extClauses = extVarHeuristic(*this);
 
-    // Do some bookkeeping with the new extension variables
+    // Add extension clauses
+    std::vector<Var> extVars;
     const double desiredActivity = activity[order_heap[0]] * 1.5;
-    for (unsigned int i = 0; i < extVars.size(); i++) {
-        Var extVar = extVars[i];
-        // Add extension variables to our data structures
-        extensionVars.push_back(extVar);
+    for (unsigned int i = 0; i < extClauses.size(); i++) {
+        std::vector<Lit>& extClause = extClauses[i];
+        add_tmp.clear();
+        for (unsigned int j = 0; j < extClause.size(); j++) {
+            // Add extension variables
+            while (nVars() < var(extClause[j])) {
+                // Add extension variables to our data structures
+                Var extVar = newVar();
+                extensionVars.push_back(extVar);
 
-        // Prioritize branching on our extension variables
-        activity[extVar] = desiredActivity;
-        #if ANTI_EXPLORATION
-        canceled[extVar] = conflicts;
-        #endif
-        if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
+                // Prioritize branching on our extension variables
+                activity[extVar] = desiredActivity;
+#if ANTI_EXPLORATION
+                canceled[extVar] = conflicts;
+#endif
+                if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
+            }
+            add_tmp.push(extClause[j]);
+        }
+
+        // Create extension clause
+        addExtClause(add_tmp);
     }
 }
 
