@@ -101,6 +101,7 @@ Solver::Solver() :
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
+  , conflict_extclauses(0), learnt_extclauses(0)
 
   , lbd_calls(0)
 #if BRANCHING_HEURISTIC == CHB
@@ -387,6 +388,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
+        if (isExtClause(c)) conflict_extclauses++;
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
@@ -443,15 +445,15 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
             if (reason(x) == CRef_Undef)
                 out_learnt[j++] = out_learnt[i];
-            else{
-                Clause& c = ca[reason(var(out_learnt[i]))];
+            else {
+                Clause& c = ca[reason(x)];
                 for (int k = 1; k < c.size(); k++)
-                    if (!seen[var(c[k])] && level(var(c[k])) > 0){
+                    if (!seen[var(c[k])] && level(var(c[k])) > 0) {
                         out_learnt[j++] = out_learnt[i];
                         break; }
             }
         }
-    }else
+    } else
         i = j = out_learnt.size();
 
     max_literals += out_learnt.size();
@@ -462,7 +464,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     //
     if (out_learnt.size() == 1)
         out_btlevel = 0;
-    else{
+    else {
         int max_i = 1;
         // Find the first literal assigned at the next-highest level:
         for (int i = 2; i < out_learnt.size(); i++)
@@ -815,23 +817,26 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
         varsInClausesVec.push_back(*it);
     }
 
-    // Step 2: Look for short common patterns between the clauses identified in step 1
-    // For now, just take 2 variables randomly
-    std::vector<Var> newClauseVars;
-    for (int i = 0; i < 2; i++) {
-        Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
-        while (std::find(newClauseVars.begin(), newClauseVars.end(), chosenVar) != newClauseVars.end())
-            chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
-        newClauseVars.push_back(chosenVar);
-    }
-
-    // Step 3: Add extension variables
     std::vector< std::vector<Lit> > extClauses;
-    Var extVar = s.nVars();
-    std::vector<Lit> extClause;
-    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, true ), mkLit(newClauseVars[0], false), mkLit(newClauseVars[1], false)));
-    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, false), mkLit(newClauseVars[0], true )));
-    extClauses.push_back(makeExtClause(extClause, mkLit(extVar, false), mkLit(newClauseVars[1], true )));
+    std::vector<Var> vars;
+    Var x = s.nVars();
+    for (int j = 0; j < 10; j++) {
+        // Step 2: Look for short common patterns between the clauses identified in step 1
+        // For now, just take 2 variables randomly
+        vars.clear();
+        for (int i = 0; i < 2; i++) {
+            Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
+            while (std::find(vars.begin(), vars.end(), chosenVar) != vars.end())
+                chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
+            vars.push_back(chosenVar);
+        }
+
+        // Step 3: Add extension variables
+        extClauses.push_back(s.makeClause(mkLit(x, true ), mkLit(vars[0], false), mkLit(vars[1], false)));
+        extClauses.push_back(s.makeClause(mkLit(x, false), mkLit(vars[0], true )                       ));
+        extClauses.push_back(s.makeClause(mkLit(x, false), mkLit(vars[1], true )                       ));
+        x++;
+    }
     return extClauses;
 }
 
@@ -856,10 +861,6 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
 
                 // Prioritize branching on our extension variables
                 activity[extVar] = desiredActivity;
-#if ANTI_EXPLORATION
-                // This causes a segfault
-                // canceled[extVar] = conflicts;
-#endif
                 if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
             }
             add_tmp.push(extClause[j]);
@@ -909,7 +910,7 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-    if (conflicts - prevExtensionConflict > 2000) {
+    if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
         addExtVars(extVarsFromCommonSubexprs);
     }
@@ -955,6 +956,7 @@ lbool Solver::search(int nof_conflicts)
                 uncheckedEnqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
+                if (isExtClause(ca[cr])) learnt_extclauses++;
                 learnts.push(cr);
                 attachClause(cr);
 #if LBD_BASED_CLAUSE_DELETION

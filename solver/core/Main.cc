@@ -43,6 +43,9 @@ void printStats(Solver& solver)
     printf("decisions             : %-12"PRIu64"   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
     printf("propagations          : %-12"PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
     printf("conflict literals     : %-12"PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
+    printf("ext vars              : %-12"PRId32"\n", solver.nExtVars());
+    printf("conflict ext clauses  : %-12"PRIu64"   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
+    printf("learnt ext clauses    : %-12"PRIu64"   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
 }

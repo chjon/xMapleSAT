@@ -91,6 +91,7 @@ public:
     int     nLearnts   ()      const;       // The current number of learnt clauses.
     int     nExtensions()      const;       // The current number of extension clauses.
     int     nVars      ()      const;       // The current number of variables.
+    int     nExtVars   ()      const;       // The current number of extension variables.
     int     nFreeVars  ()      const;
 
     // Resource contraints:
@@ -148,6 +149,7 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
+    uint64_t conflict_extclauses, learnt_extclauses;
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -222,19 +224,20 @@ protected:
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
-    int                 originalNumVars;
+    int                 originalNumVars;  // The number of variables in the original formula -- this is used to check for extension variables
     std::vector<Var>    extensionVars;    // Extension variables
     long unsigned int   prevExtensionConflict;
 
     ClauseAllocator     ca;
 
     // Temporaries (to reduce allocation overhead). Each variable is prefixed by the method in which it is
-    // used, exept 'seen' wich is used in several places.
+    // used, except 'seen' which is used in several places.
     //
     vec<char>           seen;
     vec<Lit>            analyze_stack;
     vec<Lit>            analyze_toclear;
     vec<Lit>            add_tmp;
+    std::vector<Lit>    make_tmp;
 
     double              max_learnts;
     double              learntsize_adjust_confl;
@@ -307,18 +310,20 @@ protected:
     int      level            (Var x) const;
     double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
+
+    // Extended Resolution
     bool     isExtClause      (const Clause& c) const;
     bool     isExtVar         (Var x) const;
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
     bool     addExtClause     (vec<Lit>& lits);
     void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
+    static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
+    std::vector<Lit>& makeClause    (Lit p);
+    std::vector<Lit>& makeClause    (Lit p, Lit q);
+    std::vector<Lit>& makeClause    (Lit p, Lit q, Lit r);
 
     // Static helpers:
     //
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p);
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q);
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q, Lit r);
-    static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
 
     // Returns a random float 0 <= x < 1. Seed must never be 0.
     static inline double drand(double& seed) {
@@ -380,14 +385,11 @@ inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
-inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p)               { c.clear(); c.push_back(p);                                 return c; }
-inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p, Lit q)        { c.clear(); c.push_back(p); c.push_back(q);                 return c; }
-inline std::vector<Lit>& Solver::makeExtClause   (std::vector<Lit>& c, Lit p, Lit q, Lit r) { c.clear(); c.push_back(p); c.push_back(q); c.push_back(r); return c; }
+inline std::vector<Lit>& Solver::makeClause (Lit p)               { make_tmp.clear(); make_tmp.push_back(p);                                               return make_tmp; }
+inline std::vector<Lit>& Solver::makeClause (Lit p, Lit q)        { make_tmp.clear(); make_tmp.push_back(p); make_tmp.push_back(q);                        return make_tmp; }
+inline std::vector<Lit>& Solver::makeClause (Lit p, Lit q, Lit r) { make_tmp.clear(); make_tmp.push_back(p); make_tmp.push_back(q); make_tmp.push_back(r); return make_tmp; }
 
-inline bool     Solver::isExtVar   (Var x) const {
-    return x >= originalNumVars;
-}
-
+inline bool     Solver::isExtVar   (Var x)           const { return x >= originalNumVars; }
 inline bool     Solver::isExtClause(const Clause& c) const {
     for (int i = 0; i < c.size(); i++)
         if (isExtVar(var(c[i]))) return true;
@@ -405,6 +407,7 @@ inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nExtensions   ()      const   { return extensions.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
+inline int      Solver::nExtVars      ()      const   { return extensionVars.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 
