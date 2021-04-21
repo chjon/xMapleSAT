@@ -89,6 +89,7 @@ public:
     int     nAssigns   ()      const;       // The current number of assigned literals.
     int     nClauses   ()      const;       // The current number of original clauses.
     int     nLearnts   ()      const;       // The current number of learnt clauses.
+    int     nExtensions()      const;       // The current number of extension clauses.
     int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
 
@@ -200,6 +201,7 @@ protected:
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
+    vec<CRef>           extensions;       // List of extension clauses.
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -309,12 +311,13 @@ protected:
     bool     isExtVar         (Var x) const;
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
     bool     addExtClause     (vec<Lit>& lits);
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p);
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q);
-    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q, Lit r);
+    void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
 
     // Static helpers:
     //
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p);
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q);
+    static std::vector<Lit>& makeExtClause    (std::vector<Lit>& c, Lit p, Lit q, Lit r);
     static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
 
     // Returns a random float 0 <= x < 1. Seed must never be 0.
@@ -400,6 +403,7 @@ inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ s
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
+inline int      Solver::nExtensions   ()      const   { return extensions.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }

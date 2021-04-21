@@ -226,8 +226,8 @@ bool Solver::addExtClause (vec<Lit>& ps) {
         uncheckedEnqueue(ps[0]);
         return ok = (propagate() == CRef_Undef);
     }else{
-        CRef cr = ca.alloc(ps, true);
-        learnts.push(cr);
+        CRef cr = ca.alloc(ps, false);
+        extensions.push(cr);
         attachClause(cr);
     }
 
@@ -352,7 +352,6 @@ Lit Solver::pickBranchLit()
             }
 #endif
             next = order_heap.removeMin();
-            if (isExtVar(next)) break;
         }
 
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
@@ -707,9 +706,9 @@ void Solver::reduceDB()
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
 #if LBD_BASED_CLAUSE_DELETION
-        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2 && !isExtClause(c))
+        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2)
 #else
-        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim) && !isExtClause(c))
+        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
 #endif
             removeClause(learnts[i]);
         else
@@ -766,6 +765,7 @@ bool Solver::simplify()
     removeSatisfied(learnts);
     if (remove_satisfied)        // Can be turned off.
         removeSatisfied(clauses);
+        removeSatisfied(extensions);
     checkGarbage();
     rebuildOrderHeap();
 
@@ -796,8 +796,9 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int maxWindowSize = 20;
     std::vector<int> window;
-    for (int i = 0; i < s.nClauses(); i++)
-        addClauseToWindow(s.ca, window, s.clauses[i], maxWindowSize);
+    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, window, s.clauses   [i], maxWindowSize);
+    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, window, s.learnts   [i], maxWindowSize);
+    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, window, s.extensions[i], maxWindowSize);
 
     // Get all variables in active clauses
     std::set<Var> varsInClauses;
@@ -867,6 +868,24 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
         // Create extension clause
         addExtClause(add_tmp);
     }
+}
+
+void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
+    // Get variables to delete
+    std::vector<Var> varsToDelete = delExtVarHeuristic(*this);
+
+    // Delete variables
+    // TODO
+    /*
+    for (int i = 0; i < varsToDelete.size(); i++) {
+        // Step 1: Remove variable from clauses
+            // option 1: delete all clauses containing extension variable
+            // option 2: substitute extension variable with definition
+            // option 3: only delete clauses encoding the extension variable definition
+        // Step 2: Free memory allocated for extension variables from vardata, assigns, etc.
+            // We might want to use memory pooling
+    }
+    */
 }
 
 /*_________________________________________________________________________________________________
@@ -1230,6 +1249,10 @@ void Solver::relocAll(ClauseAllocator& to)
     //
     for (int i = 0; i < learnts.size(); i++)
         ca.reloc(learnts[i], to);
+
+    // All extension:
+    for (int i = 0; i < extensions.size(); i++)
+        ca.reloc(extensions[i], to);
 
     // All original:
     //
