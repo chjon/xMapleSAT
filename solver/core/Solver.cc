@@ -102,7 +102,7 @@ Solver::Solver() :
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
-  , conflict_extclauses(0), learnt_extclauses(0)
+  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0)
 
   , lbd_calls(0)
 #if BRANCHING_HEURISTIC == CHB
@@ -961,8 +961,8 @@ lbool Solver::search(int nof_conflicts)
 
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
-        // addExtVars(extVarsFromCommonSubexprs);
-        addExtVars(extVarsFromHighActivity);
+        addExtVars(extVarsFromCommonSubexprs);
+        // addExtVars(extVarsFromHighActivity);
     }
 
     for (;;){
@@ -1012,6 +1012,7 @@ lbool Solver::search(int nof_conflicts)
 #if LBD_BASED_CLAUSE_DELETION
                 Clause& clause = ca[cr];
                 clause.activity() = lbd(clause);
+                lbd_total += clause.activity();
 #else
                 claBumpActivity(ca[cr]);
 #endif
@@ -1053,7 +1054,7 @@ lbool Solver::search(int nof_conflicts)
 
             if (learnts.size()-nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
-                reduceDB();
+                // reduceDB();
 #if RAPID_DELETION
                 max_learnts += 500;
 #endif
