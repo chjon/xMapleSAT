@@ -319,6 +319,7 @@ protected:
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
     void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
     static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
+    static std::vector< std::vector<Lit> > extVarsFromHighActivity(Solver&);
     std::vector<Lit>& makeClause    (Lit p);
     std::vector<Lit>& makeClause    (Lit p, Lit q);
     std::vector<Lit>& makeClause    (Lit p, Lit q, Lit r);

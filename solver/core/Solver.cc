@@ -748,8 +748,7 @@ bool Solver::simplify()
     return true;
 }
 
-static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex) {
-    const unsigned int maxWindowSize = 100;
+static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex, unsigned int maxWindowSize) {
     int tmp = 0;
     double clauseActivity = ca[clauseIndex].activity();
     for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
@@ -782,8 +781,12 @@ static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subex
     }
 }
 
-static inline void addSubexprToWindow(std::vector<std::map<std::set<Lit>, int>::iterator>& window, std::map<std::set<Lit>, int>::iterator& subexpr, std::map<std::set<Lit>, int> subexprs) {
-    const unsigned int maxWindowSize = 10;
+static inline void addSubexprToWindow(
+    std::vector<std::map<std::set<Lit>, int>::iterator>& window,
+    std::map<std::set<Lit>, int>::iterator& subexpr,
+    std::map<std::set<Lit>, int> subexprs,
+    unsigned int maxWindowSize
+) {
     std::map<std::set<Lit>, int>::iterator tmp = subexprs.end();
     for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
         if (subexpr->second > window[i]->second) {
@@ -799,10 +802,11 @@ static inline void addSubexprToWindow(std::vector<std::map<std::set<Lit>, int>::
 
 std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
+    const unsigned int clauseWindowSize = 100;
     std::vector<int> clauseWindow;
-    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i]);
-    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i]);
-    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i]);
+    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
+    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
+    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i], clauseWindowSize);
 
     // Step 2: Find common subexpressions of length 2
     // Convert clauses to sets
@@ -829,9 +833,10 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     }
 
     // Step 3: Get most frequent subexpressions
+    const unsigned int subexprWindowSize = 10;
     std::vector<std::map<std::set<Lit>, int>::iterator> subexprWindow;
     for (std::map<std::set<Lit>, int>::iterator i = subexprs.begin(); i != subexprs.end(); i++) {
-        addSubexprToWindow(subexprWindow, i, subexprs);
+        addSubexprToWindow(subexprWindow, i, subexprs, subexprWindowSize);
     }
 
     // Step 4: Add extension variables
@@ -846,6 +851,41 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
         extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
         x++;
     }
+    return extClauses;
+}
+
+std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
+    // Step 1: Find the variables in the top k activity clauses
+    const unsigned int clauseWindowSize = 20;
+    std::vector<int> clauseWindow;
+    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
+    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
+    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i], clauseWindowSize);
+    std::set<Var> vars;
+    for (unsigned int i = 0; i < clauseWindow.size(); i++)
+        for (int j = 0; j < s.ca[i].size(); j++)
+            vars.insert(var(s.ca[i][j]));
+    std::vector<Var> varVec(vars.begin(), vars.end());
+
+    // Step 2: Add extension variables
+    std::vector< std::vector<Lit> > extClauses;
+    Var x = s.nVars();
+    const unsigned int desiredNumExtVars = 1;
+    for (unsigned int i = 0; i < desiredNumExtVars; i++) {
+        // Sample literals at random
+        int i_a = irand(s.random_seed, static_cast<int>(varVec.size()));
+        int i_b = i_a;
+        while (i_a == i_b) i_b = irand(s.random_seed, static_cast<int>(varVec.size()));
+        Lit a = mkLit(varVec[i_a], irand(s.random_seed, 1));
+        Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
+
+        // Encode equivalence
+        extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
+        extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
+        extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
+        x++;
+    }
+
     return extClauses;
 }
 
@@ -921,7 +961,8 @@ lbool Solver::search(int nof_conflicts)
 
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
-        addExtVars(extVarsFromCommonSubexprs);
+        // addExtVars(extVarsFromCommonSubexprs);
+        addExtVars(extVarsFromHighActivity);
     }
 
     for (;;){
