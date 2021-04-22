@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <math.h>
 #include <set>
 #include <algorithm>
+#include <map>
 #include "mtl/Sort.h"
 #include "core/Solver.h"
 
@@ -747,7 +748,8 @@ bool Solver::simplify()
     return true;
 }
 
-static void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex, unsigned int maxWindowSize) {
+static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex) {
+    const unsigned int maxWindowSize = 100;
     int tmp = 0;
     double clauseActivity = ca[clauseIndex].activity();
     for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
@@ -764,47 +766,84 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int
     }
 }
 
+static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
+    std::set<Lit> subexpr;
+    for (unsigned int i = 0; i < intersection.size(); i++) {
+        for (unsigned int j = i + 1; j < intersection.size(); j++) {
+            // Count subexpressions of length 2
+            subexpr.clear();
+            subexpr.insert(intersection[i]);
+            subexpr.insert(intersection[j]);
+
+            std::map<std::set<Lit>, int>::iterator it = subexprs.find(subexpr);
+            if (it == subexprs.end()) subexprs.insert(std::make_pair(subexpr, 1));
+            else it->second++;
+        }
+    }
+}
+
+static inline void addSubexprToWindow(std::vector<std::map<std::set<Lit>, int>::iterator>& window, std::map<std::set<Lit>, int>::iterator& subexpr, std::map<std::set<Lit>, int> subexprs) {
+    const unsigned int maxWindowSize = 10;
+    std::map<std::set<Lit>, int>::iterator tmp = subexprs.end();
+    for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
+        if (subexpr->second > window[i]->second) {
+            tmp = window[i];
+            window[i] = subexpr;
+            subexpr = tmp;
+        }
+    }
+    if (window.size() != maxWindowSize) {
+        window.push_back(subexpr);
+    }
+}
+
 std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
-    const unsigned int maxWindowSize = 20;
-    std::vector<int> window;
-    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, window, s.clauses   [i], maxWindowSize);
-    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, window, s.learnts   [i], maxWindowSize);
-    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, window, s.extensions[i], maxWindowSize);
+    std::vector<int> clauseWindow;
+    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i]);
+    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i]);
+    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i]);
 
-    // Get all variables in active clauses
-    std::set<Var> varsInClauses;
-    for (unsigned int i = 0; i < window.size(); i++) {
-        const Clause& c = s.ca[window[i]];
-        for (int j = 0; j < c.size(); j++) {
-            varsInClauses.insert(var(c[j]));
+    // Step 2: Find common subexpressions of length 2
+    // Convert clauses to sets
+    std::vector< std::set<Lit> > sets;
+    for (unsigned int i = 0; i < clauseWindow.size(); i++) {
+        const Clause& c = s.ca[clauseWindow[i]];
+        std::set<Lit> set;
+        for (int j = 0; j < c.size(); j++) set.insert(c[j]);
+        sets.push_back(set);
+    }
+
+
+    // Count subexpressions by looking at intersections
+    std::map<std::set<Lit>, int> subexprs;
+    clauseWindow.clear();
+    for (unsigned int i = 0; i < sets.size(); i++) {
+        for (unsigned int j = 0; j < sets.size(); j++) {
+            if (i == j) continue;
+            std::vector<Lit> intersection(sets[i].size() + sets[j].size());
+            std::vector<Lit>::iterator it = std::set_intersection(sets[i].begin(), sets[i].end(), sets[j].begin(), sets[j].end(), intersection.begin());
+            intersection.resize(it - intersection.begin());
+            addIntersectionToSubexprs(subexprs, intersection);
         }
     }
 
-    // Copy all variables to vector
-    std::vector<Var> varsInClausesVec;
-    for (std::set<Var>::iterator it = varsInClauses.begin(); it != varsInClauses.end(); it++) {
-        varsInClausesVec.push_back(*it);
+    // Step 3: Get most frequent subexpressions
+    std::vector<std::map<std::set<Lit>, int>::iterator> subexprWindow;
+    for (std::map<std::set<Lit>, int>::iterator i = subexprs.begin(); i != subexprs.end(); i++) {
+        addSubexprToWindow(subexprWindow, i, subexprs);
     }
 
+    // Step 4: Add extension variables
     std::vector< std::vector<Lit> > extClauses;
-    std::vector<Var> vars;
     Var x = s.nVars();
-    for (int j = 0; j < 10; j++) {
-        // Step 2: Look for short common patterns between the clauses identified in step 1
-        // For now, just take 2 variables randomly
-        vars.clear();
-        for (int i = 0; i < 2; i++) {
-            Var chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
-            while (std::find(vars.begin(), vars.end(), chosenVar) != vars.end())
-                chosenVar = varsInClausesVec[irand(s.random_seed, varsInClausesVec.size())];
-            vars.push_back(chosenVar);
-        }
-
-        // Step 3: Add extension variables
-        extClauses.push_back(s.makeClause(mkLit(x, true ), mkLit(vars[0], false), mkLit(vars[1], false)));
-        extClauses.push_back(s.makeClause(mkLit(x, false), mkLit(vars[0], true )                       ));
-        extClauses.push_back(s.makeClause(mkLit(x, false), mkLit(vars[1], true )                       ));
+    for (unsigned int j = 0; j < subexprWindow.size(); j++) {
+        std::set<Lit>::const_iterator it = subexprWindow[j]->first.begin();
+        Lit a = *it; it++;
+        Lit b = *it; it++;
+        extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
+        extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
+        extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
         x++;
     }
     return extClauses;
