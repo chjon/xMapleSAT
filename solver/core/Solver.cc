@@ -177,9 +177,7 @@ Var Solver::newVar(bool sign, bool dvar)
     return v;
 }
 
-
-bool Solver::addClause_(vec<Lit>& ps)
-{
+bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
     assert(decisionLevel() == 0);
     if (!ok) return false;
 
@@ -200,35 +198,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = (propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
-        clauses.push(cr);
-        attachClause(cr);
-    }
-
-    return true;
-}
-
-bool Solver::addExtClause (vec<Lit>& ps) {
-    assert(decisionLevel() == 0);
-    if (!ok) return false;
-
-    // Check if clause is satisfied and remove false/duplicate literals:
-    sort(ps);
-    Lit p; int i, j;
-    for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
-        if (value(ps[i]) == l_True || ps[i] == ~p)
-            return true;
-        else if (value(ps[i]) != l_False && ps[i] != p)
-            ps[j++] = p = ps[i];
-    ps.shrink(i - j);
-
-    if (ps.size() == 0)
-        return ok = false;
-    else if (ps.size() == 1){
-        uncheckedEnqueue(ps[0]);
-        return ok = (propagate() == CRef_Undef);
-    }else{
-        CRef cr = ca.alloc(ps, false);
-        extensions.push(cr);
+        clauseDB.push(cr);
         attachClause(cr);
     }
 
@@ -844,7 +814,7 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
 void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)) {
-    // Get extension variables according to heuristic
+    // Get extension clauses according to heuristic
     std::vector< std::vector<Lit> > extClauses = extVarHeuristic(*this);
 
     // Add extension clauses
@@ -867,7 +837,7 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
         }
 
         // Create extension clause
-        addExtClause(add_tmp);
+        addClauseToDB(extensions, add_tmp);
     }
 }
 

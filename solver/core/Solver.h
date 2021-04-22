@@ -53,6 +53,8 @@ public:
     bool    addClause (Lit p, Lit q, Lit r);                    // Add a ternary clause to the solver. 
     bool    addClause_(      vec<Lit>& ps);                     // Add a clause to the solver without making superflous internal copy. Will
                                                                 // change the passed vector 'ps'.
+    bool    addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps);   // Add a clause to a specific clause DB without making superflous internal
+                                                                // copy. Will change the passed vector 'ps'.
 
     // Solving:
     //
@@ -315,7 +317,6 @@ protected:
     bool     isExtClause      (const Clause& c) const;
     bool     isExtVar         (Var x) const;
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
-    bool     addExtClause     (vec<Lit>& lits);
     void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
     static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
     std::vector<Lit>& makeClause    (Lit p);
@@ -378,6 +379,7 @@ inline void Solver::checkGarbage(double gf){
 
 // NOTE: enqueue does not set the ok flag! (only public methods do)
 inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, from), true); }
+inline bool     Solver::addClause_      (      vec<Lit>& ps)    { return addClauseToDB(clauses, ps); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
