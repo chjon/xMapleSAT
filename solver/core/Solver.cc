@@ -846,6 +846,9 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
         std::set<Lit>::const_iterator it = subexprWindow[j]->first.begin();
         Lit a = *it; it++;
         Lit b = *it; it++;
+        
+        std::set<Lit> def; def.insert(a); def.insert(b);
+        s.extVarDefs.insert(std::make_pair(def, x));
         extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
         extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
         extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
@@ -880,6 +883,8 @@ std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
         // Encode equivalence
+        std::set<Lit> def; def.insert(a); def.insert(b);
+        s.extVarDefs.insert(std::make_pair(def, x));
         extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
         extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
         extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
@@ -906,7 +911,7 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
             while (nVars() <= var(extClause[j])) {
                 // Add extension variables to our data structures
                 Var extVar = newVar();
-                extensionVars.push_back(extVar);
+                // extVarDefs.push_back(extVar);
 
                 // Prioritize branching on our extension variables
                 activity[extVar] = desiredActivity;

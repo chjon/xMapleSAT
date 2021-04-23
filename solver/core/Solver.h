@@ -22,6 +22,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_Solver_h
 
 #include <vector>
+#include <map>
+#include <set>
 #include "mtl/Vec.h"
 #include "mtl/Heap.h"
 #include "mtl/Alg.h"
@@ -226,9 +228,10 @@ protected:
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
-    int                 originalNumVars;  // The number of variables in the original formula -- this is used to check for extension variables
-    std::vector<Var>    extensionVars;    // Extension variables
-    long unsigned int   prevExtensionConflict;
+    
+    std::map<std::set<Lit>, Var> extVarDefs;            // Extension variable definitions
+    int                          originalNumVars;       // The number of variables in the original formula -- this is used to check for extension variables
+    long unsigned int            prevExtensionConflict; // Stores the last time extension variables were added
 
     ClauseAllocator     ca;
 
@@ -410,7 +413,7 @@ inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nExtensions   ()      const   { return extensions.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
-inline int      Solver::nExtVars      ()      const   { return extensionVars.size(); }
+inline int      Solver::nExtVars      ()      const   { return extVarDefs.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 
