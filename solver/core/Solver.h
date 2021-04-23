@@ -321,6 +321,7 @@ protected:
     bool     isExtVar         (Var x) const;
     void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
     void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
+    void     substituteExt    (vec<Lit>& out_learnt);
     static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
     static std::vector< std::vector<Lit> > extVarsFromHighActivity(Solver&);
     std::vector<Lit>& makeClause    (Lit p);

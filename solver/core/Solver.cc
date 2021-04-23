@@ -429,6 +429,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     max_literals += out_learnt.size();
     out_learnt.shrink(i - j);
+    substituteExt(out_learnt); // Substitute disjunctions with extension variables
     tot_literals += out_learnt.size();
 
     // Find correct backtrack level:
@@ -941,6 +942,36 @@ void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
             // We might want to use memory pooling
     }
     */
+}
+
+static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemove) {
+    for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
+}
+
+void Solver::substituteExt(vec<Lit>& out_learnt) {
+    std::set<Lit> learntLits;
+    for (int i = 1; i < out_learnt.size(); i++) learntLits.insert(out_learnt[i]);
+    for (std::map<std::set<Lit>, Var>::iterator i = extVarDefs.begin(); i != extVarDefs.end(); i++) {
+        // Find intersection
+        std::vector<Lit> intersection(learntLits.size());
+        std::vector<Lit>::iterator it = std::set_intersection(learntLits.begin(), learntLits.end(), i->first.begin(), i->first.end(), intersection.begin());
+        intersection.resize(it - intersection.begin());
+
+        // Replace disjunction with intersection
+        if (intersection.size() == i->first.size()) {
+            removeLits(learntLits, intersection);
+            learntLits.insert(mkLit(i->second, true));
+        }
+    }
+
+    // Generate reduced learnt clause
+    std::set<Lit>::iterator it = learntLits.begin();
+    unsigned int i;
+    for (i = 1; i <= learntLits.size(); i++) {
+        out_learnt[i] = *it;
+        it++;
+    }
+    out_learnt.shrink(out_learnt.size() - i);
 }
 
 /*_________________________________________________________________________________________________
