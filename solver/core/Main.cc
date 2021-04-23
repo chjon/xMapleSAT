@@ -47,6 +47,7 @@ void printStats(Solver& solver)
     printf("conflict ext clauses  : %-12"PRIu64"   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
     printf("learnt ext clauses    : %-12"PRIu64"   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
     printf("total lbd of learnts  : %-12"PRIu64"   (%.0f /conf)\n", solver.lbd_total, solver.lbd_total / (float)solver.conflicts);
+    printf("decisions on ext vars : %-12"PRIu64"\n", solver.branchOnExt);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
 }

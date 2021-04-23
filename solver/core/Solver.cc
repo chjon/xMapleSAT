@@ -102,7 +102,7 @@ Solver::Solver() :
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
-  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0)
+  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0)
 
   , lbd_calls(0)
 #if BRANCHING_HEURISTIC == CHB
@@ -846,7 +846,7 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
         std::set<Lit>::const_iterator it = subexprWindow[j]->first.begin();
         Lit a = *it; it++;
         Lit b = *it; it++;
-        
+
         std::set<Lit> def; def.insert(a); def.insert(b);
         s.extVarDefs.insert(std::make_pair(def, x));
         extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
@@ -966,8 +966,8 @@ lbool Solver::search(int nof_conflicts)
 
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
-        addExtVars(extVarsFromCommonSubexprs);
-        // addExtVars(extVarsFromHighActivity);
+        // addExtVars(extVarsFromCommonSubexprs);
+        addExtVars(extVarsFromHighActivity);
     }
 
     for (;;){
@@ -1089,6 +1089,7 @@ lbool Solver::search(int nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+                if (isExtVar(var(next))) branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
