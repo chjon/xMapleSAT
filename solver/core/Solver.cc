@@ -916,6 +916,7 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
 
                 // Prioritize branching on our extension variables
                 activity[extVar] = desiredActivity;
+                canceled[extVar] = conflicts;
                 if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
             }
             add_tmp.push(extClause[j]);
