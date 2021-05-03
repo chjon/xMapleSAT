@@ -429,7 +429,9 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     max_literals += out_learnt.size();
     out_learnt.shrink(i - j);
+#if EXTENSION_SUBSTITUTION 
     substituteExt(out_learnt); // Substitute disjunctions with extension variables
+# endif
     tot_literals += out_learnt.size();
 
     // Find correct backtrack level:
@@ -916,7 +918,9 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
 
                 // Prioritize branching on our extension variables
                 activity[extVar] = desiredActivity;
+#if EXTENSION_FORCE_BRANCHING
                 canceled[extVar] = conflicts;
+#endif
                 if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
             }
             add_tmp.push(extClause[j]);
@@ -998,8 +1002,11 @@ lbool Solver::search(int nof_conflicts)
 
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
-        // addExtVars(extVarsFromCommonSubexprs);
+#if EXTENSION_HEURISTIC == RANDOM_SAMPLE
         addExtVars(extVarsFromHighActivity);
+#elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
+        addExtVars(extVarsFromCommonSubexprs);
+#endif
     }
 
     for (;;){
