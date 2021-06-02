@@ -132,7 +132,10 @@ Solver::Solver() :
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
-{}
+{
+    ext_overhead.ru_utime.tv_sec  = 0;
+    ext_overhead.ru_utime.tv_usec = 0;
+}
 
 
 Solver::~Solver()
@@ -739,9 +742,10 @@ bool Solver::simplify()
 
     // Remove satisfied clauses:
     removeSatisfied(learnts);
-    if (remove_satisfied)        // Can be turned off.
+    if (remove_satisfied) {       // Can be turned off.
         removeSatisfied(clauses);
         removeSatisfied(extensions);
+    }
     checkGarbage();
     rebuildOrderHeap();
 
