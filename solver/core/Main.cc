@@ -37,6 +37,7 @@ using namespace Minisat;
 void printStats(Solver& solver)
 {
     double cpu_time = cpuTime();
+    double ext_time = solver.extTimerRead();
     double mem_used = memUsedPeak();
     printf("restarts              : %"PRIu64"\n", solver.starts);
     printf("conflicts             : %-12"PRIu64"   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
@@ -50,6 +51,7 @@ void printStats(Solver& solver)
     printf("decisions on ext vars : %-12"PRIu64"\n", solver.branchOnExt);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
+    printf("ER time               : %g s\n", ext_time);
 }
 
 

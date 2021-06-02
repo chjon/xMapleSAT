@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Vec.h"
 #include "mtl/Heap.h"
 #include "mtl/Alg.h"
+#include "utils/System.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 
@@ -153,7 +154,12 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
+    
+    // Extended resolution statistics: (read-only member variable)
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+    struct rusage ext_timer_start, ext_timer_end;
+    struct rusage ext_overhead;
+    double extTimerRead();
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -328,6 +334,10 @@ protected:
     static std::vector< std::vector<Lit> > extVarsFromCommonSubclause(Solver&);
     static std::vector< std::vector<Lit> > extVarsFromHighActivity(Solver&);
 
+    // Functions for measuring extended resolution overhead
+    void   extTimerStart();
+    void   extTimerStop();
+
     std::vector<Lit>& makeClause    (Lit p);
     std::vector<Lit>& makeClause    (Lit p, Lit q);
     std::vector<Lit>& makeClause    (Lit p, Lit q, Lit r);
@@ -458,7 +468,19 @@ inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ ve
 
 //=================================================================================================
 // Debug etc:
-
+inline void Solver::extTimerStart() {
+    getrusage(RUSAGE_SELF, &ext_timer_start);
+}
+inline void Solver::extTimerStop() {
+    getrusage(RUSAGE_SELF, &ext_timer_end);
+    ext_overhead.ru_utime.tv_sec  += ext_timer_start.ru_utime.tv_sec  + ext_timer_end.ru_utime.tv_sec ;
+    ext_overhead.ru_utime.tv_usec += ext_timer_start.ru_utime.tv_usec + ext_timer_end.ru_utime.tv_usec;
+    ext_overhead.ru_utime.tv_sec  += ext_overhead.ru_utime.tv_usec / 1000000;
+    ext_overhead.ru_utime.tv_usec  = ext_overhead.ru_utime.tv_usec % 1000000;
+}
+inline double Solver::extTimerRead() {
+    return (double)ext_overhead.ru_utime.tv_sec + (double)ext_overhead.ru_utime.tv_usec / 1000000;
+}
 
 //=================================================================================================
 }

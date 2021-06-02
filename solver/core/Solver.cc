@@ -901,6 +901,8 @@ std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
 void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)) {
+    extTimerStart();
+
     // Get extension clauses according to heuristic
     std::vector< std::vector<Lit> > extClauses = extVarHeuristic(*this);
 
@@ -929,9 +931,13 @@ void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver
         // Create extension clause
         addClauseToDB(extensions, add_tmp);
     }
+
+    extTimerStop();
 }
 
 void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
+    extTimerStart();
+
     // Get variables to delete
     std::vector<Var> varsToDelete = delExtVarHeuristic(*this);
 
@@ -947,6 +953,8 @@ void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
             // We might want to use memory pooling
     }
     */
+
+   extTimerStop();
 }
 
 static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemove) {
@@ -954,6 +962,8 @@ static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemo
 }
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
+    extTimerStart();
+
     std::set<Lit> learntLits;
     for (int i = 1; i < out_learnt.size(); i++) learntLits.insert(out_learnt[i]);
     for (std::map<std::set<Lit>, Var>::iterator i = extVarDefs.begin(); i != extVarDefs.end(); i++) {
@@ -977,6 +987,8 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
         it++;
     }
     out_learnt.shrink(out_learnt.size() - i);
+
+    extTimerStop();
 }
 
 /*_________________________________________________________________________________________________
@@ -1005,7 +1017,7 @@ lbool Solver::search(int nof_conflicts)
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
         addExtVars(extVarsFromHighActivity);
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-        addExtVars(extVarsFromCommonSubexprs);
+        addExtVars(extVarsFromCommonSubclause);
 #endif
     }
 
