@@ -317,13 +317,17 @@ protected:
     bool     withinBudget     ()      const;
 
     // Extended Resolution
-    bool     isExtClause      (const Clause& c) const;
-    bool     isExtVar         (Var x) const;
-    void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&));
-    void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));
-    void     substituteExt    (vec<Lit>& out_learnt);
-    static std::vector< std::vector<Lit> > extVarsFromCommonSubexprs(Solver&);
+    //
+    bool     isExtClause      (const Clause& c) const;                                      // Check whether a clause contains an extension variable 
+    bool     isExtVar         (Var x) const;                                                // Check whether a variable is an extension variable
+    void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)); // Add extension variables
+    void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));             // Delete extension variables
+    void     substituteExt    (vec<Lit>& out_learnt);                                       // Replace positive occurences of extension variables with definitions
+
+    // User functions for introducing extension variables
+    static std::vector< std::vector<Lit> > extVarsFromCommonSubclause(Solver&);
     static std::vector< std::vector<Lit> > extVarsFromHighActivity(Solver&);
+
     std::vector<Lit>& makeClause    (Lit p);
     std::vector<Lit>& makeClause    (Lit p, Lit q);
     std::vector<Lit>& makeClause    (Lit p, Lit q, Lit r);

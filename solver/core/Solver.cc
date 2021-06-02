@@ -803,7 +803,7 @@ static inline void addSubexprToWindow(
     }
 }
 
-std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubexprs(Solver& s) {
+std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 100;
     std::vector<int> clauseWindow;
