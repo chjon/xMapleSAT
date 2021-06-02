@@ -473,10 +473,8 @@ inline void Solver::extTimerStart() {
 }
 inline void Solver::extTimerStop() {
     getrusage(RUSAGE_SELF, &ext_timer_end);
-    ext_overhead.ru_utime.tv_sec  += ext_timer_start.ru_utime.tv_sec  + ext_timer_end.ru_utime.tv_sec ;
-    ext_overhead.ru_utime.tv_usec += ext_timer_start.ru_utime.tv_usec + ext_timer_end.ru_utime.tv_usec;
-    ext_overhead.ru_utime.tv_sec  += ext_overhead.ru_utime.tv_usec / 1000000;
-    ext_overhead.ru_utime.tv_usec  = ext_overhead.ru_utime.tv_usec % 1000000;
+    ext_overhead.ru_utime.tv_sec  += ext_timer_end.ru_utime.tv_sec - ext_timer_start.ru_utime.tv_sec;
+    ext_overhead.ru_utime.tv_usec += (ext_timer_end.ru_utime.tv_usec - ext_timer_start.ru_utime.tv_usec + 1000000) % 1000000;
 }
 inline double Solver::extTimerRead() {
     return (double)ext_overhead.ru_utime.tv_sec + (double)ext_overhead.ru_utime.tv_usec / 1000000;
