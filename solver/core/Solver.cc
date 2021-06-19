@@ -893,7 +893,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) 
     // Step 2: Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    const unsigned int desiredNumExtVars = 1;
+    const unsigned int desiredNumExtVars = 10;
     for (unsigned int i = 0; i < desiredNumExtVars; i++) {
         // Sample literals at random
         int i_a = irand(s.random_seed, static_cast<int>(varVec.size()));
