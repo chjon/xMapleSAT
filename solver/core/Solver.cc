@@ -878,7 +878,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
 
 std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
-    const unsigned int clauseWindowSize = 20;
+    const unsigned int clauseWindowSize = 100;
     std::vector<int> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
