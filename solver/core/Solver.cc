@@ -670,33 +670,48 @@ struct reduceDB_lt {
         return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity()); } 
 #endif
 };
-void Solver::reduceDB()
-{
-    int     i, j;
-#if LBD_BASED_CLAUSE_DELETION
-    sort(learnts, reduceDB_lt(ca, activity));
-#else
-    double  extra_lim = cla_inc / learnts.size();    // Remove any clause below this activity
-    sort(learnts, reduceDB_lt(ca));
+void Solver::reduceDB() {
+    // Delete learnt clauses
+    reduceDB(learnts);
+#if DELETE_EXT_LEARNT_CLAUSES
+    // Delete learnt extension clauses
+    extTimerStart();
+    reduceDB(extLearnts);
+    extTimerStop();
 #endif
-
-    // Don't delete binary, locked, or extension clauses. From the rest, delete clauses from the first half
-    // and clauses with activity smaller than 'extra_lim':
-    for (i = j = 0; i < learnts.size(); i++){
-        Clause& c = ca[learnts[i]];
-#if LBD_BASED_CLAUSE_DELETION
-        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2)
-#else
-        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
+#if DELETE_EXT_VARS
+    // Delete extension variables
+    // TODO: should this happen separately based on a different condition?
+    delExtVars(/* Heuristic function */);
 #endif
-            removeClause(learnts[i]);
-        else
-            learnts[j++] = learnts[i];
-    }
-    learnts.shrink(i - j);
     checkGarbage();
 }
 
+void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
+{
+    int     i, j;
+#if LBD_BASED_CLAUSE_DELETION
+    sort(db, reduceDB_lt(ca, activity));
+#else
+    double  extra_lim = cla_inc / db.size();    // Remove any clause below this activity
+    sort(db, reduceDB_lt(ca));
+#endif
+
+    // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
+    // and clauses with activity smaller than 'extra_lim':
+    for (i = j = 0; i < db.size(); i++){
+        Clause& c = ca[db[i]];
+#if LBD_BASED_CLAUSE_DELETION
+        if (c.activity() > 2 && !locked(c) && i < db.size() / 2)
+#else
+        if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim))
+#endif
+            removeClause(db[i]);
+        else
+            db[j++] = db[i];
+    }
+    db.shrink(i - j);
+}
 
 void Solver::removeSatisfied(vec<CRef>& cs)
 {
@@ -744,7 +759,7 @@ bool Solver::simplify()
     removeSatisfied(learnts);
     if (remove_satisfied) {       // Can be turned off.
         removeSatisfied(clauses);
-        removeSatisfied(extensions);
+        removeSatisfied(extDefs);
     }
     checkGarbage();
     rebuildOrderHeap();
@@ -807,13 +822,14 @@ static inline void addSubexprToWindow(
     }
 }
 
-std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
+std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 100;
     std::vector<int> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
-    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i], clauseWindowSize);
+    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
+    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], clauseWindowSize);
 
     // Step 2: Find common subexpressions of length 2
     // Convert clauses to sets
@@ -824,7 +840,6 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
         for (int j = 0; j < c.size(); j++) set.insert(c[j]);
         sets.push_back(set);
     }
-
 
     // Count subexpressions by looking at intersections
     std::map<std::set<Lit>, int> subexprs;
@@ -847,30 +862,28 @@ std::vector< std::vector<Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
     }
 
     // Step 4: Add extension variables
-    std::vector< std::vector<Lit> > extClauses;
+    std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
     for (unsigned int j = 0; j < subexprWindow.size(); j++) {
         std::set<Lit>::const_iterator it = subexprWindow[j]->first.begin();
         Lit a = *it; it++;
         Lit b = *it; it++;
 
-        std::set<Lit> def; def.insert(a); def.insert(b);
-        s.extVarDefs.insert(std::make_pair(def, x));
-        extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
-        extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
-        extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
+        // Add extension variable
+        extClauses.insert(std::make_pair(x, std::make_pair(a, b)));
         x++;
     }
     return extClauses;
 }
 
-std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
+std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 20;
     std::vector<int> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
-    for (int i = 0; i < s.nExtensions(); i++) addClauseToWindow(s.ca, clauseWindow, s.extensions[i], clauseWindowSize);
+    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
+    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], clauseWindowSize);
     std::set<Var> vars;
     for (unsigned int i = 0; i < clauseWindow.size(); i++)
         for (int j = 0; j < s.ca[i].size(); j++)
@@ -878,7 +891,7 @@ std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
     std::vector<Var> varVec(vars.begin(), vars.end());
 
     // Step 2: Add extension variables
-    std::vector< std::vector<Lit> > extClauses;
+    std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
     const unsigned int desiredNumExtVars = 1;
     for (unsigned int i = 0; i < desiredNumExtVars; i++) {
@@ -889,12 +902,8 @@ std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
         Lit a = mkLit(varVec[i_a], irand(s.random_seed, 1));
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
-        // Encode equivalence
-        std::set<Lit> def; def.insert(a); def.insert(b);
-        s.extVarDefs.insert(std::make_pair(def, x));
-        extClauses.push_back(s.makeClause(mkLit(x, false), a, b));
-        extClauses.push_back(s.makeClause(mkLit(x, true ), ~a));
-        extClauses.push_back(s.makeClause(mkLit(x, true ), ~b));
+        // Add extension variable
+        extClauses.insert(std::make_pair(x, std::make_pair(a, b)));
         x++;
     }
 
@@ -904,39 +913,66 @@ std::vector< std::vector<Lit> > Solver::extVarsFromHighActivity(Solver& s) {
 // Add extension variables to our data structures and prioritize branching on them.
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
-void Solver::addExtVars(std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)) {
+void Solver::addExtVars(std::map< Var, std::pair<Lit, Lit> >(*extVarHeuristic)(Solver&)) {
     extTimerStart();
 
     // Get extension clauses according to heuristic
-    std::vector< std::vector<Lit> > extClauses = extVarHeuristic(*this);
+    std::map< Var, std::pair<Lit, Lit> > extDefMap = extVarHeuristic(*this);
+
+    // Add extension variables
+    const double desiredActivity = activity[order_heap[0]] * 1.5;
+    for (unsigned int i = 0; i < extDefMap.size(); i++) {
+        Var extVar = newVar();
+
+        // Prioritize branching on our extension variables
+        activity[extVar] = desiredActivity;
+#if EXTENSION_FORCE_BRANCHING
+        canceled[extVar] = conflicts;
+#endif
+        if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
+    }
 
     // Add extension clauses
-    std::vector<Var> extVars;
-    const double desiredActivity = activity[order_heap[0]] * 1.5;
-    for (unsigned int i = 0; i < extClauses.size(); i++) {
-        std::vector<Lit>& extClause = extClauses[i];
-        add_tmp.clear();
-        for (unsigned int j = 0; j < extClause.size(); j++) {
-            while (nVars() <= var(extClause[j])) {
-                // Add extension variables to our data structures
-                Var extVar = newVar();
-                // extVarDefs.push_back(extVar);
+    for (std::map< Var, std::pair<Lit, Lit> >::iterator i = extDefMap.begin(); i != extDefMap.end(); i++) {
+        // Get literals
+        Lit x = mkLit(i->first);
+        Lit a = i->second.first;
+        Lit b = i->second.second;
 
-                // Prioritize branching on our extension variables
-                activity[extVar] = desiredActivity;
-#if EXTENSION_FORCE_BRANCHING
-                canceled[extVar] = conflicts;
-#endif
-                if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
-            }
-            add_tmp.push(extClause[j]);
-        }
+        // Create extension clauses
+        addClause(~x, a, b);
+        addClause(x, ~a);
+        addClause(x, ~b);
 
-        // Create extension clause
-        addClauseToDB(extensions, add_tmp);
+        // Save definition
+        std::set<Lit> def; def.insert(a); def.insert(b);
+        extVarDefs.insert(std::make_pair(def, i->first));
     }
 
     extTimerStop();
+}
+
+void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::set<Var>& varsToDeleteSet) {
+    int i, j;
+    sort(db, reduceDB_lt(ca, activity));
+
+    // Delete clauses which contain the extension variable
+    for (i = j = 0; i < db.size(); i++) {
+        Clause& c = ca[db[i]];
+        bool containsVarToDelete = false;
+        for (int k = 0; k < c.size(); k++) {
+            if (varsToDeleteSet.find(var(c[k])) != varsToDeleteSet.end()) {
+                containsVarToDelete = true;
+                break;
+            }
+        }
+
+        if (containsVarToDelete)
+            removeClause(db[i]);
+        else
+            db[j++] = db[i];
+    }
+    db.shrink(i - j);
 }
 
 void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
@@ -944,21 +980,18 @@ void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
 
     // Get variables to delete
     std::vector<Var> varsToDelete = delExtVarHeuristic(*this);
+    std::set<Var> varsToDeleteSet(varsToDelete.begin(), varsToDelete.end());
 
     // Delete variables
-    // TODO
-    /*
-    for (int i = 0; i < varsToDelete.size(); i++) {
-        // Step 1: Remove variable from clauses
-            // option 1: delete all clauses containing extension variable
-            // option 2: substitute extension variable with definition
-            // option 3: only delete clauses encoding the extension variable definition
-        // Step 2: Free memory allocated for extension variables from vardata, assigns, etc.
-            // We might want to use memory pooling
-    }
-    */
 
-   extTimerStop();
+    // option 1: delete all clauses containing extension variable
+    delExtVars(extLearnts, varsToDeleteSet);    
+    delExtVars(extDefs, varsToDeleteSet);    
+
+    // option 2: substitute extension variable with definition
+    // TODO
+
+    extTimerStop();
 }
 
 static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemove) {
@@ -1066,8 +1099,14 @@ lbool Solver::search(int nof_conflicts)
                 uncheckedEnqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
-                if (isExtClause(ca[cr])) learnt_extclauses++;
-                learnts.push(cr);
+
+                // Store learnt clause in correct database
+                if (isExtClause(ca[cr])) {
+                    extLearnts.push(cr);
+                    learnt_extclauses++;
+                } else {
+                    learnts.push(cr);
+                }
                 attachClause(cr);
 #if LBD_BASED_CLAUSE_DELETION
                 Clause& clause = ca[cr];
@@ -1112,13 +1151,16 @@ lbool Solver::search(int nof_conflicts)
             if (decisionLevel() == 0 && !simplify())
                 return l_False;
 
-            if (learnts.size()-nAssigns() >= max_learnts) {
+#ifdef DELETE_LEARNT_CLAUSES
+            if (learnts.size() + extLearnts.size() - nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
-                // reduceDB();
+                reduceDB();
+
 #if RAPID_DELETION
                 max_learnts += 500;
 #endif
             }
+#endif
 
             Lit next = lit_Undef;
             while (decisionLevel() < assumptions.size()){
@@ -1354,26 +1396,15 @@ void Solver::relocAll(ClauseAllocator& to)
     //
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
-
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
             ca.reloc(vardata[v].reason, to);
     }
 
-    // All learnt:
-    //
-    for (int i = 0; i < learnts.size(); i++)
-        ca.reloc(learnts[i], to);
-
-    // All extension:
-    for (int i = 0; i < extensions.size(); i++)
-        ca.reloc(extensions[i], to);
-
-    // All original:
-    //
-    for (int i = 0; i < clauses.size(); i++)
-        ca.reloc(clauses[i], to);
+    for (int i = 0; i < learnts   .size(); i++) ca.reloc(learnts   [i], to); // All learnt
+    for (int i = 0; i < extLearnts.size(); i++) ca.reloc(extLearnts[i], to); // All learnt extension
+    for (int i = 0; i < extDefs   .size(); i++) ca.reloc(extDefs   [i], to); // All extension definitions
+    for (int i = 0; i < clauses   .size(); i++) ca.reloc(clauses   [i], to); // All original
 }
-
 
 void Solver::garbageCollect()
 {

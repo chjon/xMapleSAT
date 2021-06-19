@@ -94,10 +94,13 @@ public:
     int     nAssigns   ()      const;       // The current number of assigned literals.
     int     nClauses   ()      const;       // The current number of original clauses.
     int     nLearnts   ()      const;       // The current number of learnt clauses.
-    int     nExtensions()      const;       // The current number of extension clauses.
     int     nVars      ()      const;       // The current number of variables.
-    int     nExtVars   ()      const;       // The current number of extension variables.
     int     nFreeVars  ()      const;
+
+    // Extended Resolution
+    int     nExtLearnts()      const;       // The current number of learnt extension clauses.
+    int     nExtDefs   ()      const;       // The current number of extension definition clauses.
+    int     nExtVars   ()      const;       // The current number of extension variables.
 
     // Resource contraints:
     //
@@ -213,7 +216,8 @@ protected:
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
-    vec<CRef>           extensions;       // List of extension clauses.
+    vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
+    vec<CRef>           extDefs;          // List of extension definition clauses.
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -288,6 +292,7 @@ protected:
     lbool    search           (int nof_conflicts);                                     // Search for a given number of conflicts.
     lbool    solve_           ();                                                      // Main solve method (assumptions given in 'assumptions').
     void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
+    void     reduceDB         (Minisat::vec<Minisat::CRef>& db);                       // Reduce the provided set of learnt clauses.
     void     removeSatisfied  (vec<CRef>& cs);                                         // Shrink 'cs' to contain only non-satisfied clauses.
     void     rebuildOrderHeap ();
 
@@ -326,21 +331,25 @@ protected:
     //
     bool     isExtClause      (const Clause& c) const;                                      // Check whether a clause contains an extension variable 
     bool     isExtVar         (Var x) const;                                                // Check whether a variable is an extension variable
-    void     addExtVars       (std::vector< std::vector<Lit> >(*extVarHeuristic)(Solver&)); // Add extension variables
+    void     addExtVars       (std::map< Var, std::pair<Lit, Lit> >(*heuristic)(Solver&));  // Add extension variables
     void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));             // Delete extension variables
+    void     delExtVars       (Minisat::vec<Minisat::CRef>&, const std::set<Var>&);         // Delete extension variables from clause database
     void     substituteExt    (vec<Lit>& out_learnt);                                       // Replace positive occurences of extension variables with definitions
 
     // User functions for introducing extension variables
-    static std::vector< std::vector<Lit> > extVarsFromCommonSubclause(Solver&);
-    static std::vector< std::vector<Lit> > extVarsFromHighActivity(Solver&);
+    // These are heuristics for defining good extension variables
+    //
+    // We restrict the interface to use Tseitin's version of extension variables
+    // Extension variables are defined as equivalent to a disjunction of a pair of literals
+    // Complex extension variable definitions must be encoded with multiple extension variables 
+    //
+    // The size of the map will equal the number of new extension variables
+    static std::map< Var, std::pair<Lit, Lit> > extVarsFromCommonSubclause(Solver&);
+    static std::map< Var, std::pair<Lit, Lit> > extVarsFromHighActivity(Solver&);
 
     // Functions for measuring extended resolution overhead
     void   extTimerStart();
     void   extTimerStop();
-
-    std::vector<Lit>& makeClause    (Lit p);
-    std::vector<Lit>& makeClause    (Lit p, Lit q);
-    std::vector<Lit>& makeClause    (Lit p, Lit q, Lit r);
 
     // Static helpers:
     //
@@ -406,9 +415,6 @@ inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
-inline std::vector<Lit>& Solver::makeClause (Lit p)               { make_tmp.clear(); make_tmp.push_back(p);                                               return make_tmp; }
-inline std::vector<Lit>& Solver::makeClause (Lit p, Lit q)        { make_tmp.clear(); make_tmp.push_back(p); make_tmp.push_back(q);                        return make_tmp; }
-inline std::vector<Lit>& Solver::makeClause (Lit p, Lit q, Lit r) { make_tmp.clear(); make_tmp.push_back(p); make_tmp.push_back(q); make_tmp.push_back(r); return make_tmp; }
 
 inline bool     Solver::isExtVar   (Var x)           const { return x >= originalNumVars; }
 inline bool     Solver::isExtClause(const Clause& c) const {
@@ -426,7 +432,8 @@ inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ s
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
-inline int      Solver::nExtensions   ()      const   { return extensions.size(); }
+inline int      Solver::nExtLearnts   ()      const   { return extLearnts.size(); }
+inline int      Solver::nExtDefs      ()      const   { return extDefs.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
 inline int      Solver::nExtVars      ()      const   { return extVarDefs.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
