@@ -803,25 +803,6 @@ static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subex
     }
 }
 
-static inline void addSubexprToWindow(
-    std::vector<std::map<std::set<Lit>, int>::iterator>& window,
-    std::map<std::set<Lit>, int>::iterator& subexpr,
-    std::map<std::set<Lit>, int> subexprs,
-    unsigned int maxWindowSize
-) {
-    std::map<std::set<Lit>, int>::iterator tmp = subexprs.end();
-    for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
-        if (subexpr->second > window[i]->second) {
-            tmp = window[i];
-            window[i] = subexpr;
-            subexpr = tmp;
-        }
-    }
-    if (window.size() != maxWindowSize) {
-        window.push_back(subexpr);
-    }
-}
-
 std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 100;
@@ -856,16 +837,23 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
 
     // Step 3: Get most frequent subexpressions
     const unsigned int subexprWindowSize = 10;
-    std::vector<std::map<std::set<Lit>, int>::iterator> subexprWindow;
-    for (std::map<std::set<Lit>, int>::iterator i = subexprs.begin(); i != subexprs.end(); i++) {
-        addSubexprToWindow(subexprWindow, i, subexprs, subexprWindowSize);
+    std::set< std::set<Lit> > subexprWindow;
+    std::map<std::set<Lit>, int>::iterator max = subexprs.begin();
+    for (unsigned int i = 0; i < subexprWindowSize; i++) {
+        for (std::map<std::set<Lit>, int>::iterator i = subexprs.begin(); i != subexprs.end(); i++) {
+            if (subexprWindow.find(i->first) == subexprWindow.end() && i->second >= max->second) {
+                max = i;
+            }
+        }
+
+        subexprWindow.insert(max->first);
     }
 
     // Step 4: Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    for (unsigned int j = 0; j < subexprWindow.size(); j++) {
-        std::set<Lit>::const_iterator it = subexprWindow[j]->first.begin();
+    for (std::set< std::set<Lit> >::iterator i = subexprWindow.begin(); i != subexprWindow.end(); i++) {
+        std::set<Lit>::const_iterator it = i->begin();
         Lit a = *it; it++;
         Lit b = *it; it++;
 
