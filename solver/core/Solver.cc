@@ -770,8 +770,8 @@ bool Solver::simplify()
     return true;
 }
 
-static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<int>& window, int clauseIndex, unsigned int maxWindowSize) {
-    int tmp = 0;
+static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CRef clauseIndex, unsigned int maxWindowSize) {
+    CRef tmp = 0;
     double clauseActivity = ca[clauseIndex].activity();
     for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
         if (clauseIndex == window[i]) return;
@@ -825,7 +825,7 @@ static inline void addSubexprToWindow(
 std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 100;
-    std::vector<int> clauseWindow;
+    std::vector<CRef> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
     for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
@@ -879,7 +879,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
 std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) {
     // Step 1: Find the variables in the top k activity clauses
     const unsigned int clauseWindowSize = 100;
-    std::vector<int> clauseWindow;
+    std::vector<CRef> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
     for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
@@ -887,7 +887,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) 
     std::set<Var> vars;
     for (unsigned int i = 0; i < clauseWindow.size(); i++)
         for (int j = 0; j < s.ca[clauseWindow[i]].size(); j++)
-            vars.insert(var(s.ca[i][j]));
+            vars.insert(var(s.ca[clauseWindow[i]][j]));
     std::vector<Var> varVec(vars.begin(), vars.end());
 
     // Step 2: Add extension variables
@@ -938,6 +938,7 @@ void Solver::addExtVars(std::map< Var, std::pair<Lit, Lit> >(*extVarHeuristic)(S
         Lit x = mkLit(i->first);
         Lit a = i->second.first;
         Lit b = i->second.second;
+        assert(var(x) > var(a) && var(x) > var(b));
 
         // Create extension clauses
         addClauseToDB(extDefs, ~x, a, b);
