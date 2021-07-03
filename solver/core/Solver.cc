@@ -886,14 +886,14 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) 
     for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], clauseWindowSize);
     std::set<Var> vars;
     for (unsigned int i = 0; i < clauseWindow.size(); i++)
-        for (int j = 0; j < s.ca[i].size(); j++)
+        for (int j = 0; j < s.ca[clauseWindow[i]].size(); j++)
             vars.insert(var(s.ca[i][j]));
     std::vector<Var> varVec(vars.begin(), vars.end());
 
     // Step 2: Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    const unsigned int desiredNumExtVars = 10;
+    const unsigned int desiredNumExtVars = 1;
     for (unsigned int i = 0; i < desiredNumExtVars; i++) {
         // Sample literals at random
         int i_a = irand(s.random_seed, static_cast<int>(varVec.size()));
@@ -940,9 +940,9 @@ void Solver::addExtVars(std::map< Var, std::pair<Lit, Lit> >(*extVarHeuristic)(S
         Lit b = i->second.second;
 
         // Create extension clauses
-        addClause(~x, a, b);
-        addClause(x, ~a);
-        addClause(x, ~b);
+        addClauseToDB(extDefs, ~x, a, b);
+        addClauseToDB(extDefs, x, ~a);
+        addClauseToDB(extDefs, x, ~b);
 
         // Save definition
         std::set<Lit> def; def.insert(a); def.insert(b);
