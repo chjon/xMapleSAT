@@ -839,10 +839,10 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
     const unsigned int subexprWindowSize = 10;
     std::set< std::set<Lit> > subexprWindow;
     std::map<std::set<Lit>, int>::iterator max = subexprs.begin();
-    for (unsigned int i = 0; i < subexprWindowSize; i++) {
-        for (std::map<std::set<Lit>, int>::iterator i = subexprs.begin(); i != subexprs.end(); i++) {
-            if (subexprWindow.find(i->first) == subexprWindow.end() && i->second >= max->second) {
-                max = i;
+    for (unsigned int i = 0; i < subexprWindowSize && i < subexprs.size(); i++) {
+        for (std::map<std::set<Lit>, int>::iterator it = subexprs.begin(); it != subexprs.end(); it++) {
+            if ((subexprWindow.find(it->first) == subexprWindow.end()) && (it->second >= max->second)) {
+                max = it;
             }
         }
 
