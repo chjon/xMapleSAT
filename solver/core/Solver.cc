@@ -826,14 +826,15 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
     std::map<std::set<Lit>, int> subexprs;
     clauseWindow.clear();
     for (unsigned int i = 0; i < sets.size(); i++) {
-        for (unsigned int j = 0; j < sets.size(); j++) {
-            if (i == j) continue;
+        for (unsigned int j = i + 1; j < sets.size(); j++) {
+            if (s.asynch_interrupt) goto SUBEXPR_DOUBLE_BREAK; // We might spend a lot of time here - exit if interrupted
             std::vector<Lit> intersection(sets[i].size() + sets[j].size());
             std::vector<Lit>::iterator it = std::set_intersection(sets[i].begin(), sets[i].end(), sets[j].begin(), sets[j].end(), intersection.begin());
             intersection.resize(it - intersection.begin());
             addIntersectionToSubexprs(subexprs, intersection);
         }
     }
+    SUBEXPR_DOUBLE_BREAK:
 
     // Step 3: Get most frequent subexpressions
     const unsigned int subexprWindowSize = 10;
