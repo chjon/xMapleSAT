@@ -839,7 +839,9 @@ static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::v
     std::map<std::set<Lit>, int> subexprs;
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
-            if (s.interrupted()) goto SUBEXPR_DOUBLE_BREAK; // We might spend a lot of time here - exit if interrupted
+            // We might spend a lot of time here - exit if interrupted
+            // FIXME: ideally, we wouldn't have to check for this at all if the sets of literals were sufficiently small
+            if (s.interrupted()) goto SUBEXPR_DOUBLE_BREAK;
             std::vector<Lit> intersection(sets[i].size() + sets[j].size());
             std::vector<Lit>::iterator it = std::set_intersection(sets[i].begin(), sets[i].end(), sets[j].begin(), sets[j].end(), intersection.begin());
             intersection.resize(it - intersection.begin());
@@ -869,6 +871,8 @@ static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, 
 // EXTENDED RESOLUTION - variable definition heuristic
 std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
+    // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
+    // Ideally, we want the solver object to be const when passed into this function
     std::vector< std::set<Lit> > sets = getLiteralSets(s.ca, candidateClauses);
 
     // Count subexpressions of length 2
@@ -956,6 +960,8 @@ void Solver::addExtVars(
         // Prioritize branching on our extension variables
         activity[extVar] = desiredActivity;
 #if EXTENSION_FORCE_BRANCHING
+        // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
+        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
         canceled[extVar] = conflicts;
 #endif
         if (order_heap.inHeap(extVar)) order_heap.decrease(extVar);
@@ -970,6 +976,9 @@ void Solver::addExtVars(
         assert(var(x) > var(a) && var(x) > var(b));
 
         // Create extension clauses
+        // TODO: verify that we do not already have an extension variable for this literal pair before adding clauses
+        // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v a)
+        // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
         addClauseToDB(extDefs, ~x, a, b);
         addClauseToDB(extDefs, x, ~a);
         addClauseToDB(extDefs, x, ~b);
@@ -987,6 +996,7 @@ void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::set<Var>& va
     sort(db, reduceDB_lt(ca, activity));
 
     // Delete clauses which contain the extension variable
+    // TODO: is there a more efficient way to implement this? e.g. have a list of clauses for each extension variable?
     for (i = j = 0; i < db.size(); i++) {
         Clause& c = ca[db[i]];
         bool containsVarToDelete = false;
@@ -1014,7 +1024,9 @@ void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
 
     // Delete variables
 
-    // option 1: delete all clauses containing extension variable
+    // TODO: add an option to switch between these two modes
+
+    // option 1: delete all clauses containing the extension variables
     delExtVars(extLearnts, varsToDeleteSet);    
     delExtVars(extDefs, varsToDeleteSet);    
 
@@ -1030,6 +1042,9 @@ static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemo
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
     extTimerStart();
+
+    // FIXME: this is a linear search through the list of extension definitions
+    // is there a more efficient way to find disjunctions corresponding to an extension variable?
 
     std::set<Lit> learntLits;
     for (int i = 1; i < out_learnt.size(); i++) learntLits.insert(out_learnt[i]);
@@ -1080,6 +1095,7 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
+    // TODO: make all the numbers here configurable from the command line
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE

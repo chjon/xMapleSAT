@@ -404,6 +404,11 @@ protected:
     //   user_er_add_
     //   user_er_delete_
 
+    // FIXME: We want the solver object to be const when passed into the heuristic functions. Passing in a mutable solver and
+    //   inspecting its internal state from the heuristic functions is bad API design. Currently, the solver needs to be
+    //   mutable because we need access to its clause allocator when dereferencing CRef pointers, and the clause allocator
+    //   index operator returns mutable state. Can we overload the operator with a const version? Investigate this.
+
     ///// [ user_er_select_ ] /////
     // Description:
     //   User functions for picking candidate clauses for the extended resolution variable introduction heuristic.
@@ -598,13 +603,19 @@ inline void Solver::extTimerStart() {
 }
 inline void Solver::extTimerStop() {
     getrusage(RUSAGE_SELF, &ext_timer_end);
+    
+    // Add to total overhead
     ext_overhead.ru_utime.tv_sec  += ext_timer_end.ru_utime.tv_sec - ext_timer_start.ru_utime.tv_sec;
     ext_overhead.ru_utime.tv_usec += ext_timer_end.ru_utime.tv_usec;
+
+    // Check if subtracting the initial time would result in underflow
     if (ext_timer_start.ru_utime.tv_usec > ext_overhead.ru_utime.tv_usec) {
         ext_overhead.ru_utime.tv_usec += 1000000;
         ext_overhead.ru_utime.tv_sec  -= 1;
     }
     ext_overhead.ru_utime.tv_usec -= ext_timer_start.ru_utime.tv_usec;
+
+    // Check if we carry over to the next second
     if (ext_overhead.ru_utime.tv_usec >= 1000000) {
         ext_overhead.ru_utime.tv_usec -= 1000000;
         ext_overhead.ru_utime.tv_sec  += 1;
