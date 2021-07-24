@@ -362,6 +362,8 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
+
+        // EXTENDED RESOLUTION - statistics
         if (isExtClause(c)) conflict_extclauses++;
 
 #if LBD_BASED_CLAUSE_DELETION
@@ -432,8 +434,9 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     max_literals += out_learnt.size();
     out_learnt.shrink(i - j);
-#if EXTENSION_SUBSTITUTION 
-    substituteExt(out_learnt); // Substitute disjunctions with extension variables
+#if EXTENSION_SUBSTITUTION
+    // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+    substituteExt(out_learnt);
 # endif
     tot_literals += out_learnt.size();
 
@@ -674,7 +677,7 @@ void Solver::reduceDB() {
     // Delete learnt clauses
     reduceDB(learnts);
 #if DELETE_EXT_LEARNT_CLAUSES
-    // Delete learnt extension clauses
+    // EXTENDED RESOLUTION - delete learnt extension clauses
     extTimerStart();
     reduceDB(extLearnts);
     extTimerStop();
@@ -770,7 +773,8 @@ bool Solver::simplify()
     return true;
 }
 
-static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CRef clauseIndex, unsigned int maxWindowSize) {
+// Build a window of the clauses with the top k highest activities
+static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CRef clauseIndex, unsigned int maxWindowSize) {
     CRef tmp = 0;
     double clauseActivity = ca[clauseIndex].activity();
     for (unsigned int i = 0; i < window.size() && i < maxWindowSize; i++) {
@@ -787,6 +791,18 @@ static inline void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& win
     }
 }
 
+std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numClauses) {
+    // Find the variables in the clauses with the top k highest activities
+    // FIXME: this is probably inefficient, but there isn't a preexisting data structure which keeps these in sorted order
+    // Optimization idea: sort each of the clause DBs and then pick the top k (could also use heap sort)
+    std::vector<CRef> clauseWindow;
+    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], numClauses);
+    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], numClauses);
+    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], numClauses);
+    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], numClauses);
+    return clauseWindow;
+}
+
 static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
     std::set<Lit> subexpr;
     for (unsigned int i = 0; i < intersection.size(); i++) {
@@ -796,6 +812,7 @@ static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subex
             subexpr.insert(intersection[i]);
             subexpr.insert(intersection[j]);
 
+            // Add to the counter for this literal pair
             std::map<std::set<Lit>, int>::iterator it = subexprs.find(subexpr);
             if (it == subexprs.end()) subexprs.insert(std::make_pair(subexpr, 1));
             else it->second++;
@@ -803,31 +820,25 @@ static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subex
     }
 }
 
-std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& s) {
-    // Step 1: Find the variables in the top k activity clauses
-    const unsigned int clauseWindowSize = 100;
-    std::vector<CRef> clauseWindow;
-    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
-    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
-    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
-    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], clauseWindowSize);
-
-    // Step 2: Find common subexpressions of length 2
-    // Convert clauses to sets
+static inline std::vector< std::set<Lit> > getLiteralSets(ClauseAllocator& ca, std::vector<CRef>& clauses) {
+    // Get the set of literals for each clause
     std::vector< std::set<Lit> > sets;
-    for (unsigned int i = 0; i < clauseWindow.size(); i++) {
-        const Clause& c = s.ca[clauseWindow[i]];
+    for (unsigned int i = 0; i < clauses.size(); i++) {
+        const Clause& c = ca[clauses[i]];
         std::set<Lit> set;
         for (int j = 0; j < c.size(); j++) set.insert(c[j]);
         sets.push_back(set);
     }
 
+    return sets;
+}
+
+static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::vector< std::set<Lit> >& sets) {
     // Count subexpressions by looking at intersections
     std::map<std::set<Lit>, int> subexprs;
-    clauseWindow.clear();
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
-            if (s.asynch_interrupt) goto SUBEXPR_DOUBLE_BREAK; // We might spend a lot of time here - exit if interrupted
+            if (s.interrupted()) goto SUBEXPR_DOUBLE_BREAK; // We might spend a lot of time here - exit if interrupted
             std::vector<Lit> intersection(sets[i].size() + sets[j].size());
             std::vector<Lit>::iterator it = std::set_intersection(sets[i].begin(), sets[i].end(), sets[j].begin(), sets[j].end(), intersection.begin());
             intersection.resize(it - intersection.begin());
@@ -835,12 +846,13 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
         }
     }
     SUBEXPR_DOUBLE_BREAK:
+    return subexprs;
+}
 
-    // Step 3: Get most frequent subexpressions
-    const unsigned int subexprWindowSize = 10;
+static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, int>& subexprs, unsigned int numSubexprs) {
     std::set< std::set<Lit> > subexprWindow;
     std::map<std::set<Lit>, int>::iterator max = subexprs.begin();
-    for (unsigned int i = 0; i < subexprWindowSize && i < subexprs.size(); i++) {
+    for (unsigned int i = 0; i < numSubexprs && i < subexprs.size(); i++) {
         for (std::map<std::set<Lit>, int>::iterator it = subexprs.begin(); it != subexprs.end(); it++) {
             if ((subexprWindow.find(it->first) == subexprWindow.end()) && (it->second >= max->second)) {
                 max = it;
@@ -850,10 +862,24 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
         subexprWindow.insert(max->first);
     }
 
-    // Step 4: Add extension variables
+    return subexprWindow;
+}
+
+std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+    // Get the set of literals for each clause
+    std::vector< std::set<Lit> > sets = getLiteralSets(s.ca, candidateClauses);
+
+    // Count subexpressions of length 2
+    std::map<std::set<Lit>, int> subexprs = countSubexprs(s, sets);
+
+    // Get most frequent subexpressions
+    const unsigned int numSubexprs = 10;
+    std::set< std::set<Lit> > freqSubExprs = getFreqSubexprs(subexprs, numSubexprs);
+
+    // Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    for (std::set< std::set<Lit> >::iterator i = subexprWindow.begin(); i != subexprWindow.end(); i++) {
+    for (std::set< std::set<Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         std::set<Lit>::const_iterator it = i->begin();
         Lit a = *it; it++;
         Lit b = *it; it++;
@@ -865,21 +891,20 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromCommonSubclause(Solver& 
     return extClauses;
 }
 
-std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) {
-    // Step 1: Find the variables in the top k activity clauses
-    const unsigned int clauseWindowSize = 100;
-    std::vector<CRef> clauseWindow;
-    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], clauseWindowSize);
-    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], clauseWindowSize);
-    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], clauseWindowSize);
-    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], clauseWindowSize);
+static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>& clauses) {
+    // Get set of all variables
     std::set<Var> vars;
-    for (unsigned int i = 0; i < clauseWindow.size(); i++)
-        for (int j = 0; j < s.ca[clauseWindow[i]].size(); j++)
-            vars.insert(var(s.ca[clauseWindow[i]][j]));
-    std::vector<Var> varVec(vars.begin(), vars.end());
+    for (unsigned int i = 0; i < clauses.size(); i++)
+        for (int j = 0; j < ca[clauses[i]].size(); j++)
+            vars.insert(var(ca[clauses[i]][j]));
+    return std::vector<Var>(vars.begin(), vars.end());
+}
 
-    // Step 2: Add extension variables
+std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+    // Get set of all variables
+    std::vector<Var> varVec = getVarVec(s.ca, candidateClauses);
+
+    // Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
     const unsigned int desiredNumExtVars = 1;
@@ -899,14 +924,27 @@ std::map< Var, std::pair<Lit, Lit> > Solver::extVarsFromHighActivity(Solver& s) 
     return extClauses;
 }
 
+std::vector<Var> Solver::user_er_delete_all(Solver& s) {
+    std::vector<Var> toDelete;
+    for (int i = s.originalNumVars + 1; i < s.nVars(); i++)
+        toDelete.push_back(i);
+    return toDelete;
+}
+
 // Add extension variables to our data structures and prioritize branching on them.
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
-void Solver::addExtVars(std::map< Var, std::pair<Lit, Lit> >(*extVarHeuristic)(Solver&)) {
+void Solver::addExtVars(
+    std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
+    std::map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+    unsigned int numClausesToConsider,
+    unsigned int maxNumNewVars
+) {
     extTimerStart();
 
-    // Get extension clauses according to heuristic
-    std::map< Var, std::pair<Lit, Lit> > extDefMap = extVarHeuristic(*this);
+    // Get extension clauses according to heuristics
+    std::vector<CRef> candidateClauses = er_select_heuristic(*this, numClausesToConsider);
+    std::map< Var, std::pair<Lit, Lit> > extDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
 
     // Add extension variables
     const double desiredActivity = activity[order_heap[0]] * 1.5;
@@ -965,11 +1003,11 @@ void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::set<Var>& va
     db.shrink(i - j);
 }
 
-void Solver::delExtVars(std::vector<Var>(*delExtVarHeuristic)(Solver&)) {
+void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
     extTimerStart();
 
     // Get variables to delete
-    std::vector<Var> varsToDelete = delExtVarHeuristic(*this);
+    std::vector<Var> varsToDelete = er_delete_heuristic(*this);
     std::set<Var> varsToDeleteSet(varsToDelete.begin(), varsToDelete.end());
 
     // Delete variables
@@ -1039,12 +1077,13 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
+    // EXTENDED RESOLUTION - determine whether to try adding extension variables
     if (conflicts - prevExtensionConflict >= 2000) {
         prevExtensionConflict = conflicts;
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
-        addExtVars(extVarsFromHighActivity);
+        addExtVars(user_er_select_activity, user_er_add_random, 100, 1);
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-        addExtVars(extVarsFromCommonSubclause);
+        addExtVars(user_er_select_activity, user_er_add_subexpr, 100, 10);
 #endif
     }
 
@@ -1091,6 +1130,7 @@ lbool Solver::search(int nof_conflicts)
                 CRef cr = ca.alloc(learnt_clause, true);
 
                 // Store learnt clause in correct database
+                // Clauses containing extension variables should go in a separate database
                 if (isExtClause(ca[cr])) {
                     extLearnts.push(cr);
                     learnt_extclauses++;
@@ -1176,6 +1216,8 @@ lbool Solver::search(int nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+                
+                // EXTENDED RESOLUTION - statistics
                 if (isExtVar(var(next))) branchOnExt++;
             }
 

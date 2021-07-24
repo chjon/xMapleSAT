@@ -100,7 +100,7 @@ public:
     int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
 
-    // Extended Resolution
+    // EXTENDED RESOLUTION - statistics
     int     nExtLearnts()      const;       // The current number of learnt extension clauses.
     int     nExtDefs   ()      const;       // The current number of extension definition clauses.
     int     nExtVars   ()      const;       // The current number of extension variables.
@@ -112,6 +112,7 @@ public:
     void    budgetOff();
     void    interrupt();          // Trigger a (potentially asynchronous) interruption of the solver.
     void    clearInterrupt();     // Clear interrupt indicator flag.
+    bool    interrupted() const; // Check if the solver has been interrupted
 
     // Memory managment:
     //
@@ -161,7 +162,8 @@ public:
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
     
-    // Extended resolution statistics: (read-only member variable)
+    // EXTENDED RESOLUTION - statistics
+    // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
     struct rusage ext_timer_start, ext_timer_end;
     struct rusage ext_overhead;
@@ -219,8 +221,11 @@ protected:
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
+
+    // EXTENDED RESOLUTION - clause databases
     vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
     vec<CRef>           extDefs;          // List of extension definition clauses.
+
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -242,9 +247,14 @@ protected:
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
-    std::map<std::set<Lit>, Var> extVarDefs;            // Extension variable definitions
-    int                          originalNumVars;       // The number of variables in the original formula -- this is used to check for extension variables
+    // EXTENDED RESOLUTION - solver state
+    std::map<std::set<Lit>, Var> extVarDefs;            // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
+                                                        // This map is used for replacing disjunctions with the corresponding extension variable
+                                                        // This is NOT the same as the extension variable introduction heuristic
+    int                          originalNumVars;       // The number of variables in the original formula
+                                                        // This value is used to quickly check whether a variable is an extension variable
     long unsigned int            prevExtensionConflict; // Stores the last time extension variables were added
+                                                        // This is used to check whether to run the extension variable introduction heuristic after a restart
 
     ClauseAllocator     ca;
 
@@ -330,26 +340,120 @@ protected:
     double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
 
-    // Extended Resolution
-    //
-    bool     isExtClause      (const Clause& c) const;                                      // Check whether a clause contains an extension variable 
-    bool     isExtVar         (Var x) const;                                                // Check whether a variable is an extension variable
-    void     addExtVars       (std::map< Var, std::pair<Lit, Lit> >(*heuristic)(Solver&));  // Add extension variables
-    void     delExtVars       (std::vector<Var>(*delExtVarHeuristic)(Solver&));             // Delete extension variables
-    void     delExtVars       (Minisat::vec<Minisat::CRef>&, const std::set<Var>&);         // Delete extension variables from clause database
-    void     substituteExt    (vec<Lit>& out_learnt);                                       // Replace positive occurences of extension variables with definitions
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // EXTENDED RESOLUTION - internal solver functions
+    // check the type of clause or variable
+    bool isExtClause (const Clause& c) const; // Check whether a clause contains an extension variable 
+    bool isExtVar    (Var x)           const; // Check whether a variable is an extension variable
+    
+    // Main internal methods
 
-    // User functions for introducing extension variables
-    // These are heuristics for defining good extension variables
+    // Description:
+    //   Pick extension variable definitions, add extension variables to our data structures, and
+    //   prioritize branching on them.
     //
-    // We restrict the interface to use Tseitin's version of extension variables
-    // Extension variables are defined as equivalent to a disjunction of a pair of literals
-    // Complex extension variable definitions must be encoded with multiple extension variables 
-    //
-    // The size of the map will equal the number of new extension variables
-    static std::map< Var, std::pair<Lit, Lit> > extVarsFromCommonSubclause(Solver&);
-    static std::map< Var, std::pair<Lit, Lit> > extVarsFromHighActivity(Solver&);
+    // Parameters:
+    //   er_select_heuristic:
+    //     A heuristic for picking candidate clauses to be used for the extended resolution variable
+    //     introduction heuristic.
+    //   er_add_heuristic:
+    //     A heuristic for identifying extension variable definitions.
+    //   numClausesToConsider:
+    //     The number of clauses to consider when looking for new variable definitions.
+    //   maxNumNewVars:
+    //     the maximum number of new extension variables to introduce.
+    void addExtVars (
+        std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
+        std::map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+        unsigned int numClausesToConsider,
+        unsigned int maxNumNewVars
+    );
 
+    // Description:
+    //   Select extension variables to delete and delete them
+    //
+    // Parameters:
+    //   er_delete_heuristic:
+    //     A heuristic for identifying extension variables to delete.
+    void delExtVars (std::vector<Var>(*er_delete_heuristic)(Solver&));
+
+    // Description:
+    //   Delete a specified set of extension variables from a given clause database. This is a helper function
+    //   for the overloaded delExtVars function above
+    //
+    // Parameters:
+    //   db     : The clause database to delete from
+    //   extvars: The set of extension variables to delete
+    void delExtVars (Minisat::vec<Minisat::CRef>& db, const std::set<Var>& extvars);
+
+    // Description:
+    //   Replace variable disjunctions in candidate learnt clauses with the corresponding extension variable
+    //   if one exists. e.g. if x = a v b, and we learn a clause C = (a, b, c, d, ...), replace a, b with x and
+    //   learn the clause C' = (x, c, d, ...) instead.
+    //
+    // Parameters:
+    //   out_learnt: The candidate clause to be learnt
+    void substituteExt (vec<Lit>& out_learnt);
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // EXTENDED RESOLUTION - user functions/heuristics
+    // For organization, all these function names should be prefixed according to their usage.
+    //
+    // Prefixes:
+    //   user_er_select_
+    //   user_er_add_
+    //   user_er_delete_
+
+    ///// [ user_er_select_ ] /////
+    // Description:
+    //   User functions for picking candidate clauses for the extended resolution variable introduction heuristic.
+    //
+    // Parameters:
+    //   solver    : the solver to select clauses from
+    //   numClauses: the number of clauses to select
+    //
+    // Return value:
+    //   The function should return a list of clauses which are somehow interesting for ER.
+
+    // Activity-based clause selection - select the most active clauses. This heuristic focuses on locality.
+    static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
+
+    ///// [ user_er_add_ ] /////
+    // Description:
+    //   User functions for introducing extension variables. These are heuristics for defining good extension variables.
+    //
+    // Parameters:
+    //   solver          : the solver to add clauses to
+    //   candidateClauses: clauses to use when selecting extended variable definitions
+    //   maxNumNewVars   : the maximum number of new extension variables to introduce
+    //
+    // Return value:
+    //   The function should return a map with the new extension variable as the key, and the pair of literals it corresponds
+    //   to as the value. For simplicity, we restrict the interface to use Tseitin's original version of extension variables.
+    //   Extension variables are defined as equivalent to a disjunction of a pair of literals. Complex extension variable
+    //   definitions must be encoded with multiple extension variables. The size of the map should equal the number of new
+    //   extension variables.
+
+    // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
+    static std::map< Var, std::pair<Lit, Lit> > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+
+    // Random literal selection - select two literals at random and define a new extension variable over them.
+    static std::map< Var, std::pair<Lit, Lit> > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+
+    ///// [ user_er_delete_ ] /////
+    // Description:
+    //   User functions for deleting extension variables. These are heuristics for deleting bad extension variables.
+    //
+    // Parameters:
+    //   solver : the solver to remove extension variables from
+    //
+    // Return value:
+    //   The function should return a list of extension variables that should be deleted
+
+    // Delete all extension variables
+    static std::vector<Var> user_er_delete_all(Solver& solver);
+
+    // EXTENDED RESOLUTION - statistics
     // Functions for measuring extended resolution overhead
     void   extTimerStart();
     void   extTimerStop();
@@ -422,6 +526,7 @@ inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { 
 inline bool     Solver::locked          (const Clause& c) const               { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                                    { trail_lim.push(trail.size()); }
 
+// EXTENDED RESOLUTION
 inline bool     Solver::isExtVar   (Var x)           const { return x >= originalNumVars; }
 inline bool     Solver::isExtClause(const Clause& c) const {
     for (int i = 0; i < c.size(); i++)
@@ -438,10 +543,13 @@ inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ s
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
+inline int      Solver::nVars         ()      const   { return vardata.size(); }
+
+// EXTENDED RESOLUTION - statistics
 inline int      Solver::nExtLearnts   ()      const   { return extLearnts.size(); }
 inline int      Solver::nExtDefs      ()      const   { return extDefs.size(); }
-inline int      Solver::nVars         ()      const   { return vardata.size(); }
 inline int      Solver::nExtVars      ()      const   { return extVarDefs.size(); }
+
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 
@@ -462,6 +570,8 @@ inline bool     Solver::withinBudget() const {
            (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&
            (propagation_budget < 0 || propagations < (uint64_t)propagation_budget); }
 
+inline bool     Solver::interrupted() const { return asynch_interrupt; }
+
 // FIXME: after the introduction of asynchronous interrruptions the solve-versions that return a
 // pure bool do not give a safe interface. Either interrupts must be possible to turn off here, or
 // all calls to solve must return an 'lbool'. I'm not yet sure which I prefer.
@@ -481,6 +591,8 @@ inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ ve
 
 //=================================================================================================
 // Debug etc:
+
+// EXTENDED RESOLUTION - statistics
 inline void Solver::extTimerStart() {
     getrusage(RUSAGE_SELF, &ext_timer_start);
 }
