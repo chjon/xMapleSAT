@@ -791,6 +791,7 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CR
     }
 }
 
+// EXTENDED RESOLUTION - clause selection heuristic
 std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numClauses) {
     // Find the variables in the clauses with the top k highest activities
     // FIXME: this is probably inefficient, but there isn't a preexisting data structure which keeps these in sorted order
@@ -865,6 +866,7 @@ static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, 
     return subexprWindow;
 }
 
+// EXTENDED RESOLUTION - variable definition heuristic
 std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
     std::vector< std::set<Lit> > sets = getLiteralSets(s.ca, candidateClauses);
@@ -873,8 +875,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std:
     std::map<std::set<Lit>, int> subexprs = countSubexprs(s, sets);
 
     // Get most frequent subexpressions
-    const unsigned int numSubexprs = 10;
-    std::set< std::set<Lit> > freqSubExprs = getFreqSubexprs(subexprs, numSubexprs);
+    std::set< std::set<Lit> > freqSubExprs = getFreqSubexprs(subexprs, maxNumNewVars);
 
     // Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
@@ -900,6 +901,7 @@ static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>&
     return std::vector<Var>(vars.begin(), vars.end());
 }
 
+// EXTENDED RESOLUTION - variable definition heuristic
 std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get set of all variables
     std::vector<Var> varVec = getVarVec(s.ca, candidateClauses);
@@ -907,8 +909,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::
     // Add extension variables
     std::map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    const unsigned int desiredNumExtVars = 1;
-    for (unsigned int i = 0; i < desiredNumExtVars; i++) {
+    for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
         int i_a = irand(s.random_seed, static_cast<int>(varVec.size()));
         int i_b = i_a;
@@ -924,6 +925,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::
     return extClauses;
 }
 
+// EXTENDED RESOLUTION - variable deletion heuristic
 std::vector<Var> Solver::user_er_delete_all(Solver& s) {
     std::vector<Var> toDelete;
     for (int i = s.originalNumVars + 1; i < s.nVars(); i++)
