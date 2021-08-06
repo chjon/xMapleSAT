@@ -21,9 +21,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_Solver_h
 #define Minisat_Solver_h
 
-#include <vector>
 #include <map>
 #include <set>
+#include <vector>
 #include "mtl/Vec.h"
 #include "mtl/Heap.h"
 #include "mtl/Alg.h"
@@ -251,7 +251,7 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    std::map<std::set<Lit>, Var> extVarDefs;            // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
+    std::map<std::pair<Lit, Lit>, Lit> extVarDefs;      // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                                         // This map is used for replacing disjunctions with the corresponding extension variable
                                                         // This is NOT the same as the extension variable introduction heuristic
     int                          originalNumVars;       // The number of variables in the original formula
@@ -372,6 +372,14 @@ protected:
         unsigned int maxNumNewVars
     );
 
+    // Internal helpers for addExtVars
+    void er_prioritize(const std::vector<Var>& toPrioritize);
+    std::vector<Var> er_add(
+        vec<CRef>& er_def_db,
+        std::map<std::pair<Lit, Lit>, Lit>& er_def_map,
+        const std::map< Var, std::pair<Lit, Lit> >& newDefMap
+    );
+
     // Description:
     //   Select extension variables to delete and delete them
     //
@@ -397,6 +405,12 @@ protected:
     // Parameters:
     //   out_learnt: The candidate clause to be learnt
     void substituteExt (vec<Lit>& out_learnt);
+
+    // Internal helper for substituteExt
+    static void er_substitute(
+        vec<Lit>& out_learnt,
+        std::map<std::pair<Lit, Lit>, Lit>& extVarDefs
+    );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // EXTENDED RESOLUTION - user functions/heuristics
