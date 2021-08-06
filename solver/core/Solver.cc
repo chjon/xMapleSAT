@@ -133,8 +133,14 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 {
-    ext_overhead.ru_utime.tv_sec  = 0;
-    ext_overhead.ru_utime.tv_usec = 0;
+    ext_add_overhead .ru_utime.tv_sec  = 0;
+    ext_add_overhead .ru_utime.tv_usec = 0;
+    ext_delC_overhead.ru_utime.tv_sec  = 0;
+    ext_delC_overhead.ru_utime.tv_usec = 0;
+    ext_delV_overhead.ru_utime.tv_sec  = 0;
+    ext_delV_overhead.ru_utime.tv_usec = 0;
+    ext_sub_overhead .ru_utime.tv_sec  = 0;
+    ext_sub_overhead .ru_utime.tv_usec = 0;
 }
 
 
@@ -363,7 +369,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
 
-        // EXTENDED RESOLUTION - statistics
         if (isExtClause(c)) conflict_extclauses++;
 
 #if LBD_BASED_CLAUSE_DELETION
@@ -678,9 +683,9 @@ void Solver::reduceDB() {
     reduceDB(learnts);
 #if DELETE_EXT_LEARNT_CLAUSES
     // EXTENDED RESOLUTION - delete learnt extension clauses
-    extTimerStart();
+    extTimerStart(); // TODO: add dedicated timers for each function
     reduceDB(extLearnts);
-    extTimerStop();
+    extTimerStop(ext_delC_overhead);
 #endif
 #if DELETE_EXT_VARS
     // Delete extension variables
@@ -796,6 +801,8 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
     // Find the variables in the clauses with the top k highest activities
     // FIXME: this is probably inefficient, but there isn't a preexisting data structure which keeps these in sorted order
     // Optimization idea: sort each of the clause DBs and then pick the top k (could also use heap sort)
+
+    // Optimization idea: use a quicksort-type of algo for expected-linear time
     std::vector<CRef> clauseWindow;
     for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], numClauses);
     for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], numClauses);
@@ -839,6 +846,8 @@ static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::v
     std::map<std::set<Lit>, int> subexprs;
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
+            // TODO: Check if we've already processed a pair of clauses (cache) and add their counts
+
             // We might spend a lot of time here - exit if interrupted
             // FIXME: ideally, we wouldn't have to check for this at all if the sets of literals were sufficiently small
             if (s.interrupted()) goto SUBEXPR_DOUBLE_BREAK;
@@ -953,6 +962,9 @@ void Solver::addExtVars(
     std::map< Var, std::pair<Lit, Lit> > extDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
 
     // Add extension variables
+    // TODO: verify that we do not already have an extension variable for this literal pair before adding clauses
+    // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v a)
+    // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
     const double desiredActivity = activity[order_heap[0]] * 1.5;
     for (unsigned int i = 0; i < extDefMap.size(); i++) {
         Var extVar = newVar();
@@ -976,9 +988,6 @@ void Solver::addExtVars(
         assert(var(x) > var(a) && var(x) > var(b));
 
         // Create extension clauses
-        // TODO: verify that we do not already have an extension variable for this literal pair before adding clauses
-        // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v a)
-        // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
         addClauseToDB(extDefs, ~x, a, b);
         addClauseToDB(extDefs, x, ~a);
         addClauseToDB(extDefs, x, ~b);
@@ -988,7 +997,7 @@ void Solver::addExtVars(
         extVarDefs.insert(std::make_pair(def, i->first));
     }
 
-    extTimerStop();
+    extTimerStop(ext_add_overhead);
 }
 
 void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::set<Var>& varsToDeleteSet) {
@@ -1033,7 +1042,7 @@ void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
     // option 2: substitute extension variable with definition
     // TODO
 
-    extTimerStop();
+    extTimerStop(ext_delV_overhead);
 }
 
 static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemove) {
@@ -1043,21 +1052,33 @@ static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemo
 void Solver::substituteExt(vec<Lit>& out_learnt) {
     extTimerStart();
 
+    std::set<Lit> learntLits;
+    for (int i = 1; i < out_learnt.size(); i++) learntLits.insert(out_learnt[i]);
+
     // FIXME: this is a linear search through the list of extension definitions
     // is there a more efficient way to find disjunctions corresponding to an extension variable?
 
-    std::set<Lit> learntLits;
-    for (int i = 1; i < out_learnt.size(); i++) learntLits.insert(out_learnt[i]);
-    for (std::map<std::set<Lit>, Var>::iterator i = extVarDefs.begin(); i != extVarDefs.end(); i++) {
-        // Find intersection
-        std::vector<Lit> intersection(learntLits.size());
-        std::vector<Lit>::iterator it = std::set_intersection(learntLits.begin(), learntLits.end(), i->first.begin(), i->first.end(), intersection.begin());
-        intersection.resize(it - intersection.begin());
+    // FIXME: The running time here scales with the number of extension variables
+    // Instead, create the pairs and just look them up from the map
 
-        // Replace disjunction with intersection
-        if (intersection.size() == i->first.size()) {
-            removeLits(learntLits, intersection);
-            learntLits.insert(mkLit(i->second, true));
+    // Possible future investigation: should we ignore really long clauses in order to save time?
+    // This would need a command-line option to toggle ignoring the clauses
+
+    std::set<Lit> key;
+    for (int i = 1; i < out_learnt.size(); i++) {
+        for (int j = i + 1; j < out_learnt.size(); j++) {
+            // Generate literal pairs
+            key.insert(out_learnt[i]);
+            key.insert(out_learnt[j]);
+
+            // Check if there is a corresponding extension variable
+            std::map<std::set<Lit>, Var>::iterator it = extVarDefs.find(key);
+            if (it != extVarDefs.end()) {
+                removeLits(learntLits, std::vector<Lit>(key.begin(), key.end()));
+                learntLits.insert(mkLit(it->second, false));
+            }
+
+            key.clear();
         }
     }
 
@@ -1070,7 +1091,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
     }
     out_learnt.shrink(out_learnt.size() - i);
 
-    extTimerStop();
+    extTimerStop(ext_sub_overhead);
 }
 
 /*_________________________________________________________________________________________________
@@ -1235,7 +1256,6 @@ lbool Solver::search(int nof_conflicts)
                     // Model found:
                     return l_True;
                 
-                // EXTENDED RESOLUTION - statistics
                 if (isExtVar(var(next))) branchOnExt++;
             }
 

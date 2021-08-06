@@ -166,8 +166,11 @@ public:
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
     struct rusage ext_timer_start, ext_timer_end;
-    struct rusage ext_overhead;
-    double extTimerRead();
+    struct rusage ext_add_overhead; // Overhead for adding extension variables
+    struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
+    struct rusage ext_delV_overhead; // Overhead for deleting extension variables
+    struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
+    double extTimerRead(unsigned int i); // 0: add, 1: delC, 2: delV, 3: sub
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -461,7 +464,7 @@ protected:
     // EXTENDED RESOLUTION - statistics
     // Functions for measuring extended resolution overhead
     void   extTimerStart();
-    void   extTimerStop();
+    void   extTimerStop(struct rusage& ext_overhead);
 
     // Static helpers:
     //
@@ -601,7 +604,7 @@ inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ ve
 inline void Solver::extTimerStart() {
     getrusage(RUSAGE_SELF, &ext_timer_start);
 }
-inline void Solver::extTimerStop() {
+inline void Solver::extTimerStop(struct rusage& ext_overhead) {
     getrusage(RUSAGE_SELF, &ext_timer_end);
     
     // Add to total overhead
@@ -621,8 +624,18 @@ inline void Solver::extTimerStop() {
         ext_overhead.ru_utime.tv_sec  += 1;
     }
 }
-inline double Solver::extTimerRead() {
+
+static inline double readTimer(struct rusage& ext_overhead) {
     return (double)ext_overhead.ru_utime.tv_sec + (double)ext_overhead.ru_utime.tv_usec / 1000000;
+}
+inline double Solver::extTimerRead(unsigned int i) {
+    switch(i) {
+        case 0: return readTimer(ext_add_overhead);
+        case 1: return readTimer(ext_delC_overhead);
+        case 2: return readTimer(ext_delV_overhead);
+        case 3: return readTimer(ext_sub_overhead);
+        default: return -1.;
+    }
 }
 
 //=================================================================================================
