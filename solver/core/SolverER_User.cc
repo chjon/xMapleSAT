@@ -3,6 +3,10 @@
 
 namespace Minisat {
 
+static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
+    return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
+}
+
 // Build a window of the clauses with the top k highest activities
 static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CRef clauseIndex, unsigned int maxWindowSize) {
     CRef tmp = 0;
@@ -123,9 +127,12 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std:
         Lit a = *it; it++;
         Lit b = *it; it++;
 
-        // Add extension variable
-        extClauses.insert(std::make_pair(x, std::make_pair(a, b)));
-        x++;
+        std::pair<Lit, Lit> key = mkLitPair(a, b);
+        if (s.extVarDefs.find(key) == s.extVarDefs.end()) {
+            // Add extension variable
+            extClauses.insert(std::make_pair(x, key));
+            x++;
+        }
     }
     return extClauses;
 }
@@ -155,9 +162,12 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::
         Lit a = mkLit(varVec[i_a], irand(s.random_seed, 1));
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
-        // Add extension variable
-        extClauses.insert(std::make_pair(x, std::make_pair(a, b)));
-        x++;
+        std::pair<Lit, Lit> key = mkLitPair(a, b);
+        if (s.extVarDefs.find(key) == s.extVarDefs.end()) {
+            // Add extension variable
+            extClauses.insert(std::make_pair(x, key));
+            x++;
+        }
     }
 
     return extClauses;

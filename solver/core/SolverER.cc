@@ -46,20 +46,42 @@ inline void Solver::er_substitute(vec<Lit>& clause, std::map<std::pair<Lit, Lit>
     std::set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
 
+    // TODO: can we use a trie to speed up this search?
+    // - problems: we are spending a lot of time here even where there are no extension definitions to check
+
     // Possible future investigation: should we ignore really long clauses in order to save time?
     // This would need a command-line option to toggle ignoring the clauses
-    for (int i = 1; i < clause.size(); i++) {
-        for (int j = i + 1; j < clause.size(); j++) {
-            // Generate literal pairs
-            std::pair<Lit, Lit> key = mkLitPair(clause[i], clause[j]);
 
-            // Check if there is a corresponding extension variable
-            std::map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(key);
-            if (it != extVarDefs.end()) {
-                learntLits.erase(clause[i]);
-                learntLits.erase(clause[j]);
-                learntLits.insert(it->second);
-                break;
+    const unsigned int numPairs = static_cast<unsigned int>((clause.size() - 1) * (clause.size() - 2)) >> 1;
+    if (numPairs < extVarDefs.size()) {
+        for (int i = 1; i < clause.size(); i++) {
+            for (int j = i + 1; j < clause.size(); j++) {
+                // Generate literal pairs
+                std::pair<Lit, Lit> key = mkLitPair(clause[i], clause[j]);
+
+                // Check if there is a corresponding extension variable
+                std::map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(key);
+                if (it != extVarDefs.end()) {
+                    learntLits.erase(clause[i]);
+                    learntLits.erase(clause[j]);
+                    learntLits.insert(it->second);
+                    break;
+                }
+            }
+        }
+    } else {
+        for (std::map<std::pair<Lit, Lit>, Lit>::iterator i = extVarDefs.begin(); i != extVarDefs.end(); i++) {
+            // Find intersection
+            const std::pair<Lit, Lit>& key = i->first;
+
+            // Replace disjunction with intersection
+            if (
+                learntLits.find(key.first ) != learntLits.end() &&
+                learntLits.find(key.second) != learntLits.end()
+            ) {
+                learntLits.erase(key.first);
+                learntLits.erase(key.second);
+                learntLits.insert(i->second);
             }
         }
     }
