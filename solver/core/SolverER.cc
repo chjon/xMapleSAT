@@ -41,50 +41,44 @@ static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemo
     for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
 }
 
-inline void Solver::er_substitute(vec<Lit>& clause, std::map<std::pair<Lit, Lit>, Lit>& extVarDefs) {
+static inline bool contains (std::map< Lit, std::map<Lit, Lit> > extVarMap, Lit a, Lit b) {
+    std::map< Lit, std::map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
+    if (it1 == extVarMap.end()) return false;
+    std::map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
+    return it2 != it1->second.end();
+}
+
+inline void Solver::er_substitute(vec<Lit>& clause, std::map<Lit, std::map<Lit, Lit> >& extVarDefs) {
     // Get set of all literals in clause
     std::set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
 
-    // TODO: can we use a trie to speed up this search?
-    // - problems: we are spending a lot of time here even where there are no extension definitions to check
-
     // Possible future investigation: should we ignore really long clauses in order to save time?
     // This would need a command-line option to toggle ignoring the clauses
 
-    const unsigned int numPairs = static_cast<unsigned int>((clause.size() - 1) * (clause.size() - 2)) >> 1;
-    if (numPairs < extVarDefs.size()) {
-        for (int i = 1; i < clause.size(); i++) {
-            for (int j = i + 1; j < clause.size(); j++) {
-                // Generate literal pairs
-                std::pair<Lit, Lit> key = mkLitPair(clause[i], clause[j]);
+    // Check for extension variables over literal pairs
+    for (int i = 1; i < clause.size(); i++) {
+        // Check if any extension variables are defined over this literal
+        std::map< Lit, std::map<Lit, Lit> >::const_iterator tmp1 = extVarDefs.find(clause[i]);
+        if (tmp1 == extVarDefs.end()) continue;
 
-                // Check if there is a corresponding extension variable
-                std::map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(key);
-                if (it != extVarDefs.end()) {
-                    learntLits.erase(clause[i]);
-                    learntLits.erase(clause[j]);
-                    learntLits.insert(it->second);
-                    break;
-                }
-            }
-        }
-    } else {
-        for (std::map<std::pair<Lit, Lit>, Lit>::iterator i = extVarDefs.begin(); i != extVarDefs.end(); i++) {
-            // Find intersection
-            const std::pair<Lit, Lit>& key = i->first;
+        // TODO: would it be better to iterate over the extension definitions here?
+        // Also consider sorting or doing a set intersection here
+        const std::map<Lit, Lit>& possibleDefs = tmp1->second;
+        for (int j = i + 1; j < clause.size(); j++) {
+            // Check if any extension variables are defined over this literal pair
+            std::map<Lit, Lit>::const_iterator tmp2 = possibleDefs.find(clause[j]);
+            if (tmp2 == possibleDefs.end()) continue;
 
             // Replace disjunction with intersection
-            if (
-                learntLits.find(key.first ) != learntLits.end() &&
-                learntLits.find(key.second) != learntLits.end()
-            ) {
-                learntLits.erase(key.first);
-                learntLits.erase(key.second);
-                learntLits.insert(i->second);
-            }
+            learntLits.erase(tmp1->first);
+            learntLits.erase(tmp2->first);
+            learntLits.insert(tmp2->second);
+            // printf("(%d v %d) = %d\n", var(tmp1->first) * (sign(tmp1->first) ? -1 : 1), var(tmp2->first) * (sign(tmp2->first) ? -1 : 1), var(tmp2->second) * (sign(tmp2->second) ? -1 : 1));
+            goto ER_SUBSTITUTE_DOUBLE_BREAK;
         }
     }
+    ER_SUBSTITUTE_DOUBLE_BREAK:;
 
     // Generate reduced learnt clause
     std::set<Lit>::iterator it = learntLits.begin();
@@ -118,9 +112,31 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
     }
 }
 
+static inline void insert (std::map< Lit, std::map<Lit, Lit> >& defMap, Lit x, Lit a, Lit b) {
+    // Insert for tuple <a, b>
+    std::map< Lit, std::map<Lit, Lit> >::iterator it1 = defMap.find(a);
+    if (it1 == defMap.end()) {
+        std::map<Lit, Lit> submap;
+        submap.insert(std::make_pair(b, x));
+        defMap.insert(std::make_pair(a, submap));
+    } else {
+        it1->second.insert(std::make_pair(b, x));
+    }
+
+    // Insert for tuple <b, a>
+    std::map< Lit, std::map<Lit, Lit> >::iterator it2 = defMap.find(b);
+    if (it2 == defMap.end()) {
+        std::map<Lit, Lit> submap;
+        submap.insert(std::make_pair(a, x));
+        defMap.insert(std::make_pair(b, submap));
+    } else {
+        it2->second.insert(std::make_pair(a, x));
+    }
+}
+
 inline std::vector<Var> Solver::er_add(
     vec<CRef>& er_def_db,
-    std::map<std::pair<Lit, Lit>, Lit>& er_def_map,
+    std::map< Lit, std::map<Lit, Lit> >& er_def_map,
     const std::map< Var, std::pair<Lit, Lit> >& newDefMap
 ) {
     // Add extension variables
@@ -146,7 +162,7 @@ inline std::vector<Var> Solver::er_add(
         addClauseToDB(er_def_db, x, ~b);
 
         // Save definition
-        er_def_map.insert(std::make_pair(mkLitPair(a, b), x));
+        insert(er_def_map, x, a, b);
     }
 
     return new_variables;

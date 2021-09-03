@@ -86,7 +86,7 @@ static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::v
             addIntersectionToSubexprs(subexprs, intersection);
         }
     }
-    SUBEXPR_DOUBLE_BREAK:
+    SUBEXPR_DOUBLE_BREAK:;
     return subexprs;
 }
 
@@ -104,6 +104,13 @@ static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, 
     }
 
     return subexprWindow;
+}
+
+static inline bool contains (std::map< Lit, std::map<Lit, Lit> > extVarMap, Lit a, Lit b) {
+    std::map< Lit, std::map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
+    if (it1 == extVarMap.end()) return false;
+    std::map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
+    return it2 != it1->second.end();
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
@@ -128,7 +135,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std:
         Lit b = *it; it++;
 
         std::pair<Lit, Lit> key = mkLitPair(a, b);
-        if (s.extVarDefs.find(key) == s.extVarDefs.end()) {
+        if (!contains(s.extVarDefs, a, b)) {
             // Add extension variable
             extClauses.insert(std::make_pair(x, key));
             x++;
@@ -163,7 +170,7 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
         std::pair<Lit, Lit> key = mkLitPair(a, b);
-        if (s.extVarDefs.find(key) == s.extVarDefs.end()) {
+        if (!contains(s.extVarDefs, a, b)) {
             // Add extension variable
             extClauses.insert(std::make_pair(x, key));
             x++;

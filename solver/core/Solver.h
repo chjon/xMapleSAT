@@ -251,7 +251,7 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    std::map<std::pair<Lit, Lit>, Lit> extVarDefs;      // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
+    std::map< Lit, std::map<Lit, Lit> > extVarDefs;     // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                                         // This map is used for replacing disjunctions with the corresponding extension variable
                                                         // This is NOT the same as the extension variable introduction heuristic
     int                          originalNumVars;       // The number of variables in the original formula
@@ -376,7 +376,7 @@ protected:
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         vec<CRef>& er_def_db,
-        std::map<std::pair<Lit, Lit>, Lit>& er_def_map,
+        std::map< Lit, std::map<Lit, Lit> >& er_def_map,
         const std::map< Var, std::pair<Lit, Lit> >& newDefMap
     );
 
@@ -409,7 +409,7 @@ protected:
     // Internal helper for substituteExt
     static void er_substitute(
         vec<Lit>& out_learnt,
-        std::map<std::pair<Lit, Lit>, Lit>& extVarDefs
+        std::map< Lit, std::map<Lit, Lit> >& extVarDefs
     );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -570,7 +570,7 @@ inline int      Solver::nVars         ()      const   { return vardata.size(); }
 // EXTENDED RESOLUTION - statistics
 inline int      Solver::nExtLearnts   ()      const   { return extLearnts.size(); }
 inline int      Solver::nExtDefs      ()      const   { return extDefs.size(); }
-inline int      Solver::nExtVars      ()      const   { return extVarDefs.size(); }
+inline int      Solver::nExtVars      ()      const   { return vardata.size() - originalNumVars; }
 
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
