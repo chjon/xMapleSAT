@@ -130,14 +130,16 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 {
-    ext_add_overhead .ru_utime.tv_sec  = 0;
-    ext_add_overhead .ru_utime.tv_usec = 0;
-    ext_delC_overhead.ru_utime.tv_sec  = 0;
-    ext_delC_overhead.ru_utime.tv_usec = 0;
-    ext_delV_overhead.ru_utime.tv_sec  = 0;
-    ext_delV_overhead.ru_utime.tv_usec = 0;
-    ext_sub_overhead .ru_utime.tv_sec  = 0;
-    ext_sub_overhead .ru_utime.tv_usec = 0;
+    ext_add_heuristic_overhead.ru_utime.tv_sec  = 0;
+    ext_add_heuristic_overhead.ru_utime.tv_usec = 0;
+    ext_add_ds_overhead       .ru_utime.tv_sec  = 0;
+    ext_add_ds_overhead       .ru_utime.tv_usec = 0;
+    ext_delC_overhead         .ru_utime.tv_sec  = 0;
+    ext_delC_overhead         .ru_utime.tv_usec = 0;
+    ext_delV_overhead         .ru_utime.tv_sec  = 0;
+    ext_delV_overhead         .ru_utime.tv_usec = 0;
+    ext_sub_overhead          .ru_utime.tv_sec  = 0;
+    ext_sub_overhead          .ru_utime.tv_usec = 0;
 }
 
 

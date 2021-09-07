@@ -166,7 +166,8 @@ public:
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
     struct rusage ext_timer_start, ext_timer_end;
-    struct rusage ext_add_overhead; // Overhead for adding extension variables
+    struct rusage ext_add_heuristic_overhead; // Overhead of running the heuristics for adding extension variables
+    struct rusage ext_add_ds_overhead; // Overhead for adding extension variables
     struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
     struct rusage ext_delV_overhead; // Overhead for deleting extension variables
     struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
@@ -644,10 +645,11 @@ static inline double readTimer(struct rusage& ext_overhead) {
 }
 inline double Solver::extTimerRead(unsigned int i) {
     switch(i) {
-        case 0: return readTimer(ext_add_overhead);
-        case 1: return readTimer(ext_delC_overhead);
-        case 2: return readTimer(ext_delV_overhead);
-        case 3: return readTimer(ext_sub_overhead);
+        case 0: return readTimer(ext_add_heuristic_overhead);
+        case 1: return readTimer(ext_add_ds_overhead);
+        case 2: return readTimer(ext_delC_overhead);
+        case 3: return readTimer(ext_delV_overhead);
+        case 4: return readTimer(ext_sub_overhead);
         default: return -1.;
     }
 }

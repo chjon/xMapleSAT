@@ -177,15 +177,17 @@ void Solver::addExtVars(
     unsigned int numClausesToConsider,
     unsigned int maxNumNewVars
 ) {
-    timerStart();
-
     // Get extension clauses according to heuristics
+    timerStart();
     std::vector<CRef> candidateClauses = er_select_heuristic(*this, numClausesToConsider);
     const std::map< Var, std::pair<Lit, Lit> > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
+    timerStop(ext_add_heuristic_overhead);
+
+    // Add the extension variables to our data structures
+    timerStart();
     const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, newDefMap);
-    er_prioritize(new_variables);
-    
-    timerStop(ext_add_overhead);
+    er_prioritize(new_variables); 
+    timerStop(ext_add_ds_overhead);
 }
 
 void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
