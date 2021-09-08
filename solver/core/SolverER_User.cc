@@ -40,29 +40,29 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
     return clauseWindow;
 }
 
-static inline void addIntersectionToSubexprs(std::map<std::set<Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
-    std::set<Lit> subexpr;
+// FIXME: Change subexprs to use mklitpair
+static inline void addIntersectionToSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
+    // Time complexity: O(k^2)
     for (unsigned int i = 0; i < intersection.size(); i++) {
         for (unsigned int j = i + 1; j < intersection.size(); j++) {
             // Count subexpressions of length 2
-            subexpr.clear();
-            subexpr.insert(intersection[i]);
-            subexpr.insert(intersection[j]);
+            std::pair<Lit, Lit> key = mkLitPair(intersection[i], intersection[j]);
 
             // Add to the counter for this literal pair
-            std::map<std::set<Lit>, int>::iterator it = subexprs.find(subexpr);
-            if (it == subexprs.end()) subexprs.insert(std::make_pair(subexpr, 1));
+            std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexprs.find(key);
+            if (it == subexprs.end()) subexprs.insert(std::make_pair(key, 1));
             else it->second++;
         }
     }
 }
 
-static inline std::vector< std::set<Lit> > getLiteralSets(ClauseAllocator& ca, std::vector<CRef>& clauses) {
+static inline std::vector< std::tr1::unordered_set<Lit> > getLiteralSets(ClauseAllocator& ca, std::vector<CRef>& clauses) {
     // Get the set of literals for each clause
-    std::vector< std::set<Lit> > sets;
+    // Time complexity: O(w k log(w k))
+    std::vector< std::tr1::unordered_set<Lit> > sets;
     for (unsigned int i = 0; i < clauses.size(); i++) {
         const Clause& c = ca[clauses[i]];
-        std::set<Lit> set;
+        std::tr1::unordered_set<Lit> set;
         for (int j = 0; j < c.size(); j++) set.insert(c[j]);
         sets.push_back(set);
     }
@@ -70,9 +70,10 @@ static inline std::vector< std::set<Lit> > getLiteralSets(ClauseAllocator& ca, s
     return sets;
 }
 
-static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::vector< std::set<Lit> >& sets) {
+static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(const Solver& s, std::vector< std::tr1::unordered_set<Lit> >& sets) {
     // Count subexpressions by looking at intersections
-    std::map<std::set<Lit>, int> subexprs;
+    // Time complexity: O(w^2 (k + k + ))
+    std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs;
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
             // TODO: Check if we've already processed a pair of clauses (cache) and add their counts
@@ -90,11 +91,11 @@ static inline std::map<std::set<Lit>, int> countSubexprs(const Solver& s, std::v
     return subexprs;
 }
 
-static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, int>& subexprs, unsigned int numSubexprs) {
-    std::set< std::set<Lit> > subexprWindow;
-    std::map<std::set<Lit>, int>::iterator max = subexprs.begin();
+static inline std::tr1::unordered_set< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, unsigned int numSubexprs) {
+    std::tr1::unordered_set< std::pair<Lit, Lit> > subexprWindow;
+    std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator max = subexprs.begin();
     for (unsigned int i = 0; i < numSubexprs && i < subexprs.size(); i++) {
-        for (std::map<std::set<Lit>, int>::iterator it = subexprs.begin(); it != subexprs.end(); it++) {
+        for (std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexprs.begin(); it != subexprs.end(); it++) {
             if ((subexprWindow.find(it->first) == subexprWindow.end()) && (it->second >= max->second)) {
                 max = it;
             }
@@ -106,38 +107,33 @@ static inline std::set< std::set<Lit> > getFreqSubexprs(std::map<std::set<Lit>, 
     return subexprWindow;
 }
 
-static inline bool contains (std::map< Lit, std::map<Lit, Lit> > extVarMap, Lit a, Lit b) {
-    std::map< Lit, std::map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
+static inline bool contains (std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > extVarMap, Lit a, Lit b) {
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
     if (it1 == extVarMap.end()) return false;
-    std::map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
+    std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
     return it2 != it1->second.end();
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
-std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
     // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
     // Ideally, we want the solver object to be const when passed into this function
-    std::vector< std::set<Lit> > sets = getLiteralSets(s.ca, candidateClauses);
+    std::vector< std::tr1::unordered_set<Lit> > sets = getLiteralSets(s.ca, candidateClauses);
 
     // Count subexpressions of length 2
-    std::map<std::set<Lit>, int> subexprs = countSubexprs(s, sets);
+    std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs = countSubexprs(s, sets);
 
     // Get most frequent subexpressions
-    std::set< std::set<Lit> > freqSubExprs = getFreqSubexprs(subexprs, maxNumNewVars);
+    std::tr1::unordered_set< std::pair<Lit, Lit> > freqSubExprs = getFreqSubexprs(subexprs, maxNumNewVars);
 
     // Add extension variables
-    std::map< Var, std::pair<Lit, Lit> > extClauses;
+    std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    for (std::set< std::set<Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
-        std::set<Lit>::const_iterator it = i->begin();
-        Lit a = *it; it++;
-        Lit b = *it; it++;
-
-        std::pair<Lit, Lit> key = mkLitPair(a, b);
-        if (!contains(s.extVarDefs, a, b)) {
+    for (std::tr1::unordered_set< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
+        if (!contains(s.extVarDefs, i->first, i->second)) {
             // Add extension variable
-            extClauses.insert(std::make_pair(x, key));
+            extClauses.insert(std::make_pair(x, *i));
             x++;
         }
     }
@@ -146,7 +142,8 @@ std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std:
 
 static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>& clauses) {
     // Get set of all variables
-    std::set<Var> vars;
+    // Time complexity: O(w k log(w k))
+    std::tr1::unordered_set<Var> vars;
     for (unsigned int i = 0; i < clauses.size(); i++)
         for (int j = 0; j < ca[clauses[i]].size(); j++)
             vars.insert(var(ca[clauses[i]][j]));
@@ -154,12 +151,20 @@ static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>&
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
-std::map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+    // Total time complexity: O(w k log(w k) + x)
+    // w: window size
+    // k: clause width
+    // n: number of variables
+    // x: maximum number of extension variables to introduce at once
+
     // Get set of all variables
+    // Time complexity: O(w k log(w k))
     std::vector<Var> varVec = getVarVec(s.ca, candidateClauses);
 
     // Add extension variables
-    std::map< Var, std::pair<Lit, Lit> > extClauses;
+    // Time complexity: O(x)
+    std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random

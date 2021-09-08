@@ -50,8 +50,8 @@ void printStats(Solver& solver)
     printf("decisions on ext vars : %-12"PRIu64"\n", solver.branchOnExt);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
-    printf("ER_add_heuristic time : %g s\n", solver.extTimerRead(0));
-    printf("ER_add_ds time        : %g s\n", solver.extTimerRead(1));
+    printf("ER_sel time           : %g s\n", solver.extTimerRead(0));
+    printf("ER_add time           : %g s\n", solver.extTimerRead(1));
     printf("ER_delC time          : %g s\n", solver.extTimerRead(2));
     printf("ER_delV time          : %g s\n", solver.extTimerRead(3));
     printf("ER_sub time           : %g s\n", solver.extTimerRead(4));

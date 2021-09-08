@@ -21,8 +21,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_Solver_h
 #define Minisat_Solver_h
 
-#include <map>
-#include <set>
+#include <tr1/unordered_map>
+#include <tr1/unordered_set>
 #include <vector>
 #include "mtl/Vec.h"
 #include "mtl/Heap.h"
@@ -256,7 +256,8 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    std::map< Lit, std::map<Lit, Lit> > extVarDefs;     // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > extVarDefs;
+                                                        // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                                         // This map is used for replacing disjunctions with the corresponding extension variable
                                                         // This is NOT the same as the extension variable introduction heuristic
     int                          originalNumVars;       // The number of variables in the original formula
@@ -372,7 +373,7 @@ protected:
     //     the maximum number of new extension variables to introduce.
     void addExtVars (
         std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
-        std::map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+        std::tr1::unordered_map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
         unsigned int numClausesToConsider,
         unsigned int maxNumNewVars
     );
@@ -381,8 +382,8 @@ protected:
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         vec<CRef>& er_def_db,
-        std::map< Lit, std::map<Lit, Lit> >& er_def_map,
-        const std::map< Var, std::pair<Lit, Lit> >& newDefMap
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& er_def_map,
+        const std::tr1::unordered_map< Var, std::pair<Lit, Lit> >& newDefMap
     );
 
     // Description:
@@ -400,7 +401,7 @@ protected:
     // Parameters:
     //   db     : The clause database to delete from
     //   extvars: The set of extension variables to delete
-    void delExtVars (Minisat::vec<Minisat::CRef>& db, const std::set<Var>& extvars);
+    void delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
 
     // Description:
     //   Replace variable disjunctions in candidate learnt clauses with the corresponding extension variable
@@ -414,7 +415,7 @@ protected:
     // Internal helper for substituteExt
     static void er_substitute(
         vec<Lit>& out_learnt,
-        std::map< Lit, std::map<Lit, Lit> >& extVarDefs
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& extVarDefs
     );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -462,10 +463,10 @@ protected:
     //   extension variables.
 
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
-    static std::map< Var, std::pair<Lit, Lit> > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::tr1::unordered_map< Var, std::pair<Lit, Lit> > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
     // Random literal selection - select two literals at random and define a new extension variable over them.
-    static std::map< Var, std::pair<Lit, Lit> > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::tr1::unordered_map< Var, std::pair<Lit, Lit> > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
     ///// [ user_er_delete_ ] /////
     // Description:

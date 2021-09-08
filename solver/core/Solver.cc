@@ -777,7 +777,7 @@ bool Solver::simplify()
     return true;
 }
 
-void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::set<Var>& varsToDeleteSet) {
+void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
     int i, j;
     sort(db, reduceDB_lt(ca, activity));
 

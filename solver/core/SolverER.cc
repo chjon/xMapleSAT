@@ -3,6 +3,19 @@
 
 #define MICROSEC_PER_SEC (1000000)
 
+// Template specializations for hashing
+namespace std { namespace tr1 {
+    template<>
+    std::size_t std::tr1::hash<std::pair<Minisat::Lit, Minisat::Lit> >::operator()(std::pair<Minisat::Lit, Minisat::Lit> p) const {
+        return std::size_t(p.first.x) << 32 | p.second.x;
+    }
+
+    template<>
+    std::size_t std::tr1::hash<Minisat::Lit>::operator()(Minisat::Lit p) const {
+        return p.x;
+    }
+}}
+
 // Timers
 static struct rusage g_timer_start, g_timer_end;
 inline void timerStart() {
@@ -37,20 +50,20 @@ static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
     return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
 }
 
-static inline void removeLits(std::set<Lit>& set, const std::vector<Lit>& toRemove) {
+static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vector<Lit>& toRemove) {
     for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
 }
 
-static inline bool contains (std::map< Lit, std::map<Lit, Lit> > extVarMap, Lit a, Lit b) {
-    std::map< Lit, std::map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
+static inline bool contains (std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > extVarMap, Lit a, Lit b) {
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
     if (it1 == extVarMap.end()) return false;
-    std::map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
+    std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
     return it2 != it1->second.end();
 }
 
-inline void Solver::er_substitute(vec<Lit>& clause, std::map<Lit, std::map<Lit, Lit> >& extVarDefs) {
+inline void Solver::er_substitute(vec<Lit>& clause, std::tr1::unordered_map<Lit, std::tr1::unordered_map<Lit, Lit> >& extVarDefs) {
     // Get set of all literals in clause
-    std::set<Lit> learntLits;
+    std::tr1::unordered_set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
 
     // Possible future investigation: should we ignore really long clauses in order to save time?
@@ -59,29 +72,28 @@ inline void Solver::er_substitute(vec<Lit>& clause, std::map<Lit, std::map<Lit, 
     // Check for extension variables over literal pairs
     for (int i = 1; i < clause.size(); i++) {
         // Check if any extension variables are defined over this literal
-        std::map< Lit, std::map<Lit, Lit> >::const_iterator tmp1 = extVarDefs.find(clause[i]);
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator tmp1 = extVarDefs.find(clause[i]);
         if (tmp1 == extVarDefs.end()) continue;
 
         // TODO: would it be better to iterate over the extension definitions here?
         // Also consider sorting or doing a set intersection here
-        const std::map<Lit, Lit>& possibleDefs = tmp1->second;
+        const std::tr1::unordered_map<Lit, Lit>& possibleDefs = tmp1->second;
         for (int j = i + 1; j < clause.size(); j++) {
             // Check if any extension variables are defined over this literal pair
-            std::map<Lit, Lit>::const_iterator tmp2 = possibleDefs.find(clause[j]);
+            std::tr1::unordered_map<Lit, Lit>::const_iterator tmp2 = possibleDefs.find(clause[j]);
             if (tmp2 == possibleDefs.end()) continue;
 
             // Replace disjunction with intersection
             learntLits.erase(tmp1->first);
             learntLits.erase(tmp2->first);
             learntLits.insert(tmp2->second);
-            // printf("(%d v %d) = %d\n", var(tmp1->first) * (sign(tmp1->first) ? -1 : 1), var(tmp2->first) * (sign(tmp2->first) ? -1 : 1), var(tmp2->second) * (sign(tmp2->second) ? -1 : 1));
             goto ER_SUBSTITUTE_DOUBLE_BREAK;
         }
     }
     ER_SUBSTITUTE_DOUBLE_BREAK:;
 
     // Generate reduced learnt clause
-    std::set<Lit>::iterator it = learntLits.begin();
+    std::tr1::unordered_set<Lit>::iterator it = learntLits.begin();
     unsigned int i;
     for (i = 1; i <= learntLits.size(); i++) {
         clause[i] = *it;
@@ -112,11 +124,11 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
     }
 }
 
-static inline void insert (std::map< Lit, std::map<Lit, Lit> >& defMap, Lit x, Lit a, Lit b) {
+static inline void insert (std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& defMap, Lit x, Lit a, Lit b) {
     // Insert for tuple <a, b>
-    std::map< Lit, std::map<Lit, Lit> >::iterator it1 = defMap.find(a);
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = defMap.find(a);
     if (it1 == defMap.end()) {
-        std::map<Lit, Lit> submap;
+        std::tr1::unordered_map<Lit, Lit> submap;
         submap.insert(std::make_pair(b, x));
         defMap.insert(std::make_pair(a, submap));
     } else {
@@ -124,9 +136,9 @@ static inline void insert (std::map< Lit, std::map<Lit, Lit> >& defMap, Lit x, L
     }
 
     // Insert for tuple <b, a>
-    std::map< Lit, std::map<Lit, Lit> >::iterator it2 = defMap.find(b);
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it2 = defMap.find(b);
     if (it2 == defMap.end()) {
-        std::map<Lit, Lit> submap;
+        std::tr1::unordered_map<Lit, Lit> submap;
         submap.insert(std::make_pair(a, x));
         defMap.insert(std::make_pair(b, submap));
     } else {
@@ -136,8 +148,8 @@ static inline void insert (std::map< Lit, std::map<Lit, Lit> >& defMap, Lit x, L
 
 inline std::vector<Var> Solver::er_add(
     vec<CRef>& er_def_db,
-    std::map< Lit, std::map<Lit, Lit> >& er_def_map,
-    const std::map< Var, std::pair<Lit, Lit> >& newDefMap
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& er_def_map,
+    const std::tr1::unordered_map< Var, std::pair<Lit, Lit> >& newDefMap
 ) {
     // Add extension variables
     // TODO: verify that we do not already have an extension variable for this literal pair before adding clauses
@@ -149,7 +161,7 @@ inline std::vector<Var> Solver::er_add(
     }
 
     // Add extension clauses
-    for (std::map< Var, std::pair<Lit, Lit> >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
+    for (std::tr1::unordered_map< Var, std::pair<Lit, Lit> >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
         // Get literals
         Lit x = mkLit(i->first);
         Lit a = i->second.first;
@@ -173,7 +185,7 @@ inline std::vector<Var> Solver::er_add(
 // definitions and adding the appropriate clauses and variables.
 void Solver::addExtVars(
     std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
-    std::map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+    std::tr1::unordered_map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
     unsigned int numClausesToConsider,
     unsigned int maxNumNewVars
 ) {
@@ -184,7 +196,7 @@ void Solver::addExtVars(
 
     // Add the extension variables to our data structures
     timerStart();
-    const std::map< Var, std::pair<Lit, Lit> > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
+    const std::tr1::unordered_map< Var, std::pair<Lit, Lit> > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
     const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, newDefMap);
     er_prioritize(new_variables); 
     timerStop(ext_add_overhead);
@@ -195,7 +207,7 @@ void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
 
     // Get variables to delete
     std::vector<Var> varsToDelete = er_delete_heuristic(*this);
-    std::set<Var> varsToDeleteSet(varsToDelete.begin(), varsToDelete.end());
+    std::tr1::unordered_set<Var> varsToDeleteSet(varsToDelete.begin(), varsToDelete.end());
 
     // Delete variables
 
