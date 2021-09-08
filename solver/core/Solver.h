@@ -157,6 +157,10 @@ public:
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
 
+    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable
+    int       ext_window;         // Number of clauses to consider when introducing extension variables.
+    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.
+
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;

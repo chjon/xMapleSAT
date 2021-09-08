@@ -91,16 +91,22 @@ int main(int argc, char** argv)
 #endif
         // Extra options:
         //
-        IntOption    verb   ("MAIN", "verb",   "Verbosity level (0=silent, 1=some, 2=more).", 1, IntRange(0, 2));
-        IntOption    cpu_lim("MAIN", "cpu-lim","Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
-        IntOption    mem_lim("MAIN", "mem-lim","Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
+        IntOption    verb    ("MAIN", "verb",    "Verbosity level (0=silent, 1=some, 2=more).", 1, IntRange(0, 2));
+        IntOption    cpu_lim ("MAIN", "cpu-lim", "Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
+        IntOption    mem_lim ("MAIN", "mem-lim", "Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
+        IntOption    ext_freq("MAIN", "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+        IntOption    ext_wndw("MAIN", "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+        IntOption    ext_num ("MAIN", "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
         
         parseOptions(argc, argv, true);
 
         Solver S;
         double initial_time = cpuTime();
 
-        S.verbosity = verb;
+        S.verbosity     = verb;
+        S.ext_freq      = ext_freq;
+        S.ext_window    = ext_wndw;
+        S.ext_max_intro = ext_num;
         
         solver = &S;
         // Use signal handlers that forcibly quit until the solver will be able to respond to

@@ -824,13 +824,18 @@ lbool Solver::search(int nof_conflicts)
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
     // TODO: make all the numbers here configurable from the command line
-    if (conflicts - prevExtensionConflict >= 2000) {
+    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
+        addExtVars(
+            user_er_select_activity,
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
-        addExtVars(user_er_select_activity, user_er_add_random, 100, 1);
+            user_er_add_random,
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-        addExtVars(user_er_select_activity, user_er_add_subexpr, 100, 10);
+            user_er_add_subexpr,
 #endif
+            ext_window,
+            ext_max_intro
+        );
     }
 
     for (;;){
