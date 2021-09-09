@@ -827,7 +827,7 @@ lbool Solver::search(int nof_conflicts)
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
         addExtVars(
-            user_er_select_activity,
+            user_er_select_activity2,
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
             user_er_add_random,
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH

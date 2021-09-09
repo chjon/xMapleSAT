@@ -40,7 +40,70 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
     return clauseWindow;
 }
 
-// FIXME: Change subexprs to use mklitpair
+// Partition elements such that clauses with smaller activities are left of the pivot
+// This is a helper function for quickselect
+static inline int partition(vec<CRef>& db, ClauseAllocator& ca, int l, int r) {
+    const double pivotActivity = ca[db[r]].activity();
+    int i = l;
+    CRef tmp = 0;
+
+    for (int j = l; j <= r - 1; j++) {
+        if (ca[db[j]].activity() >= pivotActivity) {
+            // Swap db[i] and db[j]
+            tmp = db[i]; db[i] = db[j]; db[j] = tmp;
+            i++;
+        }
+    }
+    // Swap db[i] and db[r]
+    tmp = db[i]; db[i] = db[r]; db[r] = tmp;
+    return i;
+}
+
+// Move elements with the k largest activities to the front of the list
+static void quickselect(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int k) {
+    // If k is smaller than number of elements in array
+    if (k > 0 && k <= r - l + 1) {
+        // Partition the array around last element and get position of pivot element in sorted array
+        int pos = partition(db, ca, l, r);
+        if (pos - l > k - 1) // If position is more, recur for left subarray
+            quickselect(db, ca, l, pos - 1, k);
+        else if (pos - l < k - 1) // Else recur for right subarray
+            quickselect(db, ca, pos + 1, r, k - pos + l - 1);
+    }
+}
+
+// Get the elements with the k largest activities and store them in the target vector
+static void copyKLargest(vec<CRef>& target, vec<CRef>& source, ClauseAllocator& ca, unsigned int k) {
+#define ER_ALLOW_DB_MODIFICATION false
+#if ER_ALLOW_DB_MODIFICATION
+    quickselect(source, ca, 0, source.size() - 1, k);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(source.size()), k); i++) target.push(source[i]);
+#else
+    // TODO: is making this copy necessary?
+    vec<CRef> copy;
+    source.copyTo(copy);
+    quickselect(copy, ca, 0, copy.size() - 1, k);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(copy.size()), k); i++) target.push(copy[i]);
+#endif
+}
+
+std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numClauses) {
+    // Find the variables in the clauses with the top k highest activities
+    // Uses a quicksort-type of algo for expected-linear time
+    // Adapted from: https://www.geeksforgeeks.org/kth-smallestlargest-element-unsorted-array/
+
+    vec<CRef> clauses;
+    copyKLargest(clauses, s.clauses   , s.ca, numClauses);
+    copyKLargest(clauses, s.learnts   , s.ca, numClauses);
+    copyKLargest(clauses, s.extLearnts, s.ca, numClauses);
+    copyKLargest(clauses, s.extDefs   , s.ca, numClauses);
+
+    std::vector<CRef> clauseWindow;
+    quickselect(clauses, s.ca, 0, clauses.size() - 1, numClauses);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(clauses.size()), numClauses); i++) clauseWindow.push_back(clauses[i]);
+    return clauseWindow;
+}
+
 static inline void addIntersectionToSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
     // Time complexity: O(k^2)
     for (unsigned int i = 0; i < intersection.size(); i++) {

@@ -445,6 +445,7 @@ protected:
 
     // Activity-based clause selection - select the most active clauses. This heuristic focuses on locality.
     static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
+    static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
 
     ///// [ user_er_add_ ] /////
     // Description:
