@@ -777,30 +777,6 @@ bool Solver::simplify()
     return true;
 }
 
-void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
-    int i, j;
-    sort(db, reduceDB_lt(ca, activity));
-
-    // Delete clauses which contain the extension variable
-    // TODO: is there a more efficient way to implement this? e.g. have a list of clauses for each extension variable?
-    for (i = j = 0; i < db.size(); i++) {
-        Clause& c = ca[db[i]];
-        bool containsVarToDelete = false;
-        for (int k = 0; k < c.size(); k++) {
-            if (varsToDeleteSet.find(var(c[k])) != varsToDeleteSet.end()) {
-                containsVarToDelete = true;
-                break;
-            }
-        }
-
-        if (containsVarToDelete)
-            removeClause(db[i]);
-        else
-            db[j++] = db[i];
-    }
-    db.shrink(i - j);
-}
-
 /*_________________________________________________________________________________________________
 |
 |  search : (nof_conflicts : int) (params : const SearchParams&)  ->  [lbool]
