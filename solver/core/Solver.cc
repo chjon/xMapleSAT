@@ -99,7 +99,7 @@ Solver::Solver() :
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
-  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0)
+  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0), extfrac_total(0)
 
   , lbd_calls(0)
 #if BRANCHING_HEURISTIC == CHB
@@ -368,7 +368,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
 
-        if (isExtClause(c)) conflict_extclauses++;
+        if (getNumExtVars(c) > 0) conflict_extclauses++;
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
@@ -858,7 +858,11 @@ lbool Solver::search(int nof_conflicts)
 
                 // Store learnt clause in correct database
                 // Clauses containing extension variables should go in a separate database
-                if (isExtClause(ca[cr])) {
+                int numExtVarsInClause = getNumExtVars(ca[cr]);
+                double extFrac = numExtVarsInClause / (double) learnt_clause.size();
+                extfrac_total += extFrac;
+
+                if (numExtVarsInClause > 0) {
                     extLearnts.push(cr);
                     learnt_extclauses++;
                 } else {

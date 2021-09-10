@@ -169,6 +169,7 @@ public:
     // EXTENDED RESOLUTION - statistics
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+    double extfrac_total;
     struct rusage ext_timer_start, ext_timer_end;
     struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
     struct rusage ext_add_overhead; // Overhead for adding extension variables
@@ -352,8 +353,8 @@ protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // EXTENDED RESOLUTION - internal solver functions
     // check the type of clause or variable
-    bool isExtClause (const Clause& c) const; // Check whether a clause contains an extension variable 
-    bool isExtVar    (Var x)           const; // Check whether a variable is an extension variable
+    int getNumExtVars (const Clause& c) const; // Count the number of extension variables in a clause
+    int isExtVar      (Var x)           const; // Check whether a variable is an extension variable - returns 1 if it is and 0 if it is not
     
     // Main internal methods
 
@@ -556,11 +557,11 @@ inline bool     Solver::locked          (const Clause& c) const               { 
 inline void     Solver::newDecisionLevel()                                    { trail_lim.push(trail.size()); }
 
 // EXTENDED RESOLUTION
-inline bool     Solver::isExtVar   (Var x)           const { return x >= originalNumVars; }
-inline bool     Solver::isExtClause(const Clause& c) const {
-    for (int i = 0; i < c.size(); i++)
-        if (isExtVar(var(c[i]))) return true;
-    return false;
+inline int      Solver::isExtVar     (Var x)           const { return (x >= originalNumVars) ? 1 : 0; }
+inline int      Solver::getNumExtVars(const Clause& c) const {
+    int numExtVar = 0;
+    for (int i = 0; i < c.size(); i++) numExtVar += isExtVar(var(c[i]));
+    return numExtVar;
 }
 
 inline int      Solver::decisionLevel ()      const   { return trail_lim.size(); }
