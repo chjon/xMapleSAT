@@ -42,13 +42,14 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
 
 // Partition elements such that clauses with smaller activities are left of the pivot
 // This is a helper function for quickselect
-static inline int partition(vec<CRef>& db, ClauseAllocator& ca, int l, int r) {
-    const double pivotActivity = ca[db[r]].activity();
-    int i = l;
+static inline int partition(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int pivot) {
+    const double pivotActivity = ca[db[pivot]].activity();
     CRef tmp = 0;
+    tmp = db[pivot]; db[pivot] = db[r]; db[r] = tmp;
+    int i = l;
 
     for (int j = l; j <= r - 1; j++) {
-        if (ca[db[j]].activity() >= pivotActivity) {
+        if (ca[db[j]].activity() > pivotActivity) {
             // Swap db[i] and db[j]
             tmp = db[i]; db[i] = db[j]; db[j] = tmp;
             i++;
@@ -60,29 +61,35 @@ static inline int partition(vec<CRef>& db, ClauseAllocator& ca, int l, int r) {
 }
 
 // Move elements with the k largest activities to the front of the list
-static void quickselect(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int k) {
+void Solver::quickselect(vec<CRef>& db, Solver& solver, int l, int r, int k) {
     // If k is smaller than number of elements in array
-    if (k > 0 && k <= r - l + 1) {
+    if (k <= 0 || k > r - l + 1) return;
+    while (!solver.asynch_interrupt) {
         // Partition the array around last element and get position of pivot element in sorted array
-        int pos = partition(db, ca, l, r);
-        if (pos - l > k - 1) // If position is more, recur for left subarray
-            quickselect(db, ca, l, pos - 1, k);
-        else if (pos - l < k - 1) // Else recur for right subarray
-            quickselect(db, ca, pos + 1, r, k - pos + l - 1);
+        int pivot = l + solver.irand(solver.random_seed, r - l + 1);
+        pivot = partition(db, solver.ca, l, r, pivot);
+
+        if (k < pivot) {
+            r = pivot - 1;
+        } else if (k > pivot) {
+            l = pivot + 1;
+        } else {
+            break;
+        }
     }
 }
 
 // Get the elements with the k largest activities and store them in the target vector
-static void copyKLargest(vec<CRef>& target, vec<CRef>& source, ClauseAllocator& ca, unsigned int k) {
+void Solver::copyKLargest(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k) {
 #define ER_ALLOW_DB_MODIFICATION false
 #if ER_ALLOW_DB_MODIFICATION
-    quickselect(source, ca, 0, source.size() - 1, k);
+    quickselect(source, solver, 0, source.size() - 1, k);
     for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(source.size()), k); i++) target.push(source[i]);
 #else
     // TODO: is making this copy necessary?
     vec<CRef> copy;
     source.copyTo(copy);
-    quickselect(copy, ca, 0, copy.size() - 1, k);
+    quickselect(copy, solver, 0, copy.size() - 1, k);
     for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(copy.size()), k); i++) target.push(copy[i]);
 #endif
 }
@@ -93,13 +100,13 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
     // Adapted from: https://www.geeksforgeeks.org/kth-smallestlargest-element-unsorted-array/
 
     vec<CRef> clauses;
-    copyKLargest(clauses, s.clauses   , s.ca, numClauses);
-    copyKLargest(clauses, s.learnts   , s.ca, numClauses);
-    copyKLargest(clauses, s.extLearnts, s.ca, numClauses);
-    copyKLargest(clauses, s.extDefs   , s.ca, numClauses);
+    copyKLargest(clauses, s.clauses   , s, numClauses);
+    copyKLargest(clauses, s.learnts   , s, numClauses);
+    copyKLargest(clauses, s.extLearnts, s, numClauses);
+    copyKLargest(clauses, s.extDefs   , s, numClauses);
 
     std::vector<CRef> clauseWindow;
-    quickselect(clauses, s.ca, 0, clauses.size() - 1, numClauses);
+    quickselect(clauses, s, 0, clauses.size() - 1, numClauses);
     for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(clauses.size()), numClauses); i++) clauseWindow.push_back(clauses[i]);
     return clauseWindow;
 }
@@ -135,7 +142,8 @@ static inline std::vector< std::tr1::unordered_set<Lit> > getLiteralSets(ClauseA
 
 static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(const Solver& s, std::vector< std::tr1::unordered_set<Lit> >& sets) {
     // Count subexpressions by looking at intersections
-    // Time complexity: O(w^2 (k + k + ))
+    // Time complexity: O(w^2 k)
+    // TODO: we can get O(w k^2 time, which should be better)
     std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs;
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
