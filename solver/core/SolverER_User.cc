@@ -62,9 +62,9 @@ static inline int partition(vec<CRef>& db, ClauseAllocator& ca, int l, int r, in
 
 // Move elements with the k largest activities to the front of the list
 void Solver::quickselect(vec<CRef>& db, Solver& solver, int l, int r, int k) {
-    // If k is smaller than number of elements in array
-    if (k <= 0 || k > r - l + 1) return;
-    while (!solver.asynch_interrupt) {
+    // Ensure we have a valid value of k
+    if (k <= 0 || k >= r - l + 1) return;
+    while (!solver.interrupted()) {
         // Partition the array around last element and get position of pivot element in sorted array
         int pivot = l + solver.irand(solver.random_seed, r - l + 1);
         pivot = partition(db, solver.ca, l, r, pivot);
@@ -97,7 +97,7 @@ void Solver::copyKLargest(vec<CRef>& target, vec<CRef>& source, Solver& solver, 
 std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numClauses) {
     // Find the variables in the clauses with the top k highest activities
     // Uses a quicksort-type of algo for expected-linear time
-    // Adapted from: https://www.geeksforgeeks.org/kth-smallestlargest-element-unsorted-array/
+    // Adapted from: https://en.wikipedia.org/wiki/Quickselect
 
     vec<CRef> clauses;
     copyKLargest(clauses, s.clauses   , s, numClauses);
@@ -142,9 +142,11 @@ static inline std::vector< std::tr1::unordered_set<Lit> > getLiteralSets(ClauseA
 
 static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(const Solver& s, std::vector< std::tr1::unordered_set<Lit> >& sets) {
     // Count subexpressions by looking at intersections
-    // Time complexity: O(w^2 k)
-    // TODO: we can get O(w k^2 time, which should be better)
+    // Time complexity: O(w k^2)
     std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs;
+
+// #define USE_SET_INTERSECTION
+#ifdef USE_SET_INTERSECTION
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
             // TODO: Check if we've already processed a pair of clauses (cache) and add their counts
@@ -159,6 +161,28 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
         }
     }
     SUBEXPR_DOUBLE_BREAK:;
+#else
+    for (unsigned int i = 0; i < sets.size() && !s.interrupted(); i++) {
+        std::tr1::unordered_set<Lit>& clause = sets[i];
+        // printf("%u/%lu: %lu\n", i, sets.size(), clause.size());
+        if (clause.size() > 100) continue;
+
+        for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
+            std::tr1::unordered_set<Lit>::iterator k = j; k++;
+            while (k != clause.end()) {
+                // Count subexpressions of length 2
+                std::pair<Lit, Lit> key = mkLitPair(*j, *k);
+
+                // Add to the counter for this literal pair
+                std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexprs.find(key);
+                if (it == subexprs.end()) subexprs.insert(std::make_pair(key, 1));
+                else it->second++;
+
+                k++;
+            }
+        }
+    }
+#endif
     return subexprs;
 }
 
