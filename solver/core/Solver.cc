@@ -799,7 +799,6 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
-    // TODO: make all the numbers here configurable from the command line
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
         addExtVars(
