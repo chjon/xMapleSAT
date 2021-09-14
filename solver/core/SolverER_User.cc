@@ -195,15 +195,17 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
             addIntersectionToSubexprs(subexprs, intersection);
         }
     }
-    SUBEXPR_DOUBLE_BREAK:;
 #else
-    for (unsigned int i = 0; i < sets.size() && !s.interrupted(); i++) {
+    for (unsigned int i = 0; i < sets.size(); i++) {
         std::tr1::unordered_set<Lit>& clause = sets[i];
         // printf("%u/%lu: %lu\n", i, sets.size(), clause.size());
         if (clause.size() > 100) continue;
 
-        for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end() && !s.interrupted(); j++) {
+        for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;
+            // We might spend a lot of time here - exit if interrupted
+            // FIXME: ideally, we wouldn't have to check for this at all if the sets of literals were sufficiently small
+            if (s.interrupted()) goto SUBEXPR_DOUBLE_BREAK;
             while (k != clause.end()) {
                 // Count subexpressions of length 2
                 std::pair<Lit, Lit> key = mkLitPair(*j, *k);
@@ -218,6 +220,7 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
         }
     }
 #endif
+    SUBEXPR_DOUBLE_BREAK:;
     return subexprs;
 }
 
