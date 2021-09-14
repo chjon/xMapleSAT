@@ -77,7 +77,41 @@ void Solver::quickselect_activity(vec<CRef>& db, Solver& solver, int l, int r, i
     }
 }
 
+// Partition elements such that clauses with larger activities are left of the pivot
+// This is a helper function for quickselect
+inline int Solver::partition_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, int l, int r, int pivot) {
+    const int pivot_count = subexpr_count.find(db[pivot])->second;
+    std::pair<Lit, Lit> tmp;
+    tmp = db[pivot]; db[pivot] = db[r]; db[r] = tmp;
+    int i = l;
 
+    for (int j = l; j <= r - 1; j++) {
+        if (subexpr_count.find(db[j])->second > pivot_count) {
+            // Swap db[i] and db[j]
+            tmp = db[i]; db[i] = db[j]; db[j] = tmp;
+            i++;
+        }
+    }
+    // Swap db[i] and db[r]
+    tmp = db[i]; db[i] = db[r]; db[r] = tmp;
+    return i;
+}
+
+void Solver::quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k) {
+    // Ensure we have a valid value of k
+    k--;
+    if (k <= 0 || k >= r - l + 1) return;
+    while (!solver.interrupted()) {
+        // Partition the array around last element and get position of pivot element in sorted array
+        int pivot = l + solver.irand(solver.random_seed, r - l + 1);
+        pivot = partition_count(db, subexpr_count, l, r, pivot);
+
+        // Update selection bounds
+        if      (k < pivot) r = pivot - 1;
+        else if (k > pivot) l = pivot + 1;
+        else break;
+    }
+}
 
 // Get the elements with the k largest activities and store them in the target vector
 void Solver::copy_k_largest_activity(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k) {
@@ -168,7 +202,7 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
         // printf("%u/%lu: %lu\n", i, sets.size(), clause.size());
         if (clause.size() > 100) continue;
 
-        for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
+        for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end() && !s.interrupted(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;
             while (k != clause.end()) {
                 // Count subexpressions of length 2
@@ -187,21 +221,38 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
     return subexprs;
 }
 
-static inline std::tr1::unordered_set< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, unsigned int numSubexprs) {
-    // TODO: we can also use quickselect for this
+inline std::vector< std::pair<Lit, Lit> > Solver::getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs) {
+#define USE_QUICKSELECT_SUBEXPRS
+#ifdef  USE_QUICKSELECT_SUBEXPRS
+    // Copy keys
+    std::vector< std::pair<Lit, Lit> > subexprs(subexpr_counts.size());
+    int i = 0;
+    for (std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexpr_counts.begin(); it != subexpr_counts.end(); it++) {
+        subexprs[i++] = it->first;
+    }
+
+    // Quickselect
+    quickselect_count(subexprs, subexpr_counts, solver, 0, subexprs.size() - 1, numSubexprs);
+    if (numSubexprs < subexprs.size()) subexprs.erase(subexprs.begin() + numSubexprs, subexprs.end());
+
+#else
+    std::vector< std::pair<Lit, Lit> > subexprs;
     std::tr1::unordered_set< std::pair<Lit, Lit> > subexprWindow;
-    std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator max = subexprs.begin();
-    for (unsigned int i = 0; i < numSubexprs && i < subexprs.size(); i++) {
-        for (std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexprs.begin(); it != subexprs.end(); it++) {
+    std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator max = subexpr_counts.begin();
+
+    for (unsigned int i = 0; i < numSubexprs && i < subexpr_counts.size(); i++) {
+        for (std::tr1::unordered_map<std::pair<Lit, Lit>, int>::iterator it = subexpr_counts.begin(); it != subexpr_counts.end(); it++) {
             if ((subexprWindow.find(it->first) == subexprWindow.end()) && (it->second >= max->second)) {
                 max = it;
             }
         }
 
         subexprWindow.insert(max->first);
+        subexprs.push_back(max->first);
     }
 
-    return subexprWindow;
+#endif
+    return subexprs;
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
@@ -215,12 +266,12 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(
     std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs = countSubexprs(s, sets);
 
     // Get most frequent subexpressions
-    std::tr1::unordered_set< std::pair<Lit, Lit> > freqSubExprs = getFreqSubexprs(subexprs, maxNumNewVars);
+    std::vector< std::pair<Lit, Lit> > freqSubExprs = getFreqSubexprs(subexprs, s, maxNumNewVars);
 
     // Add extension variables
     std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
-    for (std::tr1::unordered_set< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
+    for (std::vector< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         if (!s.extVarDefs.contains(i->first, i->second)) {
             // Add extension variable
             extClauses.insert(std::make_pair(x, *i));

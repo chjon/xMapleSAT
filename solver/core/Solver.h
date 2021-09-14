@@ -483,6 +483,8 @@ protected:
     // Quickselect based on clause activity
     static int  partition_activity(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int pivot);
     static void quickselect_activity(vec<CRef>& db, Solver& solver, int l, int r, int k);
+    static int  partition_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, int l, int r, int pivot);
+    static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
     static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
@@ -502,6 +504,8 @@ protected:
     //   Extension variables are defined as equivalent to a disjunction of a pair of literals. Complex extension variable
     //   definitions must be encoded with multiple extension variables. The size of the map should equal the number of new
     //   extension variables.
+
+    static std::vector< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs);
 
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
     static std::tr1::unordered_map< Var, std::pair<Lit, Lit> > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
