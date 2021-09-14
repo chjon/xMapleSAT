@@ -445,8 +445,12 @@ protected:
     //   The function should return a list of clauses which are somehow interesting for ER.
 
     // Activity-based clause selection - select the most active clauses. This heuristic focuses on locality.
-    static void copyKLargest(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k);
-    static void quickselect(vec<CRef>& db, Solver& solver, int l, int r, int k);
+    static void copy_k_largest_activity(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k);
+
+    // Quickselect based on clause activity
+    static int  partition_activity(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int pivot);
+    static void quickselect_activity(vec<CRef>& db, Solver& solver, int l, int r, int k);
+
     static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
 
