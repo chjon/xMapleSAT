@@ -34,6 +34,39 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
+struct LitPairMap {
+    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > map;
+
+    inline bool contains (Lit a, Lit b) {
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = map.find(a);
+        if (it1 == map.end()) return false;
+        std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
+        return it2 != it1->second.end();
+    }
+
+    inline void insert (Lit x, Lit a, Lit b) {
+        // Insert for tuple <a, b>
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
+        if (it1 == map.end()) {
+            std::tr1::unordered_map<Lit, Lit> submap;
+            submap.insert(std::make_pair(b, x));
+            map.insert(std::make_pair(a, submap));
+        } else {
+            it1->second.insert(std::make_pair(b, x));
+        }
+
+        // Insert for tuple <b, a>
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it2 = map.find(b);
+        if (it2 == map.end()) {
+            std::tr1::unordered_map<Lit, Lit> submap;
+            submap.insert(std::make_pair(a, x));
+            map.insert(std::make_pair(b, submap));
+        } else {
+            it2->second.insert(std::make_pair(a, x));
+        }
+    }
+};
+
 //=================================================================================================
 // Solver -- the main class:
 
@@ -257,7 +290,7 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > extVarDefs;
+    struct LitPairMap extVarDefs;
                                                         // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                                         // This map is used for replacing disjunctions with the corresponding extension variable
                                                         // This is NOT the same as the extension variable introduction heuristic
@@ -383,7 +416,7 @@ protected:
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         vec<CRef>& er_def_db,
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& er_def_map,
+        struct LitPairMap& er_def_map,
         const std::tr1::unordered_map< Var, std::pair<Lit, Lit> >& newDefMap
     );
 
@@ -416,7 +449,7 @@ protected:
     // Internal helper for substituteExt
     static void er_substitute(
         vec<Lit>& out_learnt,
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >& extVarDefs
+        struct LitPairMap& extVarDefs
     );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

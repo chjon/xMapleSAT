@@ -204,13 +204,6 @@ static inline std::tr1::unordered_set< std::pair<Lit, Lit> > getFreqSubexprs(std
     return subexprWindow;
 }
 
-static inline bool contains (std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > extVarMap, Lit a, Lit b) {
-    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = extVarMap.find(a);
-    if (it1 == extVarMap.end()) return false;
-    std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
-    return it2 != it1->second.end();
-}
-
 // EXTENDED RESOLUTION - variable definition heuristic
 std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
@@ -228,7 +221,7 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(
     std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
     Var x = s.nVars();
     for (std::tr1::unordered_set< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
-        if (!contains(s.extVarDefs, i->first, i->second)) {
+        if (!s.extVarDefs.contains(i->first, i->second)) {
             // Add extension variable
             extClauses.insert(std::make_pair(x, *i));
             x++;
@@ -272,7 +265,7 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(S
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
         std::pair<Lit, Lit> key = mkLitPair(a, b);
-        if (!contains(s.extVarDefs, a, b)) {
+        if (!s.extVarDefs.contains(a, b)) {
             // Add extension variable
             extClauses.insert(std::make_pair(x, key));
             x++;
