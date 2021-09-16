@@ -184,15 +184,16 @@ public:
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
+
+    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
+    int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
+    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
+
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
 
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
-
-    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable
-    int       ext_window;         // Number of clauses to consider when introducing extension variables.
-    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.
 
     // Statistics: (read-only member variable)
     //

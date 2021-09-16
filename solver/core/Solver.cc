@@ -53,7 +53,11 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
-
+#if EXTENSION_HEURISTIC != NO_EXTENSION
+static IntOption     opt_ext_freq(_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_wndw(_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_num (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+#endif
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -85,6 +89,9 @@ Solver::Solver() :
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
+  , ext_freq         (opt_ext_freq)
+  , ext_window       (opt_ext_wndw)
+  , ext_max_intro    (opt_ext_num)
 
     // Parameters (the rest):
     //
@@ -799,6 +806,7 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
+    // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
         addExtVars(
