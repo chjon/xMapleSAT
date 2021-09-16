@@ -136,8 +136,17 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
     vec<CRef> clauses;
     copy_k_largest_activity(clauses, s.clauses   , s, numClauses);
+#if CACHE_ACTIVE_CLAUSES
+    if (s.useCachedActiveClauses) {
+        copy_k_largest_activity(clauses, s.learntsByActivity, s, numClauses);
+    } else {
+        copy_k_largest_activity(clauses, s.learnts   , s, numClauses);
+        copy_k_largest_activity(clauses, s.extLearnts, s, numClauses);
+    }
+#else
     copy_k_largest_activity(clauses, s.learnts   , s, numClauses);
     copy_k_largest_activity(clauses, s.extLearnts, s, numClauses);
+#endif
     copy_k_largest_activity(clauses, s.extDefs   , s, numClauses);
 
     std::vector<CRef> clauseWindow;

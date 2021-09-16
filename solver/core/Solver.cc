@@ -115,6 +115,7 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
+  , useCachedActiveClauses(false)
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -301,7 +302,7 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
-    } }
+    } useCachedActiveClauses = false; }
 
 
 //=================================================================================================
@@ -699,6 +700,33 @@ void Solver::reduceDB() {
     delExtVars(/* Heuristic function */);
 #endif
     checkGarbage();
+
+#if CACHE_ACTIVE_CLAUSES
+    // Make a copy of the sorted clauses (caching results for ER selection)
+    extTimerStart();
+
+    learntsByActivity.clear();
+    int learnts_i = 0, extlearnts_i = 0;
+    while (
+        learnts_i + extlearnts_i < ext_window &&
+        learnts_i                < learnts   .size() &&
+        extlearnts_i             < extLearnts.size()
+    ) {
+        if (ca[learnts[learnts_i]].activity() > ca[extLearnts[extlearnts_i]].activity())
+            learntsByActivity.push(learnts[learnts_i++]);
+        else
+            learntsByActivity.push(extLearnts[extlearnts_i++]);
+    }
+
+    while (learnts_i + extlearnts_i < ext_window && learnts_i < learnts.size())
+        learntsByActivity.push(learnts[learnts_i++]);
+    while (learnts_i + extlearnts_i < ext_window && extlearnts_i < extLearnts.size())
+        learntsByActivity.push(extLearnts[extlearnts_i++]);
+
+    useCachedActiveClauses = true;
+
+    extTimerStop(ext_sel_overhead);
+#endif
 }
 
 void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)

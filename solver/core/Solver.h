@@ -269,6 +269,10 @@ protected:
     vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
     vec<CRef>           extDefs;          // List of extension definition clauses.
 
+    // Learnt clauses sorted by activity
+    vec<CRef>           learntsByActivity;
+    bool                useCachedActiveClauses;
+
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
