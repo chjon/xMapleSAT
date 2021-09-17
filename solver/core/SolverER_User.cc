@@ -136,7 +136,7 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
     vec<CRef> clauses;
     copy_k_largest_activity(clauses, s.clauses   , s, numClauses);
-#if CACHE_ACTIVE_CLAUSES
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     if (s.useCachedActiveClauses) {
         copy_k_largest_activity(clauses, s.learntsByActivity, s, numClauses);
     } else {
@@ -189,8 +189,7 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
     // Time complexity: O(w k^2)
     std::tr1::unordered_map<std::pair<Lit, Lit>, int> subexprs;
 
-// #define USE_SET_INTERSECTION
-#ifdef USE_SET_INTERSECTION
+#if ER_USER_ADD_SUBEXPR_SET_INTERSECTION
     for (unsigned int i = 0; i < sets.size(); i++) {
         for (unsigned int j = i + 1; j < sets.size(); j++) {
             // TODO: Check if we've already processed a pair of clauses (cache) and add their counts

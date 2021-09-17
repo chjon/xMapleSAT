@@ -115,7 +115,9 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
   , useCachedActiveClauses(false)
+#endif
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -302,7 +304,10 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
-    } useCachedActiveClauses = false; }
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
+        useCachedActiveClauses = false;
+#endif
+    }}
 
 
 //=================================================================================================
@@ -448,6 +453,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.shrink(i - j);
 #if EXTENSION_SUBSTITUTION
     // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+    // TODO: only do this for clauses with LBD less than some threshold (e.g. 3)
     substituteExt(out_learnt);
 # endif
     tot_literals += out_learnt.size();
@@ -701,7 +707,7 @@ void Solver::reduceDB() {
 #endif
     checkGarbage();
 
-#if CACHE_ACTIVE_CLAUSES
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     // Make a copy of the sorted clauses (caching results for ER selection)
     extTimerStart();
 

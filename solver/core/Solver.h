@@ -270,8 +270,10 @@ protected:
     vec<CRef>           extDefs;          // List of extension definition clauses.
 
     // Learnt clauses sorted by activity
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     vec<CRef>           learntsByActivity;
     bool                useCachedActiveClauses;
+#endif
 
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
