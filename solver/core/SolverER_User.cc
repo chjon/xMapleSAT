@@ -206,8 +206,10 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
 #else
     for (unsigned int i = 0; i < sets.size(); i++) {
         std::tr1::unordered_set<Lit>& clause = sets[i];
-        // printf("%u/%lu: %lu\n", i, sets.size(), clause.size());
-        if (clause.size() > 100) continue;
+#ifndef ER_USER_ADD_SUBEXPR_MAX_CHECK_WIDTH
+#error "ER_USER_ADD_SUBEXPR_MAX_CHECK_WIDTH is not defined"
+#endif
+        if (clause.size() > ER_USER_ADD_SUBEXPR_MAX_CHECK_WIDTH) continue;
 
         for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;
