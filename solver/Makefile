@@ -18,10 +18,10 @@ default:
 	$(call make_er_solver,maplesat,0,0,0,0,0,0)
 
 all:
-	$(call make_er_solver,xmaplesat_rnd_force0,1,0,0,1,50,0)
-	$(call make_er_solver,xmaplesat_rnd_force1,1,1,0,1,50,0)
-	$(call make_er_solver,xmaplesat_sub_force0,2,0,0,1,50,0)
-	$(call make_er_solver,xmaplesat_sub_force1,2,1,0,1,50,0)
+	$(call make_er_solver,xmaplesat_rnd_force0,1,0,1,0,50,0)
+	$(call make_er_solver,xmaplesat_rnd_force1,1,1,1,0,50,0)
+	$(call make_er_solver,xmaplesat_sub_force0,2,0,1,0,50,0)
+	$(call make_er_solver,xmaplesat_sub_force1,2,1,1,0,50,0)
 
 clean:
 	make -C core clean
