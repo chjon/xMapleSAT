@@ -89,9 +89,11 @@ Solver::Solver() :
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
+  #if EXTENSION_HEURISTIC != NO_EXTENSION
   , ext_freq         (opt_ext_freq)
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
+  #endif
 
     // Parameters (the rest):
     //
@@ -841,9 +843,10 @@ lbool Solver::search(int nof_conflicts)
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
     // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
+#if EXTENSION_HEURISTIC != NO_EXTENSION
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
-        addExtVars(
+        generateExtVars(
             user_er_select_activity2,
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
             user_er_add_random,
@@ -853,7 +856,10 @@ lbool Solver::search(int nof_conflicts)
             ext_window,
             ext_max_intro
         );
+
+        addExtVars();
     }
+#endif
 
     for (;;){
         CRef confl = propagate();

@@ -185,9 +185,11 @@ public:
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
 
+#if EXTENSION_HEURISTIC != NO_EXTENSION
     int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
+#endif
 
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
@@ -268,6 +270,8 @@ protected:
     // EXTENDED RESOLUTION - clause databases
     vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
     vec<CRef>           extDefs;          // List of extension definition clauses.
+
+    std::vector< std::pair< Var, std::pair<Lit, Lit> > > extBuffer; // Buffer of extension variable definitions to add
 
     // Learnt clauses sorted by activity
 #if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
@@ -399,8 +403,7 @@ protected:
     // Main internal methods
 
     // Description:
-    //   Pick extension variable definitions, add extension variables to our data structures, and
-    //   prioritize branching on them.
+    //   Pick extension variable definitions and add them to the extension definition buffer.
     //
     // Parameters:
     //   er_select_heuristic:
@@ -412,19 +415,23 @@ protected:
     //     The number of clauses to consider when looking for new variable definitions.
     //   maxNumNewVars:
     //     the maximum number of new extension variables to introduce.
-    void addExtVars (
+    void generateExtVars (
         std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
-        std::tr1::unordered_map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+        std::vector< std::pair< Var, std::pair<Lit, Lit> > >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
         unsigned int numClausesToConsider,
         unsigned int maxNumNewVars
     );
+
+    // Description:
+    //   Add extension variables from the extension definition buffer to our data structures and prioritize branching on them.
+    void addExtVars ();
 
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         vec<CRef>& er_def_db,
         struct LitPairMap& er_def_map,
-        const std::tr1::unordered_map< Var, std::pair<Lit, Lit> >& newDefMap
+        const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
     );
 
     // Description:
@@ -515,10 +522,10 @@ protected:
     static std::vector< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs);
 
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
-    static std::tr1::unordered_map< Var, std::pair<Lit, Lit> > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
     // Random literal selection - select two literals at random and define a new extension variable over them.
-    static std::tr1::unordered_map< Var, std::pair<Lit, Lit> > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
     ///// [ user_er_delete_ ] /////
     // Description:

@@ -269,7 +269,7 @@ inline std::vector< std::pair<Lit, Lit> > Solver::getFreqSubexprs(std::tr1::unor
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
-std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
     // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
     // Ideally, we want the solver object to be const when passed into this function
@@ -282,12 +282,12 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_subexpr(
     std::vector< std::pair<Lit, Lit> > freqSubExprs = getFreqSubexprs(subexprs, s, maxNumNewVars);
 
     // Add extension variables
-    std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
+    std::vector< std::pair< Var, std::pair<Lit, Lit> > > extClauses;
     Var x = s.nVars();
     for (std::vector< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         if (!s.extVarDefs.contains(i->first, i->second)) {
             // Add extension variable
-            extClauses.insert(std::make_pair(x, *i));
+            extClauses.push_back(std::make_pair(x, *i));
             x++;
         }
     }
@@ -305,7 +305,7 @@ static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>&
 }
 
 // EXTENDED RESOLUTION - variable definition heuristic
-std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Total time complexity: O(w k log(w k) + x)
     // w: window size
     // k: clause width
@@ -318,7 +318,7 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(S
 
     // Add extension variables
     // Time complexity: O(x)
-    std::tr1::unordered_map< Var, std::pair<Lit, Lit> > extClauses;
+    std::vector< std::pair< Var, std::pair<Lit, Lit> > > extClauses;
     Var x = s.nVars();
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
@@ -331,7 +331,7 @@ std::tr1::unordered_map< Var, std::pair<Lit, Lit> > Solver::user_er_add_random(S
         std::pair<Lit, Lit> key = mkLitPair(a, b);
         if (!s.extVarDefs.contains(a, b)) {
             // Add extension variable
-            extClauses.insert(std::make_pair(x, key));
+            extClauses.push_back(std::make_pair(x, key));
             x++;
         }
     }

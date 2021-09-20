@@ -55,8 +55,6 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
 }
 
 inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDefs) {
-    // TODO: only do this for clauses with LBD less than some threshold (e.g. 3)
-
     // Get set of all literals in clause
     std::tr1::unordered_set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
@@ -122,10 +120,12 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
 inline std::vector<Var> Solver::er_add(
     vec<CRef>& er_def_db,
     struct LitPairMap& er_def_map,
-    const std::tr1::unordered_map< Var, std::pair<Lit, Lit> >& newDefMap
+    const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
 ) {
     // Add extension variables
-    // TODO: verify that we do not already have an extension variable for this literal pair before adding clauses
+    // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
+    // for the provided literal pairs
+
     // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v a)
     // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
     std::vector<Var> new_variables;
@@ -134,7 +134,7 @@ inline std::vector<Var> Solver::er_add(
     }
 
     // Add extension clauses
-    for (std::tr1::unordered_map< Var, std::pair<Lit, Lit> >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
+    for (std::vector< std::pair< Var, std::pair<Lit, Lit> > >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
         // Get literals
         Lit x = mkLit(i->first);
         Lit a = i->second.first;
@@ -153,25 +153,33 @@ inline std::vector<Var> Solver::er_add(
     return new_variables;
 }
 
-// Add extension variables to our data structures and prioritize branching on them.
-// This calls a heuristic function which is responsible for identifying extension variable
-// definitions and adding the appropriate clauses and variables.
-void Solver::addExtVars(
+void Solver::generateExtVars (
     std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
-    std::tr1::unordered_map< Var, std::pair<Lit, Lit> >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
+    std::vector< std::pair< Var, std::pair<Lit, Lit> > >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
     unsigned int numClausesToConsider,
     unsigned int maxNumNewVars
 ) {
-    // Get extension clauses according to heuristics
+    // Get extension clauses according to heuristic
     timerStart();
     std::vector<CRef> candidateClauses = er_select_heuristic(*this, numClausesToConsider);
     timerStop(ext_sel_overhead);
 
+    // Get extension variables according to heuristic
+    timerStart();
+    const std::vector< std::pair< Var, std::pair<Lit, Lit> > > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
+    extBuffer.insert(extBuffer.end(), newDefMap.begin(), newDefMap.end());
+    timerStop(ext_add_overhead);
+}
+
+// Add extension variables to our data structures and prioritize branching on them.
+// This calls a heuristic function which is responsible for identifying extension variable
+// definitions and adding the appropriate clauses and variables.
+void Solver::addExtVars() {
     // Add the extension variables to our data structures
     timerStart();
-    const std::tr1::unordered_map< Var, std::pair<Lit, Lit> > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
-    const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, newDefMap);
-    er_prioritize(new_variables); 
+    const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer);
+    extBuffer.clear();
+    er_prioritize(new_variables);
     timerStop(ext_add_overhead);
 }
 
