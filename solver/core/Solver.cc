@@ -734,6 +734,20 @@ void Solver::reduceDB() {
     useCachedActiveClauses = true;
 
     extTimerStop(ext_sel_overhead);
+
+    if (!extBuffer.size()) {
+        // Generate extension variables
+        generateExtVars(
+            user_er_select_activity2,
+    #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
+            user_er_add_random,
+    #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
+            user_er_add_subexpr,
+    #endif
+            ext_window,
+            ext_max_intro
+        );
+    }
 #endif
 }
 
@@ -844,21 +858,29 @@ lbool Solver::search(int nof_conflicts)
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
     // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
 #if EXTENSION_HEURISTIC != NO_EXTENSION
-    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
-        prevExtensionConflict = conflicts;
-        generateExtVars(
-            user_er_select_activity2,
-#if EXTENSION_HEURISTIC == RANDOM_SAMPLE
-            user_er_add_random,
-#elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-            user_er_add_subexpr,
-#endif
-            ext_window,
-            ext_max_intro
-        );
 
-        addExtVars();
+#if !ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
+    if (!extBuffer.size()) {
+        // Only try generating more extension variables if there aren't any buffered already
+        if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
+            prevExtensionConflict = conflicts;
+
+            generateExtVars(
+                user_er_select_activity2,
+#if EXTENSION_HEURISTIC == RANDOM_SAMPLE
+                user_er_add_random,
+#elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
+                user_er_add_subexpr,
+#endif
+                ext_window,
+                ext_max_intro
+            );
+        }
     }
+#endif
+    
+    // Add extension variables if there are any in the buffer
+    addExtVars();
 #endif
 
     for (;;){
@@ -966,6 +988,12 @@ lbool Solver::search(int nof_conflicts)
 
 #if RAPID_DELETION
                 max_learnts += 500;
+#endif
+
+#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
+                // Force a restart
+                cancelUntil(0);
+                return l_Undef;
 #endif
             }
 #endif
