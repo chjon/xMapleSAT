@@ -190,7 +190,9 @@ public:
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
     int       ext_sub_lbd;        // Maximum LBD of clauses to substitute into
-    int       ext_skip_width;     // Maximum clause width to consider
+    int       ext_skip_width;     // Maximum clause width to consider when processing clauses (substitution and extension)
+    int       ext_min_width;      // Minimum clause width to consider when selecting clauses
+    int       ext_max_width;      // Maximum clause width to consider when selecting clauses
 #endif
 
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
@@ -502,6 +504,7 @@ protected:
     static int  partition_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, int l, int r, int pivot);
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
+    static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
     static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
 

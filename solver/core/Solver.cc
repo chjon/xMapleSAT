@@ -59,6 +59,8 @@ static IntOption     opt_ext_wndw(_cat, "ext-wndw","Number of clauses to conside
 static IntOption     opt_ext_num (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_lbd (_cat, "ext-lbd", "Maximum LBD of clause for extension variable substitution\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_skip_width (_cat, "ext-skip-width", "Maximum clause width to consider\n", 100, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_min_width (_cat, "ext-min-width", "Minimum clause width to select\n", 2, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_width (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
 #endif
 
 //=================================================================================================
@@ -97,6 +99,8 @@ Solver::Solver() :
   , ext_max_intro    (opt_ext_num)
   , ext_sub_lbd      (opt_ext_lbd)
   , ext_skip_width   (opt_ext_skip_width)
+  , ext_min_width   (opt_ext_min_width)
+  , ext_max_width   (opt_ext_max_width)
   #endif
 
     // Parameters (the rest):
@@ -742,7 +746,7 @@ void Solver::reduceDB() {
     if (!extBuffer.size()) {
         // Generate extension variables
         generateExtVars(
-            user_er_select_activity2,
+            user_er_select_activity,
     #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
             user_er_add_random,
     #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
@@ -870,7 +874,7 @@ lbool Solver::search(int nof_conflicts)
             prevExtensionConflict = conflicts;
 
             generateExtVars(
-                user_er_select_activity2,
+                user_er_select_activity,
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
                 user_er_add_random,
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
