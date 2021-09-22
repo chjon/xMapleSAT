@@ -190,6 +190,7 @@ public:
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
     int       ext_sub_lbd;        // Maximum LBD of clauses to substitute into
+    int       ext_skip_width;     // Maximum clause width to consider
 #endif
 
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)

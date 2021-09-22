@@ -97,10 +97,15 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDef
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
     timerStart();
-    // Check LBD
+
     #if EXTENSION_HEURISTIC != NO_EXTENSION
+    // Check clause width
+    if (out_learnt.size() > ext_skip_width) return;
+
+    // Check LBD
     if (ext_sub_lbd > 0 && lbd(out_learnt) > ext_sub_lbd) return;
     #endif
+
     er_substitute(out_learnt, extVarDefs);
     timerStop(ext_sub_overhead);
 }

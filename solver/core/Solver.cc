@@ -58,6 +58,7 @@ static IntOption     opt_ext_freq(_cat, "ext-freq","Number of conflicts to wait 
 static IntOption     opt_ext_wndw(_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_num (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_lbd (_cat, "ext-lbd", "Maximum LBD of clause for extension variable substitution\n", 3, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_skip_width (_cat, "ext-skip-width", "Maximum clause width to consider\n", 100, IntRange(0, INT32_MAX));
 #endif
 
 //=================================================================================================
@@ -95,6 +96,7 @@ Solver::Solver() :
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
   , ext_sub_lbd      (opt_ext_lbd)
+  , ext_skip_width   (opt_ext_skip_width)
   #endif
 
     // Parameters (the rest):
