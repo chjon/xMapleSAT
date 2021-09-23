@@ -100,7 +100,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
 
     #if EXTENSION_HEURISTIC != NO_EXTENSION
     // Check clause width
-    if (out_learnt.size() > ext_skip_width) return;
+    if (ext_skip_width > 0 && out_learnt.size() > ext_skip_width) return;
 
     // Check LBD
     if (ext_sub_lbd > 0 && lbd(out_learnt) > ext_sub_lbd) return;
