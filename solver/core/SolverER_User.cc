@@ -25,6 +25,23 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CR
     }
 }
 
+void Solver::user_er_filter_incremental(const CRef candidate) {
+    // Filter clauses based on their sizes
+    extTimerStart();
+    const int k = ca[candidate].size();
+    if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
+    extTimerStop(ext_sel_overhead);
+}
+
+void Solver::user_er_filter_batch(const vec<CRef>& clauses) {
+    // Filter clauses based on their sizes
+    for (int i = 0; i < clauses.size(); i++) {
+        CRef candidate = clauses[i];
+        const int k = ca[candidate].size();
+        if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
+    }
+}
+
 // Do not select clauses unless their sizes are acceptable
 void Solver::user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth) {
     for (int i = 0; i < clauses.size(); i++) {
@@ -38,25 +55,21 @@ void Solver::user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& cl
 // EXTENDED RESOLUTION - clause selection heuristic
 std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numClauses) {
     // Find the variables in the clauses with the top k highest activities
-    // FIXME: this is probably inefficient, but there isn't a preexisting data structure which keeps these in sorted order
-    // Optimization idea: sort each of the clause DBs and then pick the top k (could also use heap sort)
-std::vector<CRef> clauseWindow;
-#if EXTENSION_HEURISTIC != NO_EXTENSION
-    vec<CRef> filteredClauses;
-    user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
+    std::vector<CRef> clauseWindow;
+    // vec<CRef> filteredClauses;
+    // user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
 
     // Optimization idea: use a quicksort-type of algo for expected-linear time
-    for (int i = 0; i < filteredClauses.size(); i++)
-        addClauseToWindow(s.ca, clauseWindow, filteredClauses[i], numClauses);
-#else
-    for (int i = 0; i < s.nClauses   (); i++) addClauseToWindow(s.ca, clauseWindow, s.clauses   [i], numClauses);
-    for (int i = 0; i < s.nLearnts   (); i++) addClauseToWindow(s.ca, clauseWindow, s.learnts   [i], numClauses);
-    for (int i = 0; i < s.nExtLearnts(); i++) addClauseToWindow(s.ca, clauseWindow, s.extLearnts[i], numClauses);
-    for (int i = 0; i < s.nExtDefs   (); i++) addClauseToWindow(s.ca, clauseWindow, s.extDefs   [i], numClauses);
-#endif
+    // for (int i = 0; i < filteredClauses.size(); i++)
+    //     addClauseToWindow(s.ca, clauseWindow, filteredClauses[i], numClauses);
+
+    // Use incremental filtered clause list
+    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
+        addClauseToWindow(s.ca, clauseWindow, *it, numClauses);
+
     return clauseWindow;
 }
 
@@ -155,30 +168,16 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
     // If this still takes too long, consider: https://en.wikipedia.org/wiki/Floyd-Rivest_algorithm
 
     vec<CRef> clauses;
-#if EXTENSION_HEURISTIC != NO_EXTENSION
     vec<CRef> filteredClauses;
-    user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
-    user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
+    // user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
+    // Use incremental filtered clause list
+    
+    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
+        filteredClauses.push(*it);
     copy_k_largest_activity(clauses, filteredClauses, s, numClauses);
-#else
-    copy_k_largest_activity(clauses, s.clauses   , s, numClauses);
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    if (s.useCachedActiveClauses) {
-        copy_k_largest_activity(clauses, s.learntsByActivity, s, numClauses);
-    } else {
-        copy_k_largest_activity(clauses, s.learnts   , s, numClauses);
-        copy_k_largest_activity(clauses, s.extLearnts, s, numClauses);
-    }
-#else
-    copy_k_largest_activity(clauses, s.learnts   , s, numClauses);
-    copy_k_largest_activity(clauses, s.extLearnts, s, numClauses);
-#endif
-    copy_k_largest_activity(clauses, s.extDefs   , s, numClauses);
-#endif
-
-
 
     std::vector<CRef> clauseWindow;
     quickselect_activity(clauses, s, 0, clauses.size() - 1, numClauses);
@@ -237,9 +236,7 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
 #else
     for (unsigned int i = 0; i < sets.size(); i++) {
         std::tr1::unordered_set<Lit>& clause = sets[i];
-#if EXTENSION_HEURISTIC != NO_EXTENSION
         if (clause.size() > static_cast<unsigned int>(s.ext_skip_width)) continue;
-#endif
 
         for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;

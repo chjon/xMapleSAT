@@ -53,15 +53,14 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
-#if EXTENSION_HEURISTIC != NO_EXTENSION
-static IntOption     opt_ext_freq(_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_wndw(_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_num (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_lbd (_cat, "ext-lbd", "Maximum LBD of clause for extension variable substitution\n", 3, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clause to select\n", 0, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clause to select\n", 5, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_skip_width (_cat, "ext-skip-width", "Maximum clause width to consider\n", 100, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_min_width (_cat, "ext-min-width", "Minimum clause width to select\n", 2, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_max_width (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
-#endif
+static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 2, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -93,15 +92,14 @@ Solver::Solver() :
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
-  #if EXTENSION_HEURISTIC != NO_EXTENSION
   , ext_freq         (opt_ext_freq)
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
-  , ext_sub_lbd      (opt_ext_lbd)
+  , ext_min_lbd      (opt_ext_min_lbd)
+  , ext_max_lbd      (opt_ext_max_lbd)
   , ext_skip_width   (opt_ext_skip_width)
-  , ext_min_width   (opt_ext_min_width)
-  , ext_max_width   (opt_ext_max_width)
-  #endif
+  , ext_min_width    (opt_ext_min_width)
+  , ext_max_width    (opt_ext_max_width)
 
     // Parameters (the rest):
     //
@@ -229,6 +227,7 @@ bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
         CRef cr = ca.alloc(ps, false);
         clauseDB.push(cr);
         attachClause(cr);
+        user_er_filter_incremental(cr);
     }
 
     return true;
@@ -774,12 +773,15 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
     for (i = j = 0; i < db.size(); i++){
         Clause& c = ca[db[i]];
 #if LBD_BASED_CLAUSE_DELETION
-        if (c.activity() > 2 && !locked(c) && i < db.size() / 2)
+        if (c.activity() > 2 && !locked(c) && i < db.size() / 2) {
 #else
-        if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim))
+        if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
+            extTimerStart();
+            extFilteredClauses.erase(db[i]);
+            extTimerStop(ext_sel_overhead);
             removeClause(db[i]);
-        else
+        } else
             db[j++] = db[i];
     }
     db.shrink(i - j);
@@ -1262,4 +1264,12 @@ void Solver::garbageCollect()
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
+
+    extTimerStart();
+    extFilteredClauses.clear();
+    user_er_filter_batch(learnts);
+    user_er_filter_batch(extLearnts);
+    user_er_filter_batch(extDefs);
+    user_er_filter_batch(clauses);
+    extTimerStop(ext_sel_overhead);
 }

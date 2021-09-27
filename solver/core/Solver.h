@@ -185,15 +185,14 @@ public:
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
 
-#if EXTENSION_HEURISTIC != NO_EXTENSION
     int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
-    int       ext_sub_lbd;        // Maximum LBD of clauses to substitute into
+    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
+    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
     int       ext_skip_width;     // Maximum clause width to consider when processing clauses (substitution and extension)
     int       ext_min_width;      // Minimum clause width to consider when selecting clauses
     int       ext_max_width;      // Maximum clause width to consider when selecting clauses
-#endif
 
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
@@ -306,13 +305,17 @@ protected:
     
     // EXTENDED RESOLUTION - solver state
     struct LitPairMap extVarDefs;
-                                                        // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
-                                                        // This map is used for replacing disjunctions with the corresponding extension variable
-                                                        // This is NOT the same as the extension variable introduction heuristic
-    int                          originalNumVars;       // The number of variables in the original formula
-                                                        // This value is used to quickly check whether a variable is an extension variable
-    long unsigned int            prevExtensionConflict; // Stores the last time extension variables were added
-                                                        // This is used to check whether to run the extension variable introduction heuristic after a restart
+                                             // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
+                                             // This map is used for replacing disjunctions with the corresponding extension variable
+                                             // This is NOT the same as the extension variable introduction heuristic
+    std::tr1::unordered_set<CRef> extFilteredClauses;
+                                             // List of clauses which can be selected by the clause selection heuristic
+                                             // This represents the result of an initial filtering step, such as filtering by clause width
+                                             // Special care needs to be taken while deleting clauses
+    int               originalNumVars;       // The number of variables in the original formula
+                                             // This value is used to quickly check whether a variable is an extension variable
+    long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
+                                             // This is used to check whether to run the extension variable introduction heuristic after a restart
 
     ClauseAllocator     ca;
 
@@ -504,6 +507,8 @@ protected:
     static int  partition_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, int l, int r, int pivot);
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
+    void user_er_filter_incremental(const CRef candidate);
+    void user_er_filter_batch(const vec<CRef>& clauses);
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
     static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
