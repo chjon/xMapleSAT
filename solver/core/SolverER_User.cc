@@ -236,7 +236,8 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
 #else
     for (unsigned int i = 0; i < sets.size(); i++) {
         std::tr1::unordered_set<Lit>& clause = sets[i];
-        if (clause.size() > static_cast<unsigned int>(s.ext_skip_width)) continue;
+        int clause_width = clause.size();
+        if (clause_width < s.ext_min_width || clause_width > s.ext_max_width) continue;
 
         for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;

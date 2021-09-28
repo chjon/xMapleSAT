@@ -99,13 +99,17 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
     timerStart();
 
     // Check clause width
-    if (ext_skip_width > 0 && out_learnt.size() > ext_skip_width) return;
+    int clause_width = out_learnt.size();
+    if (clause_width >= ext_min_width &&
+        clause_width <= ext_max_width
+    ) {
+        // Check LBD
+        int clause_lbd = lbd(out_learnt);
+        if (clause_lbd >= ext_min_lbd && clause_lbd <= ext_max_lbd) {
+            er_substitute(out_learnt, extVarDefs);
+        }
+    }
 
-    // Check LBD
-    int clause_lbd = lbd(out_learnt);
-    if (clause_lbd < ext_min_lbd || clause_lbd > ext_max_lbd) return;
-
-    er_substitute(out_learnt, extVarDefs);
     timerStop(ext_sub_overhead);
 }
 

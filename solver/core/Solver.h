@@ -190,7 +190,6 @@ public:
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
     int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
     int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
-    int       ext_skip_width;     // Maximum clause width to consider when processing clauses (substitution and extension)
     int       ext_min_width;      // Minimum clause width to consider when selecting clauses
     int       ext_max_width;      // Maximum clause width to consider when selecting clauses
 
