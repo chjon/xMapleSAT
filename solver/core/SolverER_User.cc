@@ -8,6 +8,7 @@ static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
 }
 
 // Build a window of the clauses with the top k highest activities
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
 static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CRef clauseIndex, unsigned int maxWindowSize) {
     CRef tmp = 0;
     double clauseActivity = ca[clauseIndex].activity();
@@ -24,51 +25,98 @@ static void addClauseToWindow(ClauseAllocator& ca, std::vector<CRef>& window, CR
         window.push_back(clauseIndex);
     }
 }
+#endif
+
+struct clause_width_lt { 
+    ClauseAllocator& ca;
+    clause_width_lt(ClauseAllocator& ca_) : ca(ca_) {}
+    bool operator () (CRef x, CRef y) { 
+        return ca[x].size() < ca[y].size();
+    }
+};
 
 void Solver::user_er_filter_incremental(const CRef candidate) {
     // Filter clauses based on their sizes
-    extTimerStart();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     const int k = ca[candidate].size();
     if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
-    extTimerStop(ext_sel_overhead);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    struct clause_width_lt lt = clause_width_lt(ca);
+    if (extWidthFilteredClauses.size() < 200) {
+        extWidthFilteredClauses.push_back(candidate);
+        std::push_heap(extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
+    } else {
+        const int k = ca[candidate].size();
+        int old_min = ca[extWidthFilteredClauses.back()].size();
+        if (k > old_min) {
+            extWidthFilteredClauses.push_back(candidate);
+            std::push_heap(extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
+            std::pop_heap (extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
+        }
+    }
+#endif
 }
 
-void Solver::user_er_filter_batch(const vec<CRef>& clauses) {
+void Solver::user_er_filter_batch_helper(const vec<CRef>& clauses) {
     // Filter clauses based on their sizes
     for (int i = 0; i < clauses.size(); i++) {
         CRef candidate = clauses[i];
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
         const int k = ca[candidate].size();
-        if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
+        if (k >= ext_min_width && k <= ext_max_width) {
+            extFilteredClauses.insert(candidate);
+        }
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+        user_er_filter_incremental(candidate);
+#endif
     }
 }
 
-// Do not select clauses unless their sizes are acceptable
-void Solver::user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth) {
-    for (int i = 0; i < clauses.size(); i++) {
-        const CRef ref = clauses[i];
-        const int  k   = ca[ref].size();
-        if (k < minWidth || k > maxWidth) continue;
-        output.push(ref);
+void Solver::user_er_filter_batch() {
+    extTimerStart();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+    extFilteredClauses.clear();
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    extWidthFilteredClauses.clear();
+#endif
+    user_er_filter_batch_helper(extLearnts);
+    user_er_filter_batch_helper(learnts);
+    user_er_filter_batch_helper(extDefs);
+    user_er_filter_batch_helper(clauses);
+    extTimerStop(ext_sel_overhead);
+}
+
+std::vector<CRef> Solver::user_er_select_naive(Solver& s, unsigned int numClauses) {
+    std::vector<CRef> clauseWindow;
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++) {
+        if (numClauses == 0) break;
+        clauseWindow.push_back(*it);
+        numClauses--;
     }
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++) {
+        if (numClauses == 0) break;
+        clauseWindow.push_back(*it);
+        numClauses--;
+    }
+#endif
+    return clauseWindow;
 }
 
 // EXTENDED RESOLUTION - clause selection heuristic
 std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numClauses) {
     // Find the variables in the clauses with the top k highest activities
     std::vector<CRef> clauseWindow;
-    // vec<CRef> filteredClauses;
-    // user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
-
-    // Optimization idea: use a quicksort-type of algo for expected-linear time
-    // for (int i = 0; i < filteredClauses.size(); i++)
-    //     addClauseToWindow(s.ca, clauseWindow, filteredClauses[i], numClauses);
 
     // Use incremental filtered clause list
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
         addClauseToWindow(s.ca, clauseWindow, *it, numClauses);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
+        addClauseToWindow(s.ca, clauseWindow, *it, numClauses);
+#endif
 
     return clauseWindow;
 }
@@ -169,14 +217,15 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
     vec<CRef> clauses;
     vec<CRef> filteredClauses;
-    // user_er_select_filter_widths(filteredClauses, s.clauses   , s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.learnts   , s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.extLearnts, s.ca, s.ext_min_width, s.ext_max_width);
-    // user_er_select_filter_widths(filteredClauses, s.extDefs   , s.ca, s.ext_min_width, s.ext_max_width);
+
     // Use incremental filtered clause list
-    
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
         filteredClauses.push(*it);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
+        filteredClauses.push(*it);
+#endif
     copy_k_largest_activity(clauses, filteredClauses, s, numClauses);
 
     std::vector<CRef> clauseWindow;

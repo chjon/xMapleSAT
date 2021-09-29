@@ -756,6 +756,14 @@ void Solver::reduceDB() {
 #endif
 }
 
+struct clause_width_lt { 
+    ClauseAllocator& ca;
+    clause_width_lt(ClauseAllocator& ca_) : ca(ca_) {}
+    bool operator () (CRef x, CRef y) { 
+        return ca[x].size() > ca[y].size();
+    }
+};
+
 void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
 {
     int     i, j;
@@ -764,6 +772,10 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
 #else
     double  extra_lim = cla_inc / db.size();    // Remove any clause below this activity
     sort(db, reduceDB_lt(ca));
+#endif
+
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    extWidthFilteredClauses.clear();
 #endif
 
     // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
@@ -775,12 +787,21 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
 #else
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
+
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
             extTimerStart();
             extFilteredClauses.erase(db[i]);
             extTimerStop(ext_sel_overhead);
+#endif
             removeClause(db[i]);
-        } else
+        } else {
+            extTimerStart();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+            user_er_filter_incremental(db[i]);
+            extTimerStop(ext_sel_overhead);
+#endif
             db[j++] = db[i];
+        }
     }
     db.shrink(i - j);
 }
@@ -874,7 +895,13 @@ lbool Solver::search(int nof_conflicts)
             prevExtensionConflict = conflicts;
 
             generateExtVars(
+#if ER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+                user_er_select_naive,
+#elif ER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
                 user_er_select_activity,
+#elif ER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
+                user_er_select_activity2,
+#endif
 #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
                 user_er_add_random,
 #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
@@ -1263,11 +1290,7 @@ void Solver::garbageCollect()
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
 
-    extTimerStart();
-    extFilteredClauses.clear();
-    user_er_filter_batch(learnts);
-    user_er_filter_batch(extLearnts);
-    user_er_filter_batch(extDefs);
-    user_er_filter_batch(clauses);
-    extTimerStop(ext_sel_overhead);
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    user_er_filter_batch();
+#endif
 }

@@ -307,10 +307,18 @@ protected:
                                              // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                              // This map is used for replacing disjunctions with the corresponding extension variable
                                              // This is NOT the same as the extension variable introduction heuristic
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     std::tr1::unordered_set<CRef> extFilteredClauses;
                                              // List of clauses which can be selected by the clause selection heuristic
                                              // This represents the result of an initial filtering step, such as filtering by clause width
                                              // Special care needs to be taken while deleting clauses
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    std::vector<CRef> extWidthFilteredClauses;
+                                             // List of clauses which can be selected by the clause selection heuristic
+                                             // This vector is treated as a min-heap, where we add clauses to the vector in order
+                                             // This represents the result of filtering the clauses by clause width
+                                             // Special care needs to be taken while deleting clauses
+#endif
     int               originalNumVars;       // The number of variables in the original formula
                                              // This value is used to quickly check whether a variable is an extension variable
     long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
@@ -507,9 +515,11 @@ protected:
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
     void user_er_filter_incremental(const CRef candidate);
-    void user_er_filter_batch(const vec<CRef>& clauses);
+    void user_er_filter_batch_helper(const vec<CRef>& clauses);
+    void user_er_filter_batch();
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
-    static std::vector<CRef> user_er_select_activity(Solver& solver, unsigned int numClauses);
+    static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);
+    static std::vector<CRef> user_er_select_activity (Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
 
     ///// [ user_er_add_ ] /////
