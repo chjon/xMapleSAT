@@ -30,6 +30,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define ER_USER_ADD_SUBEXPR_SET_INTERSECTION false
 #endif
 
+// Define heuristic for filtering clauses before clause selection
+#define ER_FILTER_HEURISTIC_NONE    0 // Consider all clauses
+#define ER_FILTER_HEURISTIC_RANGE   1 // Consider clauses whose widths are in a certain range 
+#define ER_FILTER_HEURISTIC_LONGEST 2 // Consider the longest clauses
+#ifndef ER_USER_FILTER_HEURISTIC
+    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_RANGE
+#endif
+
+// Define heuristic for selecting clauses
+#define ER_SELECT_HEURISTIC_NONE      0 // Consider all clauses
+#define ER_SELECT_HEURISTIC_ACTIVITY  1 // Select most active clauses
+#define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
+#ifndef ER_USER_SELECT_HEURISTIC
+    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ACTIVITY
+#endif
+
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
+    #error Must select at least one filter/selection heuristic
+#endif
+
 #ifndef ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     #define ER_USER_SELECT_CACHE_ACTIVE_CLAUSES false
 #endif
