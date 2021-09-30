@@ -188,11 +188,20 @@ public:
     int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
-    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
-    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     int       ext_min_width;      // Minimum clause width to consider when selecting clauses
     int       ext_max_width;      // Maximum clause width to consider when selecting clauses
-
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    int       ext_filter_num;     // Maximum number of clauses after the filter step
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
+    int       ext_sub_min_width;      // Minimum width of clauses to substitute into
+    int       ext_sub_max_width;      // Maximum width of clauses to substitute into
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
+    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+#endif
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
 

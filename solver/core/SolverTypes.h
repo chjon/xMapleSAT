@@ -46,6 +46,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ACTIVITY
 #endif
 
+// Define heuristic for replacing extension definitions in clauses
+#define ER_SUBSTITUTE_HEURISTIC_NONE  0x0 // Consider all clauses
+#define ER_SUBSTITUTE_HEURISTIC_WIDTH 0x1 // Consider clauses within a clause width range
+#define ER_SUBSTITUTE_HEURISTIC_LBD   0x2 // Consider clauses within an LBD range
+#ifndef ER_USER_SUBSTITUTE_HEURISTIC
+    #define ER_USER_SUBSTITUTE_HEURISTIC (ER_SUBSTITUTE_HEURISTIC_LBD | ER_SUBSTITUTE_HEURISTIC_WIDTH)
+#endif
+
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
     #error Must select at least one filter/selection heuristic
 #endif

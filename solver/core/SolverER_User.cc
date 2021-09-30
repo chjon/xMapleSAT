@@ -60,13 +60,14 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 void Solver::user_er_filter_batch_helper(const vec<CRef>& clauses) {
     // Filter clauses based on their sizes
     for (int i = 0; i < clauses.size(); i++) {
-        CRef candidate = clauses[i];
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+        CRef candidate = clauses[i];
         const int k = ca[candidate].size();
         if (k >= ext_min_width && k <= ext_max_width) {
             extFilteredClauses.insert(candidate);
         }
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+        CRef candidate = clauses[i];
         user_er_filter_incremental(candidate);
 #endif
     }
@@ -285,9 +286,6 @@ static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(co
 #else
     for (unsigned int i = 0; i < sets.size(); i++) {
         std::tr1::unordered_set<Lit>& clause = sets[i];
-        int clause_width = clause.size();
-        if (clause_width < s.ext_min_width || clause_width > s.ext_max_width) continue;
-
         for (std::tr1::unordered_set<Lit>::iterator j = clause.begin(); j != clause.end(); j++) {
             std::tr1::unordered_set<Lit>::iterator k = j; k++;
             // We might spend a lot of time here - exit if interrupted

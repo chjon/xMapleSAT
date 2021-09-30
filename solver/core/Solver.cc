@@ -56,10 +56,20 @@ static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward m
 static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clause to select\n", 0, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clause to select\n", 5, IntRange(0, INT32_MAX));
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
 static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+static IntOption     opt_ext_filter_num (_cat, "ext-filter-num", "Maximum number of clauses after the filter step\n", 200, IntRange(0, INT32_MAX));
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
+static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", 100, IntRange(0, INT32_MAX));
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
+#endif
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -91,13 +101,25 @@ Solver::Solver() :
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
+
+// EXTENDED RESOLUTION parameters
   , ext_freq         (opt_ext_freq)
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
-  , ext_min_lbd      (opt_ext_min_lbd)
-  , ext_max_lbd      (opt_ext_max_lbd)
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
   , ext_min_width    (opt_ext_min_width)
   , ext_max_width    (opt_ext_max_width)
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+  , ext_filter_num   (opt_ext_filter_num)
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
+  , ext_sub_min_width (opt_ext_sub_min_width)
+  , ext_sub_max_width (opt_ext_sub_max_width)
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+  , ext_min_lbd      (opt_ext_min_lbd)
+  , ext_max_lbd      (opt_ext_max_lbd)
+#endif
 
     // Parameters (the rest):
     //
