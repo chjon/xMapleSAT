@@ -42,7 +42,7 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
     if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
     struct clause_width_lt lt = clause_width_lt(ca);
-    if (extWidthFilteredClauses.size() < ext_filter_num) {
+    if (extWidthFilteredClauses.size() < static_cast<unsigned int>(ext_filter_num)) {
         extWidthFilteredClauses.push_back(candidate);
         std::push_heap(extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
     } else {
