@@ -66,7 +66,7 @@ static IntOption     opt_ext_filter_num (_cat, "ext-filter-num", "Maximum number
 static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", 100, IntRange(0, INT32_MAX));
 #endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
 static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
 #endif
@@ -116,7 +116,7 @@ Solver::Solver() :
   , ext_sub_min_width (opt_ext_sub_min_width)
   , ext_sub_max_width (opt_ext_sub_max_width)
 #endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
   , ext_min_lbd      (opt_ext_min_lbd)
   , ext_max_lbd      (opt_ext_max_lbd)
 #endif
@@ -810,7 +810,7 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
             extTimerStart();
             extFilteredClauses.erase(db[i]);
             extTimerStop(ext_sel_overhead);
@@ -997,7 +997,9 @@ lbool Solver::search(int nof_conflicts)
                 attachClause(cr);
 #if LBD_BASED_CLAUSE_DELETION
                 Clause& clause = ca[cr];
-                clause.activity() = lbd(clause);
+                const int clauseLBD = lbd(clause); 
+                clause.lbd(clauseLBD);
+                clause.activity() = clauseLBD;
                 lbd_total += clause.activity();
 #else
                 claBumpActivity(ca[cr]);
@@ -1312,7 +1314,7 @@ void Solver::garbageCollect()
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
     user_er_filter_batch();
 #endif
 }

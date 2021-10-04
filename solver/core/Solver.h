@@ -198,7 +198,7 @@ public:
     int       ext_sub_min_width;      // Minimum width of clauses to substitute into
     int       ext_sub_max_width;      // Maximum width of clauses to substitute into
 #endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
     int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
 #endif
@@ -316,7 +316,7 @@ protected:
                                              // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                              // This map is used for replacing disjunctions with the corresponding extension variable
                                              // This is NOT the same as the extension variable introduction heuristic
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     std::tr1::unordered_set<CRef> extFilteredClauses;
                                              // List of clauses which can be selected by the clause selection heuristic
                                              // This represents the result of an initial filtering step, such as filtering by clause width

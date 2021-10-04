@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_FILTER_HEURISTIC_NONE    0 // Consider all clauses
 #define ER_FILTER_HEURISTIC_RANGE   1 // Consider clauses whose widths are in a certain range 
 #define ER_FILTER_HEURISTIC_LONGEST 2 // Consider the longest clauses
+#define ER_FILTER_HEURISTIC_LBD     3 // Consider clauses whose LBDs are in a certain range
 #ifndef ER_USER_FILTER_HEURISTIC
     #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_RANGE
 #endif
@@ -227,7 +228,8 @@ class Clause {
         unsigned learnt    : 1;
         unsigned has_extra : 1;
         unsigned reloced   : 1;
-        unsigned size      : 27; }                            header;
+        unsigned size      : 27;
+        unsigned lbd       : 32; }                            header;
     union { Lit lit; Act act; uint32_t abs; CRef rel; } data[0];
 
     friend class ClauseAllocator;
@@ -240,6 +242,7 @@ class Clause {
         header.has_extra = use_extra;
         header.reloced   = 0;
         header.size      = ps.size();
+        header.lbd       = 0;
 
         for (int i = 0; i < ps.size(); i++) 
             data[i].lit = ps[i];
@@ -259,7 +262,8 @@ public:
             abstraction |= 1 << (var(data[i].lit) & 31);
         data[header.size].abs = abstraction;  }
 
-
+    uint32_t     lbd         ()              { return header.lbd; }
+    void         lbd         (int l)         { header.lbd = l; }
     int          size        ()      const   { return header.size; }
     void         shrink      (int i)         { assert(i <= size()); if (header.has_extra) data[header.size-i] = data[header.size]; header.size -= i; }
     void         pop         ()              { shrink(1); }
