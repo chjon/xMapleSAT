@@ -17,7 +17,8 @@ define make_er_solver
 endef
 
 default:
-	$(call make_er_solver,maplesat,0,0,1,0,0,0,0)
+	make -C core clean
+	make -C core rs
 
 all:
 	$(call make_er_solver,xmaplesat_rnd_rng_lbd0,1,1)
