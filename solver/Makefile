@@ -7,7 +7,7 @@ define make_er_solver
 		-D EXTENSION_HEURISTIC=$(2) \
 		-D ER_USER_FILTER_HEURISTIC=$(3) \
 		-D ER_USER_SELECT_HEURISTIC=1 \
-		-D ER_USER_SUBSTITUTE_HEURISTIC=3 \
+		-D ER_USER_SUBSTITUTE_HEURISTIC=$(4) \
 		-D EXTENSION_SUBSTITUTION=1 \
 		-D EXTENSION_FORCE_BRANCHING=0 \
 		-D ER_USER_ADD_SUBEXPR_SET_INTERSECTION=1 \
@@ -21,14 +21,10 @@ default:
 	make -C core rs
 
 all:
-	$(call make_er_solver,xmaplesat_rnd_rng_lbd0,1,1)
-	$(call make_er_solver,xmaplesat_rnd_lng_lbd0,1,2)
-	$(call make_er_solver,xmaplesat_rnd_rng_lbd1,1,1)
-	$(call make_er_solver,xmaplesat_rnd_lng_lbd1,1,2)
-	$(call make_er_solver,xmaplesat_sub_rng_lbd0,2,1)
-	$(call make_er_solver,xmaplesat_sub_lng_lbd0,2,2)
-	$(call make_er_solver,xmaplesat_sub_rng_lbd1,2,1)
-	$(call make_er_solver,xmaplesat_sub_lng_lbd1,2,2)
+	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1)
+	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,2)
+	$(call make_er_solver,xmaplesat_sub_rng,2,1,1)
+	$(call make_er_solver,xmaplesat_sub_lbd,2,3,2)
 
 clean:
 	make -C core clean
