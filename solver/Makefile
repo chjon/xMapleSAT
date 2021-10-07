@@ -22,9 +22,9 @@ default:
 
 all:
 	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1)
-	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,2)
+	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,3)
 	$(call make_er_solver,xmaplesat_sub_rng,2,1,1)
-	$(call make_er_solver,xmaplesat_sub_lbd,2,3,2)
+	$(call make_er_solver,xmaplesat_sub_lbd,2,3,3)
 
 clean:
 	make -C core clean
