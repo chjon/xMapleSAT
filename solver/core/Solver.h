@@ -410,7 +410,7 @@ protected:
     bool     locked           (const Clause& c) const; // Returns TRUE if a clause is a reason for some implication in the current state.
     bool     satisfied        (const Clause& c) const; // Returns TRUE if a clause is satisfied in the current state.
 
-    void     relocHelper      (CRef& cr, ClauseAllocator& to);
+    void     relocHelper      (CRef& cr, ClauseAllocator& to, std::tr1::unordered_map<CRef, int>& newLBDs);
     void     relocAll         (ClauseAllocator& to);
 
     // Misc:

@@ -1278,7 +1278,7 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
 //=================================================================================================
 // Garbage Collection methods:
 
-inline void Solver::relocHelper(CRef& cr, ClauseAllocator& to) {
+void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_map<CRef, int>& newLBDs) {
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_SELECT_HEURISTIC & ER_SELECT_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     CRef before = cr;
 #endif
@@ -1300,7 +1300,7 @@ inline void Solver::relocHelper(CRef& cr, ClauseAllocator& to) {
     if (it != clauseLBDs.end()) {
         int clauseLBD = it->second;
         clauseLBDs.erase(it);
-        clauseLBDs.insert(std::pair<CRef, int>(after, clauseLBD));
+        newLBDs.insert(std::pair<CRef, int>(after, clauseLBD));
     }
     extTimerStop(ext_sel_overhead);
 #endif
@@ -1310,6 +1310,7 @@ void Solver::relocAll(ClauseAllocator& to)
 {
     // All watchers:
     //
+    std::tr1::unordered_map<CRef, int> tmp;
     // for (int i = 0; i < watches.size(); i++)
     watches.cleanAll();
     for (int v = 0; v < nVars(); v++)
@@ -1318,7 +1319,7 @@ void Solver::relocAll(ClauseAllocator& to)
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
             vec<Watcher>& ws = watches[p];
             for (int j = 0; j < ws.size(); j++)
-                relocHelper(ws[j].cref, to);
+                relocHelper(ws[j].cref, to, tmp);
         }
 
     // All reasons:
@@ -1326,13 +1327,17 @@ void Solver::relocAll(ClauseAllocator& to)
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            relocHelper(vardata[v].reason, to);
+            relocHelper(vardata[v].reason, to, tmp);
     }
 
-    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to); // All learnt
-    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to); // All learnt extension
-    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to); // All extension definitions
-    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to); // All original
+    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to, tmp); // All learnt
+    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to, tmp); // All learnt extension
+    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to, tmp); // All extension definitions
+    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to, tmp); // All original
+
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    clauseLBDs = tmp;
+#endif
 }
 
 void Solver::garbageCollect()
