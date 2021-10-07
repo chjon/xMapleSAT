@@ -59,12 +59,7 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
     std::tr1::unordered_map<CRef, int>::iterator it = clauseLBDs.find(candidate);
     int l = 0;
     if (it != clauseLBDs.end()) l = it->second;
-    if (l >= ext_min_lbd && l <= ext_max_lbd) {
-        extFilteredClauses.insert(candidate);
-        if (candidate == 383201) {
-            printf("Here!\n");
-        }
-    }
+    if (l >= ext_min_lbd && l <= ext_max_lbd) extFilteredClauses.insert(candidate);
 #endif
 }
 
