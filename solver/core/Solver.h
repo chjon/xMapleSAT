@@ -529,6 +529,8 @@ protected:
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
     void user_er_filter_incremental(const CRef candidate);
+    void user_er_filter_batch();
+    void user_er_filter_batch_helper(vec<CRef>& db);
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
     static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity (Solver& solver, unsigned int numClauses);

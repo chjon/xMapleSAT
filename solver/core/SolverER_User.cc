@@ -63,6 +63,20 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 #endif
 }
 
+void Solver::user_er_filter_batch() {
+    extTimerStart();
+    extFilteredClauses.clear();
+    user_er_filter_batch_helper(learnts);
+    user_er_filter_batch_helper(extLearnts);
+    user_er_filter_batch_helper(extDefs);
+    user_er_filter_batch_helper(clauses);
+    extTimerStop(ext_sel_overhead);
+}
+
+void Solver::user_er_filter_batch_helper(vec<CRef>& db) {
+    for (int i = 0; i < db.size(); i++) user_er_filter_incremental(db[i]);
+}
+
 std::vector<CRef> Solver::user_er_select_naive(Solver& s, unsigned int numClauses) {
     std::vector<CRef> clauseWindow;
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD

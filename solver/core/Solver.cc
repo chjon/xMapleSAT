@@ -1283,24 +1283,13 @@ void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_map<
     CRef before = cr;
 #endif
     ca.reloc(cr, to);
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    extTimerStart();
-    CRef after = cr;
-    if (extFilteredClauses.find(before) != extFilteredClauses.end()) {
-        extFilteredClauses.erase(before);
-        extFilteredClauses.insert(after);
-    }
-    extTimerStop(ext_sel_overhead);
-#endif
-
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     extTimerStart();
     std::tr1::unordered_map<CRef, int>::iterator it = clauseLBDs.find(before);
     if (it != clauseLBDs.end()) {
         int clauseLBD = it->second;
         clauseLBDs.erase(it);
-        newLBDs.insert(std::pair<CRef, int>(after, clauseLBD));
+        newLBDs.insert(std::pair<CRef, int>(cr, clauseLBD));
     }
     extTimerStop(ext_sel_overhead);
 #endif
@@ -1351,4 +1340,5 @@ void Solver::garbageCollect()
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
+    user_er_filter_batch();
 }
