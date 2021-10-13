@@ -56,9 +56,7 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
     }
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     // Filter clauses based on their LBD
-    std::tr1::unordered_map<CRef, int>::iterator it = clauseLBDs.find(candidate);
-    int l = 0;
-    if (it != clauseLBDs.end()) l = it->second;
+    const int l = ca[candidate].lbd();
     if (l >= ext_min_lbd && l <= ext_max_lbd) extFilteredClauses.insert(candidate);
 #endif
 }

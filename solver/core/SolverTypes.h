@@ -228,7 +228,11 @@ class Clause {
         unsigned learnt    : 1;
         unsigned has_extra : 1;
         unsigned reloced   : 1;
-        unsigned size      : 27; } header;
+        unsigned size      : 23;
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        unsigned lbd       : 4;
+#endif
+    } header;
     union { Lit lit; Act act; uint32_t abs; CRef rel; } data[0];
 
     friend class ClauseAllocator;
@@ -241,6 +245,9 @@ class Clause {
         header.has_extra = use_extra;
         header.reloced   = 0;
         header.size      = ps.size();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        header.lbd       = 0;
+#endif
 
         for (int i = 0; i < ps.size(); i++) 
             data[i].lit = ps[i];
@@ -259,6 +266,10 @@ public:
         for (int i = 0; i < size(); i++)
             abstraction |= 1 << (var(data[i].lit) & 31);
         data[header.size].abs = abstraction;  }
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    int          lbd         ()      const   { return header.lbd; }
+    void         setlbd      (int l)         { if (l < 0xF) header.lbd = l; else header.lbd = 0xF; }
+#endif
     int          size        ()      const   { return header.size; }
     void         shrink      (int i)         { assert(i <= size()); if (header.has_extra) data[header.size-i] = data[header.size]; header.size -= i; }
     void         pop         ()              { shrink(1); }
@@ -337,7 +348,13 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
         
         if (c.reloced()) { cr = c.relocation(); return; }
         
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        int l = c.lbd();
+#endif
         cr = to.alloc(c, c.learnt());
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        to[cr].setlbd(l);
+#endif
         c.relocate(cr);
         
         // Copy extra data-fields: 

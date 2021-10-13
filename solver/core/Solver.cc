@@ -812,11 +812,6 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
             extTimerStart();
             extFilteredClauses.erase(db[i]);
             extTimerStop(ext_sel_overhead);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-            extTimerStart();
-            extFilteredClauses.erase(db[i]);
-            clauseLBDs.erase(db[i]);
-            extTimerStop(ext_sel_overhead);
 #endif
             removeClause(db[i]);
         } else {
@@ -1000,7 +995,7 @@ lbool Solver::search(int nof_conflicts)
 #endif
 
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-                clauseLBDs.insert(std::make_pair(cr, clauseLBD));
+                clause.setlbd(clauseLBD);
 #endif
 
 #if LBD_BASED_CLAUSE_DELETION
@@ -1278,18 +1273,18 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
 //=================================================================================================
 // Garbage Collection methods:
 
-void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_map<CRef, int>& newLBDs) {
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_SELECT_HEURISTIC & ER_SELECT_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_set<CRef>& newFilteredClauses) {
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     CRef before = cr;
 #endif
     ca.reloc(cr, to);
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+
+#if ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_RANGE || ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_LBD
     extTimerStart();
-    std::tr1::unordered_map<CRef, int>::iterator it = clauseLBDs.find(before);
-    if (it != clauseLBDs.end()) {
-        int clauseLBD = it->second;
-        clauseLBDs.erase(it);
-        newLBDs.insert(std::pair<CRef, int>(cr, clauseLBD));
+    std::tr1::unordered_set<CRef>::iterator it2 = extFilteredClauses.find(before);
+    if (it2 != extFilteredClauses.end()) {
+        extFilteredClauses.erase(it2);
+        newFilteredClauses.insert(cr);
     }
     extTimerStop(ext_sel_overhead);
 #endif
@@ -1299,7 +1294,7 @@ void Solver::relocAll(ClauseAllocator& to)
 {
     // All watchers:
     //
-    std::tr1::unordered_map<CRef, int> tmp;
+    std::tr1::unordered_set<CRef> tmpFiltered;
     // for (int i = 0; i < watches.size(); i++)
     watches.cleanAll();
     for (int v = 0; v < nVars(); v++)
@@ -1308,7 +1303,7 @@ void Solver::relocAll(ClauseAllocator& to)
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
             vec<Watcher>& ws = watches[p];
             for (int j = 0; j < ws.size(); j++)
-                relocHelper(ws[j].cref, to, tmp);
+                relocHelper(ws[j].cref, to, tmpFiltered);
         }
 
     // All reasons:
@@ -1316,16 +1311,18 @@ void Solver::relocAll(ClauseAllocator& to)
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            relocHelper(vardata[v].reason, to, tmp);
+            relocHelper(vardata[v].reason, to, tmpFiltered);
     }
 
-    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to, tmp); // All learnt
-    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to, tmp); // All learnt extension
-    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to, tmp); // All extension definitions
-    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to, tmp); // All original
+    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to, tmpFiltered); // All learnt
+    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to, tmpFiltered); // All learnt extension
+    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to, tmpFiltered); // All extension definitions
+    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to, tmpFiltered); // All original
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    clauseLBDs = tmp;
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    extTimerStart();
+    extFilteredClauses = tmpFiltered;
+    extTimerStop(ext_sel_overhead);
 #endif
 }
 
@@ -1340,5 +1337,4 @@ void Solver::garbageCollect()
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
-    user_er_filter_batch();
 }
