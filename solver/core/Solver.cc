@@ -998,9 +998,13 @@ lbool Solver::search(int nof_conflicts)
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
 #endif
 
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+                user_er_filter_incremental(cr);
+#endif
+
 #if LBD_BASED_CLAUSE_DELETION
                 clause.activity() = clauseLBD;
-                lbd_total += clause.activity();
+                lbd_total += clauseLBD;
 #else
                 claBumpActivity(ca[cr]);
 #endif
