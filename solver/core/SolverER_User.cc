@@ -55,9 +55,8 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
         }
     }
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    // Filter clauses based on their LBD
-    const int l = ca[candidate].lbd();
-    if (l >= ext_min_lbd && l <= ext_max_lbd) extFilteredClauses.insert(candidate);
+    // Filter clauses based on their creation LBD
+    if (ca[candidate].good_lbd()) extFilteredClauses.insert(candidate);
 #endif
 }
 

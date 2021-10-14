@@ -995,7 +995,7 @@ lbool Solver::search(int nof_conflicts)
 #endif
 
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-                clause.setlbd(clauseLBD);
+                clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
 #endif
 
 #if LBD_BASED_CLAUSE_DELETION

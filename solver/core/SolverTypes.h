@@ -228,10 +228,10 @@ class Clause {
         unsigned learnt    : 1;
         unsigned has_extra : 1;
         unsigned reloced   : 1;
-        unsigned size      : 23;
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-        unsigned lbd       : 4;
+        unsigned good_lbd  : 1;
 #endif
+        unsigned size      : 26;
     } header;
     union { Lit lit; Act act; uint32_t abs; CRef rel; } data[0];
 
@@ -246,7 +246,7 @@ class Clause {
         header.reloced   = 0;
         header.size      = ps.size();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-        header.lbd       = 0;
+        header.good_lbd  = false;
 #endif
 
         for (int i = 0; i < ps.size(); i++) 
@@ -267,8 +267,8 @@ public:
             abstraction |= 1 << (var(data[i].lit) & 31);
         data[header.size].abs = abstraction;  }
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    int          lbd         ()      const   { return header.lbd; }
-    void         setlbd      (int l)         { if (l < 0xF) header.lbd = l; else header.lbd = 0xF; }
+    bool         good_lbd    ()      const   { return header.good_lbd; }
+    void         set_lbd     (bool l)        { header.good_lbd = l; }
 #endif
     int          size        ()      const   { return header.size; }
     void         shrink      (int i)         { assert(i <= size()); if (header.has_extra) data[header.size-i] = data[header.size]; header.size -= i; }
@@ -349,11 +349,11 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
         if (c.reloced()) { cr = c.relocation(); return; }
         
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-        int l = c.lbd();
+        bool l = c.good_lbd();
 #endif
         cr = to.alloc(c, c.learnt());
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-        to[cr].setlbd(l);
+        to[cr].set_lbd(l);
 #endif
         c.relocate(cr);
         
