@@ -808,10 +808,10 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
             extTimerStart();
             extFilteredClauses.erase(db[i]);
-            extTimerStop(ext_sel_overhead);
+            extTimerStop(ext_delC_overhead);
 #endif
             removeClause(db[i]);
         } else {
@@ -1278,14 +1278,10 @@ void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_set<
     CRef before = cr;
 #endif
     ca.reloc(cr, to);
-
 #if ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_RANGE || ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_LBD
     extTimerStart();
-    std::tr1::unordered_set<CRef>::iterator it2 = extFilteredClauses.find(before);
-    if (it2 != extFilteredClauses.end()) {
-        extFilteredClauses.erase(it2);
+    if (extFilteredClauses.find(before) != extFilteredClauses.end())
         newFilteredClauses.insert(cr);
-    }
     extTimerStop(ext_sel_overhead);
 #endif
 }
