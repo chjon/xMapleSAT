@@ -995,11 +995,14 @@ lbool Solver::search(int nof_conflicts)
 #endif
 
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+                extTimerStart();
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
-#endif
-
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
                 user_er_filter_incremental(cr);
+                extTimerStop(ext_sel_overhead);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+                extTimerStart();
+                user_er_filter_incremental(cr);
+                extTimerStop(ext_sel_overhead);
 #endif
 
 #if LBD_BASED_CLAUSE_DELETION
