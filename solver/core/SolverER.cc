@@ -1,8 +1,6 @@
 #include "core/Solver.h"
 #include "mtl/Sort.h"
 
-#define MICROSEC_PER_SEC (1000000)
-
 // Template specializations for hashing
 namespace std { namespace tr1 {
     template<>
@@ -15,34 +13,6 @@ namespace std { namespace tr1 {
         return p.x;
     }
 }}
-
-// Timers
-static struct rusage g_timer_start, g_timer_end;
-inline void timerStart() {
-    getrusage(RUSAGE_SELF, &g_timer_start);
-}
-inline void timerStop(struct rusage& timer) {
-    getrusage(RUSAGE_SELF, &g_timer_end);
-    
-    // Semantics: timer += end_time - start_time
-
-    // Add to total overhead
-    timer.ru_utime.tv_sec  += g_timer_end.ru_utime.tv_sec - g_timer_start.ru_utime.tv_sec;
-    timer.ru_utime.tv_usec += g_timer_end.ru_utime.tv_usec;
-
-    // Check if subtracting the initial time would result in underflow
-    if (g_timer_start.ru_utime.tv_usec > timer.ru_utime.tv_usec) {
-        timer.ru_utime.tv_usec += MICROSEC_PER_SEC;
-        timer.ru_utime.tv_sec  -= 1;
-    }
-    timer.ru_utime.tv_usec -= g_timer_start.ru_utime.tv_usec;
-
-    // Check if we carry over to the next second
-    if (timer.ru_utime.tv_usec >= MICROSEC_PER_SEC) {
-        timer.ru_utime.tv_usec -= MICROSEC_PER_SEC;
-        timer.ru_utime.tv_sec  += 1;
-    }
-}
 
 namespace Minisat {
 
@@ -96,7 +66,7 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDef
 }
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
-    timerStart();
+    extTimerStart();
     // Ensure we have extension variables
     if (nExtVars() > 0) {
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
@@ -118,7 +88,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
         }
     }
 
-    timerStop(ext_sub_overhead);
+    extTimerStop(ext_sub_overhead);
 }
 
 // Prioritize branching on a given set of literals
@@ -180,15 +150,15 @@ void Solver::generateExtVars (
     unsigned int maxNumNewVars
 ) {
     // Get extension clauses according to heuristic
-    timerStart();
+    extTimerStart();
     std::vector<CRef> candidateClauses = er_select_heuristic(*this, numClausesToConsider);
-    timerStop(ext_sel_overhead);
+    extTimerStop(ext_sel_overhead);
 
     // Get extension variables according to heuristic
-    timerStart();
+    extTimerStart();
     const std::vector< std::pair< Var, std::pair<Lit, Lit> > > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
     extBuffer.insert(extBuffer.end(), newDefMap.begin(), newDefMap.end());
-    timerStop(ext_add_overhead);
+    extTimerStop(ext_add_overhead);
 }
 
 // Add extension variables to our data structures and prioritize branching on them.
@@ -196,11 +166,11 @@ void Solver::generateExtVars (
 // definitions and adding the appropriate clauses and variables.
 void Solver::addExtVars() {
     // Add the extension variables to our data structures
-    timerStart();
+    extTimerStart();
     const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer);
     extBuffer.clear();
     er_prioritize(new_variables);
-    timerStop(ext_add_overhead);
+    extTimerStop(ext_add_overhead);
 }
 
 void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {

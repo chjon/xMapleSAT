@@ -178,6 +178,8 @@ Solver::Solver() :
     ext_delV_overhead.ru_utime.tv_usec = 0;
     ext_sub_overhead .ru_utime.tv_sec  = 0;
     ext_sub_overhead .ru_utime.tv_usec = 0;
+    ext_stat_overhead.ru_utime.tv_sec  = 0;
+    ext_stat_overhead.ru_utime.tv_usec = 0;
 }
 
 
@@ -410,7 +412,15 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
 
-        if (getNumExtVars(c) > 0) conflict_extclauses++;
+        extTimerStart();
+        if (getNumExtVars(c) > 0) {
+            conflict_extclauses++;
+            for (int i = 0; i < c.size(); i++) {
+                Var v = var(c[i]);
+                if (isExtVar(v)) confExtVars.insert(v);
+            }
+        }
+        extTimerStop(ext_stat_overhead);
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)

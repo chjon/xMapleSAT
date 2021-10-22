@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 
+#define MICROSEC_PER_SEC (1000000)
 
 namespace Minisat {
 
@@ -216,6 +217,7 @@ public:
     // EXTENDED RESOLUTION - statistics
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+    std::tr1::unordered_set<Var> confExtVars; // Set of variables that participate in conflicts
     double extfrac_total;
     struct rusage ext_timer_start, ext_timer_end;
     struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
@@ -223,7 +225,8 @@ public:
     struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
     struct rusage ext_delV_overhead; // Overhead for deleting extension variables
     struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
-    double extTimerRead(unsigned int i); // 0: add, 1: delC, 2: delV, 3: sub
+    struct rusage ext_stat_overhead; // Overhead for measuring statistics
+    double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -743,6 +746,7 @@ inline double Solver::extTimerRead(unsigned int i) {
         case 2: return readTimer(ext_delC_overhead);
         case 3: return readTimer(ext_delV_overhead);
         case 4: return readTimer(ext_sub_overhead);
+        case 5: return readTimer(ext_stat_overhead);
         default: return -1.;
     }
 }
