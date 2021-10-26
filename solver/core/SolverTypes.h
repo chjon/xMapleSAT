@@ -43,6 +43,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_SELECT_HEURISTIC_NONE      0 // Consider all clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY  1 // Select most active clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
+#define ER_SELECT_HEURISTIC_GLUCOSER  3 // Only consider the previous two learnt clauses
 #ifndef ER_USER_SELECT_HEURISTIC
     #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ACTIVITY
 #endif
@@ -89,9 +90,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #error ANTI_EXPLORATION requires BRANCHING_HEURISTIC == LRB
 #endif
 
-#define NO_EXTENSION 0
-#define RANDOM_SAMPLE 1
-#define SUBEXPR_MATCH 2
+// Define heuristics for adding extension definitions
+#define ER_ADD_HEURISTIC_NONE     0 // Do not add extension variables
+#define ER_ADD_HEURISTIC_RANDOM   1 // Add extension variables by selecting random pairs of literals
+#define ER_ADD_HEURISTIC_SUBEXPR  2 // Add extension variables by selecting the most common pairs of literals
+#define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
 
 #ifndef EXTENSION_SUBSTITUTION
     #define EXTENSION_SUBSTITUTION true
@@ -99,11 +102,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef EXTENSION_HEURISTIC
-    #define EXTENSION_HEURISTIC RANDOM_SAMPLE
+#ifndef ER_USER_ADD_HEURISTIC
+    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
 #endif
-#if EXTENSION_SUBSTITUTION && EXTENSION_HEURISTIC == NO_EXTENSION
-    #error EXTENSION_SUBSTITUTION requires EXTENSION_HEURISTIC != NO_EXTENSION
+#if EXTENSION_SUBSTITUTION && ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_NONE
+    #error EXTENSION_SUBSTITUTION requires ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
 #endif
 
 #ifndef DELETE_LEARNT_CLAUSES

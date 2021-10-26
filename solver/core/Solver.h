@@ -293,6 +293,10 @@ protected:
     bool                useCachedActiveClauses;
 #endif
 
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+    std::vector<CRef> er_prevLearntClauses;
+#endif
+
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -534,6 +538,9 @@ protected:
     static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity (Solver& solver, unsigned int numClauses);
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+    static std::vector<CRef> user_er_select_glucosER (Solver& solver, unsigned int numClauses);
+#endif
 
     ///// [ user_er_add_ ] /////
     // Description:
@@ -553,11 +560,18 @@ protected:
 
     static std::vector< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs);
 
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
     static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
     // Random literal selection - select two literals at random and define a new extension variable over them.
-    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_random(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+    // GlucosER literal selection - select the two literals which are not shared and define a new extension variable over them.
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_glucosER(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+#endif
 
     ///// [ user_er_delete_ ] /////
     // Description:

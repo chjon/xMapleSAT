@@ -773,10 +773,18 @@ void Solver::reduceDB() {
     if (!extBuffer.size()) {
         // Generate extension variables
         generateExtVars(
-            user_er_select_activity,
-    #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
+    #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+                user_er_select_naive,
+    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
+                user_er_select_activity,
+    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
+                user_er_select_activity2,
+    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+                user_er_select_glucosER,
+    #endif
+    #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
             user_er_add_random,
-    #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
+    #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
             user_er_add_subexpr,
     #endif
             ext_window,
@@ -911,7 +919,7 @@ lbool Solver::search(int nof_conflicts)
 
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
     // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
-#if EXTENSION_HEURISTIC != NO_EXTENSION
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
 
 #if !ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     if (!extBuffer.size()) {
@@ -926,10 +934,12 @@ lbool Solver::search(int nof_conflicts)
                 user_er_select_activity,
 #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
                 user_er_select_activity2,
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+                user_er_select_glucosER,
 #endif
-#if EXTENSION_HEURISTIC == RANDOM_SAMPLE
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
                 user_er_add_random,
-#elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
                 user_er_add_subexpr,
 #endif
                 ext_window,

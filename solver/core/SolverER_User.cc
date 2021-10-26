@@ -222,6 +222,12 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
     return clauseWindow;
 }
 
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+std::vector<CRef> Solver::user_er_select_glucosER(Solver& s, unsigned int numClauses) {
+    return er_prevLearntClauses;
+}
+#endif
+
 static inline void addIntersectionToSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
     // Time complexity: O(k^2)
     for (unsigned int i = 0; i < intersection.size(); i++) {
@@ -330,6 +336,8 @@ inline std::vector< std::pair<Lit, Lit> > Solver::getFreqSubexprs(std::tr1::unor
     return subexprs;
 }
 
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
+
 // EXTENDED RESOLUTION - variable definition heuristic
 std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
@@ -366,6 +374,8 @@ static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>&
     return std::vector<Var>(vars.begin(), vars.end());
 }
 
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
+
 // EXTENDED RESOLUTION - variable definition heuristic
 std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Total time complexity: O(w k log(w k) + x)
@@ -401,6 +411,51 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(
 
     return extClauses;
 }
+
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+
+std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosER(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+    std::vector< std::pair< Var, std::pair<Lit, Lit> > > extDefPairs;
+
+    // Check that we have at least 2 learnt clauses
+    if (candidateClauses.size() != 2) return extDefPairs;
+    Clause& c0 = s.ca[candidateClauses[0]];
+    Clause& c1 = s.ca[candidateClauses[1]];
+
+    // Check that the last 2 learnt clauses only differ by one literal
+    if (c0.size() != c1.size()) return extDefPairs;
+    std::tr1::unordered_set<Lit> lits;
+    std::vector<Lit> diffLits;
+    for (int i = 0; i < c0.size(); i++) lits.insert(c0[i]);
+    for (int i = 0; i < c1.size(); i++) {
+        std::tr1::unordered_set<Lit>::iterator it = lits.find(c1[i]);
+        if (it == lits.end()) {
+            if (diffLits.size()) return extDefPairs; // More than one different literal!
+            diffLits.push_back(c1[i]);
+        } else {
+            lits.erase(it);
+        }
+    }
+
+    // Lits and diffLits must both have size 1 here
+    if (lits.size() == 1 && diffLits.size() == 1) {
+        // Lits a and b must be different - otherwise, lits.size() == diffLits.size() == 0
+        Lit a = *lits.begin();
+        Lit b = *diffLits.begin();
+        std::pair<Lit, Lit> key = mkLitPair(a, b);
+        if (!s.extVarDefs.contains(a, b)) {
+            // Add extension variable
+            Var x = s.nVars();
+            extDefPairs.push_back(std::make_pair(x, key));
+        }
+
+        er_prevLearntClauses[0] = er_prevLearntClauses[1];
+    }
+
+    return extDefPairs;
+}
+
+#endif
 
 // EXTENDED RESOLUTION - variable deletion heuristic
 std::vector<Var> Solver::user_er_delete_all(Solver& s) {
