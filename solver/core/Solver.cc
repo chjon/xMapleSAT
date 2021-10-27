@@ -860,9 +860,8 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-    // EXTENDED RESOLUTION - determine whether to try adding extension variables
-    // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+    // EXTENDED RESOLUTION - determine whether to try adding extension variables
     if (!extBuffer.size()) {
         // Only try generating more extension variables if there aren't any buffered already
         if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
@@ -936,7 +935,7 @@ lbool Solver::search(int nof_conflicts)
                 const int clauseLBD = lbd(clause);
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
                 extTimerStart();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
@@ -945,7 +944,9 @@ lbool Solver::search(int nof_conflicts)
                 extTimerStop(ext_sel_overhead);
 #endif
 
-                // TODO: check glucosER conditions and add extension variables here
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+                generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
+#endif
 
 #if LBD_BASED_CLAUSE_DELETION
                 clause.activity() = clauseLBD;
@@ -1221,7 +1222,7 @@ void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_set<
     CRef before = cr;
 #endif
     ca.reloc(cr, to);
-#if ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_RANGE || ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_LBD
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     extTimerStart();
     if (extFilteredClauses.find(before) != extFilteredClauses.end())
         newFilteredClauses.insert(cr);
@@ -1261,6 +1262,12 @@ void Solver::relocAll(ClauseAllocator& to)
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     extTimerStart();
     extFilteredClauses = tmpFiltered;
+    extTimerStop(ext_sel_overhead);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+    extTimerStart();
+    for (unsigned int i = 0; i < er_prevLearntClauses.size(); i++) {
+        ca.reloc(er_prevLearntClauses[i], to);
+    }
     extTimerStop(ext_sel_overhead);
 #endif
 }
