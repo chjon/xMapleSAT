@@ -117,37 +117,6 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
 }
 
 #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
-std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numClauses) {
-    // Find the variables in the clauses with the top k highest activities
-    // Uses a quicksort-type of algo for expected-linear time
-    // Adapted from: https://en.wikipedia.org/wiki/Quickselect
-    // If this still takes too long, consider: https://en.wikipedia.org/wiki/Floyd-Rivest_algorithm
-
-    vec<CRef> clauses;
-    vec<CRef> filteredClauses;
-
-    // Use incremental filtered clause list
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
-        filteredClauses.push(*it);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
-        filteredClauses.push(*it);
-#endif
-    copy_k_largest_activity(clauses, filteredClauses, s, numClauses);
-
-    std::vector<CRef> clauseWindow;
-    quickselect_activity(clauses, s, 0, clauses.size() - 1, numClauses);
-    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(clauses.size()), numClauses); i++) clauseWindow.push_back(clauses[i]);
-    return clauseWindow;
-}
-
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
-std::vector<CRef> Solver::user_er_select_glucosER(Solver& s, unsigned int numClauses) {
-    return s.er_prevLearntClauses;
-}
-#endif
-
 // Partition elements such that clauses with larger activities are left of the pivot
 // This is a helper function for quickselect
 inline int Solver::partition_activity(vec<CRef>& db, ClauseAllocator& ca, int l, int r, int pivot) {
@@ -185,6 +154,66 @@ void Solver::quickselect_activity(vec<CRef>& db, Solver& solver, int l, int r, i
     }
 }
 
+// Get the elements with the k largest activities and store them in the target vector
+void Solver::copy_k_largest_activity(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k) {
+#define ER_ALLOW_DB_MODIFICATION false
+#if ER_ALLOW_DB_MODIFICATION
+    quickselect_activity(source, solver, 0, source.size() - 1, k);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(source.size()), k); i++) target.push(source[i]);
+#else
+    // TODO: is making this copy necessary?
+    vec<CRef> copy;
+    source.copyTo(copy);
+    quickselect_activity(copy, solver, 0, copy.size() - 1, k);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(copy.size()), k); i++) target.push(copy[i]);
+#endif
+}
+
+std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numClauses) {
+    // Find the variables in the clauses with the top k highest activities
+    // Uses a quicksort-type of algo for expected-linear time
+    // Adapted from: https://en.wikipedia.org/wiki/Quickselect
+    // If this still takes too long, consider: https://en.wikipedia.org/wiki/Floyd-Rivest_algorithm
+
+    vec<CRef> clauses;
+    vec<CRef> filteredClauses;
+
+    // Use incremental filtered clause list
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
+        filteredClauses.push(*it);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
+        filteredClauses.push(*it);
+#endif
+    copy_k_largest_activity(clauses, filteredClauses, s, numClauses);
+
+    std::vector<CRef> clauseWindow;
+    quickselect_activity(clauses, s, 0, clauses.size() - 1, numClauses);
+    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(clauses.size()), numClauses); i++) clauseWindow.push_back(clauses[i]);
+    return clauseWindow;
+}
+
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+std::vector<CRef> Solver::user_er_select_glucosER(Solver& s, unsigned int numClauses) {
+    return s.er_prevLearntClauses;
+}
+#endif
+
+// EXTENDED RESOLUTION - variable definition heuristic
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
+    return user_er_add_subexpr(s, candidateClauses, maxNumNewVars);
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
+    return user_er_add_random(s, candidateClauses, maxNumNewVars);
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+    return user_er_add_glucosER(s, candidateClauses, maxNumNewVars);
+#endif
+}
+#endif
+
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
 // Partition elements such that clauses with larger activities are left of the pivot
 // This is a helper function for quickselect
 inline int Solver::partition_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, int l, int r, int pivot) {
@@ -221,21 +250,6 @@ void Solver::quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1:
     }
 }
 
-// Get the elements with the k largest activities and store them in the target vector
-void Solver::copy_k_largest_activity(vec<CRef>& target, vec<CRef>& source, Solver& solver, unsigned int k) {
-#define ER_ALLOW_DB_MODIFICATION false
-#if ER_ALLOW_DB_MODIFICATION
-    quickselect_activity(source, solver, 0, source.size() - 1, k);
-    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(source.size()), k); i++) target.push(source[i]);
-#else
-    // TODO: is making this copy necessary?
-    vec<CRef> copy;
-    source.copyTo(copy);
-    quickselect_activity(copy, solver, 0, copy.size() - 1, k);
-    for (unsigned int i = 0; i < std::min(static_cast<unsigned int>(copy.size()), k); i++) target.push(copy[i]);
-#endif
-}
-
 static inline void addIntersectionToSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexprs, const std::vector<Lit>& intersection) {
     // Time complexity: O(k^2)
     for (unsigned int i = 0; i < intersection.size(); i++) {
@@ -249,20 +263,6 @@ static inline void addIntersectionToSubexprs(std::tr1::unordered_map<std::pair<L
             else it->second++;
         }
     }
-}
-
-static inline std::vector< std::tr1::unordered_set<Lit> > getLiteralSets(ClauseAllocator& ca, std::vector<CRef>& clauses) {
-    // Get the set of literals for each clause
-    // Time complexity: O(w k log(w k))
-    std::vector< std::tr1::unordered_set<Lit> > sets;
-    for (unsigned int i = 0; i < clauses.size(); i++) {
-        const Clause& c = ca[clauses[i]];
-        std::tr1::unordered_set<Lit> set;
-        for (int j = 0; j < c.size(); j++) set.insert(c[j]);
-        sets.push_back(set);
-    }
-
-    return sets;
 }
 
 static inline std::tr1::unordered_map<std::pair<Lit, Lit>, int> countSubexprs(const Solver& s, std::vector< std::tr1::unordered_set<Lit> >& sets) {
@@ -344,21 +344,20 @@ inline std::vector< std::pair<Lit, Lit> > Solver::getFreqSubexprs(std::tr1::unor
     return subexprs;
 }
 
-#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
-std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
-#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
-    return user_er_add_subexpr(s, candidateClauses, maxNumNewVars);
-#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
-    return user_er_add_random(s, candidateClauses, maxNumNewVars);
-#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
-    return user_er_add_glucosER(s, candidateClauses, maxNumNewVars);
-#endif
+static inline std::vector< std::tr1::unordered_set<Lit> > getLiteralSets(ClauseAllocator& ca, std::vector<CRef>& clauses) {
+    // Get the set of literals for each clause
+    // Time complexity: O(w k log(w k))
+    std::vector< std::tr1::unordered_set<Lit> > sets;
+    for (unsigned int i = 0; i < clauses.size(); i++) {
+        const Clause& c = ca[clauses[i]];
+        std::tr1::unordered_set<Lit> set;
+        for (int j = 0; j < c.size(); j++) set.insert(c[j]);
+        sets.push_back(set);
+    }
+
+    return sets;
 }
-#endif
 
-#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
-
-// EXTENDED RESOLUTION - variable definition heuristic
 std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_subexpr(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
     // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
@@ -384,6 +383,7 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_subexpr
     return extClauses;
 }
 
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
 static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>& clauses) {
     // Get set of all variables
     // Time complexity: O(w k)
@@ -394,9 +394,6 @@ static inline std::vector<Var> getVarVec(ClauseAllocator& ca, std::vector<CRef>&
     return std::vector<Var>(vars.begin(), vars.end());
 }
 
-#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
-
-// EXTENDED RESOLUTION - variable definition heuristic
 std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
     // Total time complexity: O(w k log(w k) + x)
     // w: window size
