@@ -945,6 +945,7 @@ lbool Solver::search(int nof_conflicts)
 #endif
 
 #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+                // Try generating an extension variable based on the last learnt clauses
                 generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
 #endif
 

@@ -372,7 +372,7 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_subexpr
 
     // Add extension variables
     std::vector< std::pair< Var, std::pair<Lit, Lit> > > extClauses;
-    Var x = s.nVars();
+    Var x = s.nVars() + s.extBuffer.size();
     for (std::vector< std::pair<Lit, Lit> >::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         if (!s.extVarDefs.contains(i->first, i->second)) {
             // Add extension variable
@@ -408,7 +408,7 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(
     // Add extension variables
     // Time complexity: O(x)
     std::vector< std::pair< Var, std::pair<Lit, Lit> > > extClauses;
-    Var x = s.nVars();
+    Var x = s.nVars() + s.extBuffer.size();
     if (varVec.size() == 0) return extClauses;
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
@@ -461,7 +461,7 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
         std::pair<Lit, Lit> key = mkLitPair(a, b);
         if (!s.extVarDefs.contains(a, b)) {
             // Add extension variable
-            Var x = s.nVars();
+            Var x = s.nVars() + s.extBuffer.size();
             extDefPairs.push_back(std::make_pair(x, key));
         }
     }
