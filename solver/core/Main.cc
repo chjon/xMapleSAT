@@ -44,7 +44,6 @@ void printStats(Solver& solver)
     printf("propagations          : %-12"PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
     printf("conflict literals     : %-12"PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     printf("ext vars              : %-12"PRId32"\n", solver.nExtVars());
-    printf("conflict ext vars     : %-12"PRIu64"\n", solver.confExtVars.size());
     printf("conflict ext clauses  : %-12"PRIu64"   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
     printf("learnt ext clauses    : %-12"PRIu64"   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
     printf("total lbd of learnts  : %-12"PRIu64"   (%.0f /conf)\n", solver.lbd_total, solver.lbd_total / (float)solver.conflicts);

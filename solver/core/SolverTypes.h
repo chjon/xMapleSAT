@@ -31,12 +31,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 // Define heuristic for filtering clauses before clause selection
-#define ER_FILTER_HEURISTIC_NONE    0 // Consider all clauses
-#define ER_FILTER_HEURISTIC_RANGE   1 // Consider clauses whose widths are in a certain range 
-#define ER_FILTER_HEURISTIC_LONGEST 2 // Consider the longest clauses
-#define ER_FILTER_HEURISTIC_LBD     3 // Consider clauses whose LBDs are in a certain range
+#define ER_FILTER_HEURISTIC_NONE     0 // Consider all clauses
+#define ER_FILTER_HEURISTIC_RANGE    1 // Consider clauses whose widths are in a certain range 
+#define ER_FILTER_HEURISTIC_LONGEST  2 // Consider the longest clauses
+#define ER_FILTER_HEURISTIC_LBD      3 // Consider clauses whose LBDs are in a certain range
+#define ER_FILTER_HEURISTIC_GLUCOSER 4 // Consider the most recently learnt clauses
 #ifndef ER_USER_FILTER_HEURISTIC
-    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_RANGE
+    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_GLUCOSER
 #endif
 
 // Define heuristic for selecting clauses
@@ -45,7 +46,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
 #define ER_SELECT_HEURISTIC_GLUCOSER  3 // Only consider the previous two learnt clauses
 #ifndef ER_USER_SELECT_HEURISTIC
-    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ACTIVITY
+    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_GLUCOSER
 #endif
 
 // Define heuristic for replacing extension definitions in clauses
@@ -56,12 +57,23 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define ER_USER_SUBSTITUTE_HEURISTIC (ER_SUBSTITUTE_HEURISTIC_LBD | ER_SUBSTITUTE_HEURISTIC_WIDTH)
 #endif
 
+// Define heuristics for adding extension definitions
+#define ER_ADD_HEURISTIC_NONE     0 // Do not add extension variables
+#define ER_ADD_HEURISTIC_RANDOM   1 // Add extension variables by selecting random pairs of literals
+#define ER_ADD_HEURISTIC_SUBEXPR  2 // Add extension variables by selecting the most common pairs of literals
+#define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
+#ifndef ER_USER_ADD_HEURISTIC
+    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
+#endif
+
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
     #error Must select at least one filter/selection heuristic
 #endif
 
-#ifndef ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    #define ER_USER_SELECT_CACHE_ACTIVE_CLAUSES false
+#if (ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER && ER_USER_SELECT_HEURISTIC != ER_SELECT_HEURISTIC_GLUCOSER)
+    #error ER_ADD_HEURISTIC_GLUCOSER requires ER_SELECT_HEURISTIC_GLUCOSER
+#elif (ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER && ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_GLUCOSER)
+    #error ER_SELECT_HEURISTIC_GLUCOSER requires ER_FILTER_HEURISTIC_GLUCOSER
 #endif
 
 #ifndef BRANCHING_HEURISTIC
@@ -90,21 +102,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #error ANTI_EXPLORATION requires BRANCHING_HEURISTIC == LRB
 #endif
 
-// Define heuristics for adding extension definitions
-#define ER_ADD_HEURISTIC_NONE     0 // Do not add extension variables
-#define ER_ADD_HEURISTIC_RANDOM   1 // Add extension variables by selecting random pairs of literals
-#define ER_ADD_HEURISTIC_SUBEXPR  2 // Add extension variables by selecting the most common pairs of literals
-#define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
-
 #ifndef EXTENSION_SUBSTITUTION
     #define EXTENSION_SUBSTITUTION true
 #endif
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef ER_USER_ADD_HEURISTIC
-    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
-#endif
+
 #if EXTENSION_SUBSTITUTION && ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_NONE
     #error EXTENSION_SUBSTITUTION requires ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
 #endif

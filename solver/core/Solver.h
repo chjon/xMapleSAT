@@ -217,7 +217,6 @@ public:
     // EXTENDED RESOLUTION - statistics
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
-    std::tr1::unordered_set<Var> confExtVars; // Set of variables that participate in conflicts
     double extfrac_total;
     struct rusage ext_timer_start, ext_timer_end;
     struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
@@ -287,16 +286,6 @@ protected:
 
     std::vector< std::pair< Var, std::pair<Lit, Lit> > > extBuffer; // Buffer of extension variable definitions to add
 
-    // Learnt clauses sorted by activity
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    vec<CRef>           learntsByActivity;
-    bool                useCachedActiveClauses;
-#endif
-
-#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
-    std::vector<CRef> er_prevLearntClauses;
-#endif
-
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -334,6 +323,8 @@ protected:
                                              // This vector is treated as a min-heap, where we add clauses to the vector in order
                                              // This represents the result of filtering the clauses by clause width
                                              // Special care needs to be taken while deleting clauses
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+    std::vector<CRef> er_prevLearntClauses;
 #endif
     int               originalNumVars;       // The number of variables in the original formula
                                              // This value is used to quickly check whether a variable is an extension variable
@@ -532,13 +523,16 @@ protected:
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
     void user_er_filter_incremental(const CRef candidate);
-    void user_er_filter_batch();
-    void user_er_filter_batch_helper(vec<CRef>& db);
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
+    
+    static std::vector<CRef> user_er_select          (Solver& solver, unsigned int numClauses);
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
     static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
     static std::vector<CRef> user_er_select_activity (Solver& solver, unsigned int numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
-#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
     static std::vector<CRef> user_er_select_glucosER (Solver& solver, unsigned int numClauses);
 #endif
 
@@ -559,6 +553,10 @@ protected:
     //   extension variables.
 
     static std::vector< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs);
+
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+#endif
 
 #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.

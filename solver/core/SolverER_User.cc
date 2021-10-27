@@ -57,21 +57,16 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     // Filter clauses based on their creation LBD
     if (ca[candidate].good_lbd()) extFilteredClauses.insert(candidate);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+    if (ca[candidate].learnt()) {
+        if (er_prevLearntClauses.size() > 1) {
+            er_prevLearntClauses[0] = er_prevLearntClauses[1];
+            er_prevLearntClauses[1] = candidate;
+        } else {
+            er_prevLearntClauses.push_back(candidate);
+        }
+    }
 #endif
-}
-
-void Solver::user_er_filter_batch() {
-    extTimerStart();
-    extFilteredClauses.clear();
-    user_er_filter_batch_helper(learnts);
-    user_er_filter_batch_helper(extLearnts);
-    user_er_filter_batch_helper(extDefs);
-    user_er_filter_batch_helper(clauses);
-    extTimerStop(ext_sel_overhead);
-}
-
-void Solver::user_er_filter_batch_helper(vec<CRef>& db) {
-    for (int i = 0; i < db.size(); i++) user_er_filter_incremental(db[i]);
 }
 
 std::vector<CRef> Solver::user_er_select_naive(Solver& s, unsigned int numClauses) {
@@ -224,7 +219,7 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
 std::vector<CRef> Solver::user_er_select_glucosER(Solver& s, unsigned int numClauses) {
-    return er_prevLearntClauses;
+    return s.er_prevLearntClauses;
 }
 #endif
 
@@ -335,6 +330,30 @@ inline std::vector< std::pair<Lit, Lit> > Solver::getFreqSubexprs(std::tr1::unor
 #endif
     return subexprs;
 }
+
+std::vector<CRef> Solver::user_er_select(Solver& solver, unsigned int numClauses) {
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+    return user_er_select_naive(solver, numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
+    return user_er_select_activity(solver, numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
+    return user_er_select_activity2(solver, numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+    return user_er_select_glucosER(solver, numClauses);
+#endif
+}
+
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add(Solver& s, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars) {
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
+    return user_er_add_subexpr(s, candidateClauses, maxNumNewVars);
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
+    return user_er_add_random(s, candidateClauses, maxNumNewVars);
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+    return user_er_add_glucosER(s, candidateClauses, maxNumNewVars);
+#endif
+}
+#endif
 
 #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
 
@@ -448,8 +467,6 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
             Var x = s.nVars();
             extDefPairs.push_back(std::make_pair(x, key));
         }
-
-        er_prevLearntClauses[0] = er_prevLearntClauses[1];
     }
 
     return extDefPairs;

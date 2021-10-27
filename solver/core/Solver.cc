@@ -143,9 +143,6 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-  , useCachedActiveClauses(false)
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -249,7 +246,9 @@ bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
         CRef cr = ca.alloc(ps, false);
         clauseDB.push(cr);
         attachClause(cr);
+        extTimerStart();
         user_er_filter_incremental(cr);
+        extTimerStop(ext_sel_overhead);
     }
 
     return true;
@@ -335,9 +334,6 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-        useCachedActiveClauses = false;
-#endif
     }}
 
 
@@ -415,10 +411,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         extTimerStart();
         if (getNumExtVars(c) > 0) {
             conflict_extclauses++;
-            for (int i = 0; i < c.size(); i++) {
-                Var v = var(c[i]);
-                if (isExtVar(v)) confExtVars.insert(v);
-            }
         }
         extTimerStop(ext_stat_overhead);
 
@@ -743,55 +735,6 @@ void Solver::reduceDB() {
     delExtVars(/* Heuristic function */);
 #endif
     checkGarbage();
-
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    // Make a copy of the sorted clauses (caching results for ER selection)
-    extTimerStart();
-
-    learntsByActivity.clear();
-    int learnts_i = 0, extlearnts_i = 0;
-    while (
-        learnts_i + extlearnts_i < ext_window &&
-        learnts_i                < learnts   .size() &&
-        extlearnts_i             < extLearnts.size()
-    ) {
-        if (ca[learnts[learnts_i]].activity() > ca[extLearnts[extlearnts_i]].activity())
-            learntsByActivity.push(learnts[learnts_i++]);
-        else
-            learntsByActivity.push(extLearnts[extlearnts_i++]);
-    }
-
-    while (learnts_i + extlearnts_i < ext_window && learnts_i < learnts.size())
-        learntsByActivity.push(learnts[learnts_i++]);
-    while (learnts_i + extlearnts_i < ext_window && extlearnts_i < extLearnts.size())
-        learntsByActivity.push(extLearnts[extlearnts_i++]);
-
-    useCachedActiveClauses = true;
-
-    extTimerStop(ext_sel_overhead);
-
-    if (!extBuffer.size()) {
-        // Generate extension variables
-        generateExtVars(
-    #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
-                user_er_select_naive,
-    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
-                user_er_select_activity,
-    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
-                user_er_select_activity2,
-    #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
-                user_er_select_glucosER,
-    #endif
-    #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
-            user_er_add_random,
-    #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
-            user_er_add_subexpr,
-    #endif
-            ext_window,
-            ext_max_intro
-        );
-    }
-#endif
 }
 
 struct clause_width_lt { 
@@ -920,34 +863,13 @@ lbool Solver::search(int nof_conflicts)
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
     // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
-
-#if !ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     if (!extBuffer.size()) {
         // Only try generating more extension variables if there aren't any buffered already
         if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
             prevExtensionConflict = conflicts;
-
-            generateExtVars(
-#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
-                user_er_select_naive,
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
-                user_er_select_activity,
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
-                user_er_select_activity2,
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
-                user_er_select_glucosER,
-#endif
-#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
-                user_er_add_random,
-#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
-                user_er_add_subexpr,
-#endif
-                ext_window,
-                ext_max_intro
-            );
+            generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
         }
     }
-#endif
     
     // Add extension variables if there are any in the buffer
     addExtVars();
@@ -1014,16 +936,16 @@ lbool Solver::search(int nof_conflicts)
                 const int clauseLBD = lbd(clause);
 #endif
 
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+                extTimerStart();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-                extTimerStart();
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
-                user_er_filter_incremental(cr);
-                extTimerStop(ext_sel_overhead);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-                extTimerStart();
+#endif
                 user_er_filter_incremental(cr);
                 extTimerStop(ext_sel_overhead);
 #endif
+
+                // TODO: check glucosER conditions and add extension variables here
 
 #if LBD_BASED_CLAUSE_DELETION
                 clause.activity() = clauseLBD;
@@ -1074,12 +996,6 @@ lbool Solver::search(int nof_conflicts)
 
 #if RAPID_DELETION
                 max_learnts += 500;
-#endif
-
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-                // Force a restart
-                cancelUntil(0);
-                return l_Undef;
 #endif
             }
 #endif
