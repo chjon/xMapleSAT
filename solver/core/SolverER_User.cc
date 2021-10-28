@@ -49,6 +49,38 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 #endif
 }
 
+void Solver::user_er_filter_delete_incremental(CRef cr) {
+    extTimerStart();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+    extFilteredClauses.erase(cr);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    extFilteredClauses.erase(cr);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    er_deletedClauses.insert(cr);
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+    er_deletedClauses.insert(cr);
+#endif
+    extTimerStop(ext_delC_overhead);
+}
+
+void Solver::user_er_filter_delete_flush(void) {
+    extTimerStart();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    for (std::tr1::vector<CRef>::iterator it = extWidthFilteredClauses.begin(); it != extWidthFilteredClauses.end(); it++) {
+        if (er_deletedClauses.find(*it) != er_deletedClauses.end())
+            extWidthFilteredClauses.erase(it);
+    }
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+    std::vector<CRef> tmp;
+    for (std::vector<CRef>::iterator it = er_prevLearntClauses.begin(); it != er_prevLearntClauses.end(); it++)
+        if (er_deletedClauses.find(*it) == er_deletedClauses.end())
+            tmp.push_back(*it);
+    er_prevLearntClauses = tmp;
+#endif
+    er_deletedClauses.clear();
+    extTimerStop(ext_delC_overhead);
+}
+
 std::vector<CRef> Solver::user_er_select(Solver& solver, unsigned int numClauses) {
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
     return user_er_select_naive(solver, numClauses);

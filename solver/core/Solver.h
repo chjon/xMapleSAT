@@ -312,6 +312,9 @@ protected:
                                              // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                              // This map is used for replacing disjunctions with the corresponding extension variable
                                              // This is NOT the same as the extension variable introduction heuristic
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    std::tr1::unordered_set<CRef> er_deletedClauses;
+#endif
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     std::tr1::unordered_set<CRef> extFilteredClauses;
                                              // List of clauses which can be selected by the clause selection heuristic
@@ -524,7 +527,9 @@ protected:
 
     void user_er_filter_incremental(const CRef candidate);
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
-    
+    void user_er_filter_delete_incremental(CRef cr);
+    void user_er_filter_delete_flush(void);
+
     static std::vector<CRef> user_er_select          (Solver& solver, unsigned int numClauses);
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
     static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);

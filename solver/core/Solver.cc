@@ -768,11 +768,8 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
 #else
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-            extTimerStart();
-            extFilteredClauses.erase(db[i]);
-            extTimerStop(ext_delC_overhead);
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+            user_er_filter_delete_incremental(db[i]);
 #endif
             removeClause(db[i]);
         } else {
@@ -780,6 +777,9 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
         }
     }
     db.shrink(i - j);
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    user_er_filter_delete_flush();
+#endif
 }
 
 void Solver::removeSatisfied(vec<CRef>& cs)
@@ -862,6 +862,7 @@ lbool Solver::search(int nof_conflicts)
 
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
     if (!extBuffer.size()) {
         // Only try generating more extension variables if there aren't any buffered already
         if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
@@ -869,6 +870,7 @@ lbool Solver::search(int nof_conflicts)
             generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
         }
     }
+#endif
     
     // Add extension variables if there are any in the buffer
     addExtVars();
@@ -935,7 +937,7 @@ lbool Solver::search(int nof_conflicts)
                 const int clauseLBD = lbd(clause);
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
                 extTimerStart();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
