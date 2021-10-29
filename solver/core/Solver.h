@@ -314,20 +314,10 @@ protected:
                                              // This is NOT the same as the extension variable introduction heuristic
 #if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
     std::tr1::unordered_set<CRef> er_deletedClauses;
-#endif
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    std::tr1::unordered_set<CRef> extFilteredClauses;
+    std::vector<CRef> er_filteredClauses;
                                              // List of clauses which can be selected by the clause selection heuristic
                                              // This represents the result of an initial filtering step, such as filtering by clause width
                                              // Special care needs to be taken while deleting clauses
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    std::vector<CRef> extWidthFilteredClauses;
-                                             // List of clauses which can be selected by the clause selection heuristic
-                                             // This vector is treated as a min-heap, where we add clauses to the vector in order
-                                             // This represents the result of filtering the clauses by clause width
-                                             // Special care needs to be taken while deleting clauses
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-    std::vector<CRef> er_prevLearntClauses;
 #endif
     int               originalNumVars;       // The number of variables in the original formula
                                              // This value is used to quickly check whether a variable is an extension variable
@@ -529,6 +519,8 @@ protected:
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
     void user_er_filter_delete_incremental(CRef cr);
     void user_er_filter_delete_flush(void);
+
+    void user_er_reloc(ClauseAllocator& to);
 
     static std::vector<CRef> user_er_select          (Solver& solver, unsigned int numClauses);
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE

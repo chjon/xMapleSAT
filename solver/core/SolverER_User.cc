@@ -19,31 +19,31 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
     // Filter clauses based on their sizes
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     const int k = ca[candidate].size();
-    if (k >= ext_min_width && k <= ext_max_width) extFilteredClauses.insert(candidate);
+    if (k >= ext_min_width && k <= ext_max_width) er_filteredClauses.push_back(candidate);
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
     struct clause_width_lt lt = clause_width_lt(ca);
-    if (extWidthFilteredClauses.size() < static_cast<unsigned int>(ext_filter_num)) {
-        extWidthFilteredClauses.push_back(candidate);
-        std::push_heap(extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
+    if (er_filteredClauses.size() < static_cast<unsigned int>(ext_filter_num)) {
+        er_filteredClauses.push_back(candidate);
+        std::push_heap(er_filteredClauses.begin(), er_filteredClauses.end(), lt);
     } else {
         const int k = ca[candidate].size();
-        int old_min = ca[extWidthFilteredClauses.back()].size();
+        int old_min = ca[er_filteredClauses.back()].size();
         if (k > old_min) {
-            extWidthFilteredClauses.push_back(candidate);
-            std::push_heap(extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
-            std::pop_heap (extWidthFilteredClauses.begin(), extWidthFilteredClauses.end(), lt);
+            er_filteredClauses.push_back(candidate);
+            std::push_heap(er_filteredClauses.begin(), er_filteredClauses.end(), lt);
+            std::pop_heap (er_filteredClauses.begin(), er_filteredClauses.end(), lt);
         }
     }
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     // Filter clauses based on their creation LBD
-    if (ca[candidate].good_lbd()) extFilteredClauses.insert(candidate);
+    if (ca[candidate].good_lbd()) er_filteredClauses.push_back(candidate);
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     if (ca[candidate].learnt()) {
-        if (er_prevLearntClauses.size() > 1) {
-            er_prevLearntClauses[0] = er_prevLearntClauses[1];
-            er_prevLearntClauses[1] = candidate;
+        if (er_filteredClauses.size() > 1) {
+            er_filteredClauses[0] = er_filteredClauses[1];
+            er_filteredClauses[1] = candidate;
         } else {
-            er_prevLearntClauses.push_back(candidate);
+            er_filteredClauses.push_back(candidate);
         }
     }
 #endif
@@ -51,34 +51,42 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 
 void Solver::user_er_filter_delete_incremental(CRef cr) {
     extTimerStart();
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-    extFilteredClauses.erase(cr);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    extFilteredClauses.erase(cr);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    er_deletedClauses.insert(cr);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE   || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD     || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     er_deletedClauses.insert(cr);
 #endif
     extTimerStop(ext_delC_overhead);
 }
 
 void Solver::user_er_filter_delete_flush(void) {
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD     || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || \
+    ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     extTimerStart();
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    for (std::tr1::vector<CRef>::iterator it = extWidthFilteredClauses.begin(); it != extWidthFilteredClauses.end(); it++) {
-        if (er_deletedClauses.find(*it) != er_deletedClauses.end())
-            extWidthFilteredClauses.erase(it);
-    }
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     std::vector<CRef> tmp;
-    for (std::vector<CRef>::iterator it = er_prevLearntClauses.begin(); it != er_prevLearntClauses.end(); it++)
+    for (std::vector<CRef>::iterator it = er_filteredClauses.begin(); it != er_filteredClauses.end(); it++)
         if (er_deletedClauses.find(*it) == er_deletedClauses.end())
             tmp.push_back(*it);
-    er_prevLearntClauses = tmp;
-#endif
+    er_filteredClauses = tmp;
     er_deletedClauses.clear();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    std::make_heap(er_filteredClauses);
+#endif
     extTimerStop(ext_delC_overhead);
+#endif
+}
+
+void Solver::user_er_reloc(ClauseAllocator& to) {
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    extTimerStart();
+    for (unsigned int i = 0; i < er_filteredClauses.size(); i++) {
+        ca.reloc(er_filteredClauses[i], to);
+    }
+    extTimerStop(ext_sel_overhead);
+#endif
 }
 
 std::vector<CRef> Solver::user_er_select(Solver& solver, unsigned int numClauses) {
@@ -96,14 +104,8 @@ std::vector<CRef> Solver::user_er_select(Solver& solver, unsigned int numClauses
 #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
 std::vector<CRef> Solver::user_er_select_naive(Solver& s, unsigned int numClauses) {
     std::vector<CRef> clauseWindow;
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++) {
-        if (numClauses == 0) break;
-        clauseWindow.push_back(*it);
-        numClauses--;
-    }
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++) {
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    for (std::vector<CRef>::iterator it = s.er_filteredClauses.begin(); it != s.er_filteredClauses.end(); it++) {
         if (numClauses == 0) break;
         clauseWindow.push_back(*it);
         numClauses--;
@@ -138,10 +140,7 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
 
     // Use incremental filtered clause list
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
-        addClauseToWindow(s.ca, clauseWindow, *it, numClauses);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
+    for (std::vector<CRef>::iterator it = s.er_filteredClauses.begin(); it != s.er_filteredClauses.end(); it++)
         addClauseToWindow(s.ca, clauseWindow, *it, numClauses);
 #endif
 
@@ -211,11 +210,8 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
     vec<CRef> filteredClauses;
 
     // Use incremental filtered clause list
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    for (std::tr1::unordered_set<CRef>::iterator it = s.extFilteredClauses.begin(); it != s.extFilteredClauses.end(); it++)
-        filteredClauses.push(*it);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-    for (std::vector<CRef>::iterator it = s.extWidthFilteredClauses.begin(); it != s.extWidthFilteredClauses.end(); it++)
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+    for (std::vector<CRef>::iterator it = s.er_filteredClauses.begin(); it != s.er_filteredClauses.end(); it++)
         filteredClauses.push(*it);
 #endif
     copy_k_largest_activity(clauses, filteredClauses, s, numClauses);
@@ -228,7 +224,7 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
 #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
 std::vector<CRef> Solver::user_er_select_glucosER(Solver& s, unsigned int numClauses) {
-    return s.er_prevLearntClauses;
+    return s.er_filteredClauses;
 }
 #endif
 

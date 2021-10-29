@@ -755,10 +755,6 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
     sort(db, reduceDB_lt(ca));
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    extWidthFilteredClauses.clear();
-#endif
-
     // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
     // and clauses with activity smaller than 'extra_lim':
     for (i = j = 0; i < db.size(); i++){
@@ -1220,24 +1216,10 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
 //=================================================================================================
 // Garbage Collection methods:
 
-void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_set<CRef>& newFilteredClauses) {
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    CRef before = cr;
-#endif
-    ca.reloc(cr, to);
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    extTimerStart();
-    if (extFilteredClauses.find(before) != extFilteredClauses.end())
-        newFilteredClauses.insert(cr);
-    extTimerStop(ext_sel_overhead);
-#endif
-}
-
-void Solver::relocAll(ClauseAllocator& to)
+void Solver::relocAll(ClauseAllocator& to) 
 {
     // All watchers:
     //
-    std::tr1::unordered_set<CRef> tmpFiltered;
     // for (int i = 0; i < watches.size(); i++)
     watches.cleanAll();
     for (int v = 0; v < nVars(); v++)
@@ -1246,7 +1228,7 @@ void Solver::relocAll(ClauseAllocator& to)
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
             vec<Watcher>& ws = watches[p];
             for (int j = 0; j < ws.size(); j++)
-                relocHelper(ws[j].cref, to, tmpFiltered);
+                ca.reloc(ws[j].cref, to);
         }
 
     // All reasons:
@@ -1254,25 +1236,15 @@ void Solver::relocAll(ClauseAllocator& to)
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            relocHelper(vardata[v].reason, to, tmpFiltered);
+            ca.reloc(vardata[v].reason, to);
     }
 
-    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to, tmpFiltered); // All learnt
-    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to, tmpFiltered); // All learnt extension
-    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to, tmpFiltered); // All extension definitions
-    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to, tmpFiltered); // All original
+    for (int i = 0; i < learnts   .size(); i++) ca.reloc(learnts   [i], to); // All learnt
+    for (int i = 0; i < extLearnts.size(); i++) ca.reloc(extLearnts[i], to); // All learnt extension
+    for (int i = 0; i < extDefs   .size(); i++) ca.reloc(extDefs   [i], to); // All extension definitions
+    for (int i = 0; i < clauses   .size(); i++) ca.reloc(clauses   [i], to); // All original
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    extTimerStart();
-    extFilteredClauses = tmpFiltered;
-    extTimerStop(ext_sel_overhead);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-    extTimerStart();
-    for (unsigned int i = 0; i < er_prevLearntClauses.size(); i++) {
-        ca.reloc(er_prevLearntClauses[i], to);
-    }
-    extTimerStop(ext_sel_overhead);
-#endif
+    user_er_reloc(to);
 }
 
 void Solver::garbageCollect()
