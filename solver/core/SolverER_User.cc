@@ -500,10 +500,21 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
 #endif
 
 // EXTENDED RESOLUTION - variable deletion heuristic
-std::vector<Var> Solver::user_er_delete_all(Solver& s) {
-    std::vector<Var> toDelete;
+std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
+    std::tr1::unordered_set<Var> toDelete;
     for (int i = s.originalNumVars + 1; i < s.nVars(); i++)
-        toDelete.push_back(i);
+        toDelete.insert(i);
+    return toDelete;
+}
+
+std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
+    std::tr1::unordered_set<Var> toDelete;
+    const double activityThreshold = 60; 
+    for (int i = s.originalNumVars + 1; i < s.nVars(); i++) {
+        if (s.activity[i] < activityThreshold) {
+            toDelete.insert(i);
+        }
+    }
     return toDelete;
 }
 

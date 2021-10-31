@@ -76,6 +76,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #error ER_SELECT_HEURISTIC_GLUCOSER requires ER_FILTER_HEURISTIC_GLUCOSER
 #endif
 
+// Define heuristics for deleting extension variables
+#define ER_DELETE_HEURISTIC_NONE     0 // Do not delete extension variables
+#define ER_DELETE_HEURISTIC_ALL      1 // Delete all extension variables
+#define ER_DELETE_HEURISTIC_ACTIVITY 2 // Delete low-activity extension variables
+#ifndef ER_USER_DELETE_HEURISTIC
+    #define ER_USER_DELETE_HEURISTIC ER_DELETE_HEURISTIC_NONE
+#endif
+
 #ifndef BRANCHING_HEURISTIC
     #define BRANCHING_HEURISTIC LRB
 #endif
@@ -119,9 +127,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef DELETE_EXT_LEARNT_CLAUSES
     #define DELETE_EXT_LEARNT_CLAUSES true
 #endif
-#ifndef DELETE_EXT_VARS
-    #define DELETE_EXT_VARS false
-#endif
+
 #if DELETE_EXT_LEARNT_CLAUSES && !DELETE_LEARNT_CLAUSES
     #error DELETE_EXT_LEARNT_CLAUSES requires DELETE_LEARNT_CLAUSES
 #endif

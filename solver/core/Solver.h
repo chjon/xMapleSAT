@@ -37,6 +37,7 @@ namespace Minisat {
 
 struct LitPairMap {
     std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > map;
+    std::tr1::unordered_map< Lit, std::pair<Lit, Lit> > xmap;
 
     inline bool contains (Lit a, Lit b) {
         std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = map.find(a);
@@ -45,7 +46,9 @@ struct LitPairMap {
         return it2 != it1->second.end();
     }
 
-    inline void insert (Lit x, Lit a, Lit b) {
+    void insert (Lit x, Lit a, Lit b) {
+        xmap.insert(std::make_pair(x, std::make_pair(a, b)));
+
         // Insert for tuple <a, b>
         std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
         if (it1 == map.end()) {
@@ -64,6 +67,34 @@ struct LitPairMap {
             map.insert(std::make_pair(b, submap));
         } else {
             it2->second.insert(std::make_pair(a, x));
+        }
+    }
+
+    inline void erase(Lit a, Lit b) {
+        // Check if the pair is in the map
+        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
+        if (it1 == map.end()) return;
+        std::tr1::unordered_map<Lit, Lit>& submap = it1->second;
+        std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = submap.find(b);
+        if (it2 == submap.end()) return;
+
+        // Delete the pair
+        if (submap.size() == 0) map.erase(it1);
+        else                    submap.erase(it2);
+
+        // Delete the pair in the reverse order
+        it1 = map.find(b);
+        submap = it1->second;
+        it2 = submap.find(a);
+        if (submap.size() == 0) map.erase(it1);
+        else                    submap.erase(it2);
+    }
+
+    void erase(const std::tr1::unordered_set<Var>& defsToDelete) {
+        for (std::tr1::unordered_set<Var>::const_iterator i = defsToDelete.begin(); i != defsToDelete.end(); i++) {
+            std::tr1::unordered_map< Lit, std::pair<Lit, Lit> >::iterator it = xmap.find(mkLit(*i));
+            std::pair<Lit, Lit>& def = it->second;
+            erase(def.first, def.second);
         }
     }
 };
@@ -455,7 +486,7 @@ protected:
     // Parameters:
     //   er_delete_heuristic:
     //     A heuristic for identifying extension variables to delete.
-    void delExtVars (std::vector<Var>(*er_delete_heuristic)(Solver&));
+    void delExtVars (std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solver&));
 
     // Description:
     //   Delete a specified set of extension variables from a given clause database. This is a helper function
@@ -579,7 +610,10 @@ protected:
     //   The function should return a list of extension variables that should be deleted
 
     // Delete all extension variables
-    static std::vector<Var> user_er_delete_all(Solver& solver);
+    static std::tr1::unordered_set<Var> user_er_delete_all(Solver& solver);
+
+    // Delete extension variables with activity below a threshold
+    static std::tr1::unordered_set<Var> user_er_delete_activity(Solver& solver);
 
     // EXTENDED RESOLUTION - statistics
     // Functions for measuring extended resolution overhead

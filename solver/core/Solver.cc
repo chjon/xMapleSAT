@@ -729,10 +729,12 @@ void Solver::reduceDB() {
     // EXTENDED RESOLUTION - delete learnt extension clauses
     reduceDB(extLearnts);
 #endif
-#if DELETE_EXT_VARS
     // Delete extension variables
     // TODO: should this happen separately based on a different condition?
-    delExtVars(/* Heuristic function */);
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+    delExtVars(user_er_delete_all);
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    delExtVars(user_er_delete_activity);
 #endif
     checkGarbage();
 }
