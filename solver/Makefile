@@ -9,6 +9,7 @@ define make_er_solver
 		-D ER_USER_SELECT_HEURISTIC=$(4) \
 		-D ER_USER_SUBSTITUTE_HEURISTIC=$(5) \
 		-D EXTENSION_SUBSTITUTION=$(6) \
+		-D ER_USER_DELETE_HEURISTIC=$(7) \
 		-D EXTENSION_FORCE_BRANCHING=0 \
 		-D ER_USER_ADD_SUBEXPR_SET_INTERSECTION=1 \
 	" -C core rs
@@ -18,16 +19,16 @@ endef
 all: maplesat xmaplesat glucoser
 
 maplesat:
-	$(call make_er_solver,maplesat,0,0,0,0,0)
+	$(call make_er_solver,maplesat,0,0,0,0,0,0)
 
 xmaplesat:
-	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1,1,1)
-	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,1,3,1)
-	$(call make_er_solver,xmaplesat_sub_rng,2,1,1,1,1)
-	$(call make_er_solver,xmaplesat_sub_lbd,2,3,1,3,1)
+	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1,1,1,0)
+	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,1,3,1,0)
+	$(call make_er_solver,xmaplesat_sub_rng,2,1,1,1,1,0)
+	$(call make_er_solver,xmaplesat_sub_lbd,2,3,1,3,1,0)
 
 glucoser:
-	$(call make_er_solver,glucoser,3,4,3,0,1)
+	$(call make_er_solver,glucoser,3,4,3,0,1,2)
 
 clean:
 	make -C core clean
