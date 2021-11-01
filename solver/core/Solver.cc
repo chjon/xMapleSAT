@@ -731,11 +731,11 @@ void Solver::reduceDB() {
 #endif
     // Delete extension variables
     // TODO: should this happen separately based on a different condition?
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
-    delExtVars(user_er_delete_all);
-#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-    delExtVars(user_er_delete_activity);
-#endif
+// #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+//     delExtVars(user_er_delete_all);
+// #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+//     delExtVars(user_er_delete_activity);
+// #endif
     checkGarbage();
 }
 
@@ -858,6 +858,12 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+    delExtVars(user_er_delete_all);
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    delExtVars(user_er_delete_activity);
+#endif
+
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
@@ -923,9 +929,11 @@ lbool Solver::search(int nof_conflicts)
                 extfrac_total += extFrac;
 
                 if (numExtVarsInClause > 0) {
+                    if (cr == 1727) printf("1727 in extlearnts\n");
                     extLearnts.push(cr);
                     learnt_extclauses++;
                 } else {
+                    if (cr == 1727) printf("1727 in learnts\n");
                     learnts.push(cr);
                 }
                 attachClause(cr);

@@ -95,7 +95,13 @@ struct LitPairMap {
             std::tr1::unordered_map< Lit, std::pair<Lit, Lit> >::iterator it = xmap.find(mkLit(*i));
             std::pair<Lit, Lit>& def = it->second;
             erase(def.first, def.second);
+            xmap.erase(it);
         }
+    }
+
+    void clear(void) {
+        map.clear();
+        xmap.clear();
     }
 };
 

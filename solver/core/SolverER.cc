@@ -188,34 +188,45 @@ void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unorder
             }
         }
 
-        if (containsVarToDelete)
+        if (!locked(c) && containsVarToDelete) {
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+            user_er_filter_delete_incremental(db[i]);
+#endif
             removeClause(db[i]);
-        else
+        } else {
             db[j++] = db[i];
+        }
     }
     db.shrink(i - j);
+
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    user_er_filter_delete_flush();
+#endif
 }
 
 void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solver&)) {
     extTimerStart();
 
-    // Get variables to delete
-    std::tr1::unordered_set<Var> varsToDelete = er_delete_heuristic(*this);
-    printf("Deleting %lu ext vars\n", varsToDelete.size());
-
     // Delete variables
 
     // TODO: add an option to switch between these two modes
 
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
     // option 1: delete all clauses containing the extension variables
-    delExtVars(extLearnts, varsToDelete);    
-    delExtVars(extDefs, varsToDelete);    
-
-    // option 2: substitute extension variable with definition
-    // TODO
+    extLearnts.clear();
+    extDefs.clear(); 
+    extVarDefs.clear();
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    // Get variables to delete
+    std::tr1::unordered_set<Var> varsToDelete = er_delete_heuristic(*this);
+    delExtVars(extLearnts, varsToDelete);
+    delExtVars(extDefs, varsToDelete);   
 
     // Remove definitions from data structures
     extVarDefs.erase(varsToDelete);
+#endif
+    // option 2: substitute extension variable with definition
+    // TODO
 
     extTimerStop(ext_delV_overhead);
 }
