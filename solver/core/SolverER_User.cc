@@ -486,13 +486,16 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
         // Lits a and b must be different - otherwise, lits.size() == diffLits.size() == 0
         Lit a = *lits.begin();
         Lit b = *diffLits.begin();
-        std::pair<Lit, Lit> key = mkLitPair(a, b);
-        if (!s.extVarDefs.contains(a, b)) {
+        std::pair<Lit, Lit> key = mkLitPair(~a, ~b);
+        if (!s.extVarDefs.contains(~a, ~b)) {
             // Add extension variable
             Var x = s.nVars() + s.extBuffer.size();
             extDefPairs.push_back(std::make_pair(x, key));
         }
     }
+
+    // TODO: introduce extension variable right away
+    // TODO: introduce (x v \alpha) right away (this would maybe be an improvement on GlucosER)
 
     return extDefPairs;
 }
