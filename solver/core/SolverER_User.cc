@@ -50,14 +50,12 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
 }
 
 void Solver::user_er_filter_delete_incremental(CRef cr) {
-    extTimerStart();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE   || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD     || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     er_deletedClauses.insert(cr);
 #endif
-    extTimerStop(ext_delC_overhead);
 }
 
 void Solver::user_er_filter_delete_flush(void) {
@@ -65,7 +63,6 @@ void Solver::user_er_filter_delete_flush(void) {
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD     || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-    extTimerStart();
     std::vector<CRef> tmp;
     for (std::vector<CRef>::iterator it = er_filteredClauses.begin(); it != er_filteredClauses.end(); it++)
         if (er_deletedClauses.find(*it) == er_deletedClauses.end())
@@ -75,7 +72,6 @@ void Solver::user_er_filter_delete_flush(void) {
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
     std::make_heap(er_filteredClauses);
 #endif
-    extTimerStop(ext_delC_overhead);
 #endif
 }
 

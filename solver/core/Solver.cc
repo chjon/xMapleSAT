@@ -71,6 +71,11 @@ static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of cl
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
 #endif
 
+static inline void initOverhead(struct rusage& overhead, int s, int us) {
+    overhead.ru_utime.tv_sec  = s;
+    overhead.ru_utime.tv_usec = us;
+}
+
 //=================================================================================================
 // Constructor/Destructor:
 
@@ -165,18 +170,13 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 {
-    ext_sel_overhead .ru_utime.tv_sec  = 0;
-    ext_sel_overhead .ru_utime.tv_usec = 0;
-    ext_add_overhead .ru_utime.tv_sec  = 0;
-    ext_add_overhead .ru_utime.tv_usec = 0;
-    ext_delC_overhead.ru_utime.tv_sec  = 0;
-    ext_delC_overhead.ru_utime.tv_usec = 0;
-    ext_delV_overhead.ru_utime.tv_sec  = 0;
-    ext_delV_overhead.ru_utime.tv_usec = 0;
-    ext_sub_overhead .ru_utime.tv_sec  = 0;
-    ext_sub_overhead .ru_utime.tv_usec = 0;
-    ext_stat_overhead.ru_utime.tv_sec  = 0;
-    ext_stat_overhead.ru_utime.tv_usec = 0;
+    // Initialize overhead measurement
+    initOverhead(ext_sel_overhead , 0, 0);
+    initOverhead(ext_add_overhead , 0, 0);
+    initOverhead(ext_delC_overhead, 0, 0);
+    initOverhead(ext_delV_overhead, 0, 0);
+    initOverhead(ext_sub_overhead , 0, 0);
+    initOverhead(ext_stat_overhead, 0, 0);
 }
 
 
@@ -731,9 +731,9 @@ void Solver::reduceDB() {
 #endif
     // Delete extension variables
     // TODO: should this happen separately based on a different condition?
-// #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
-//     delExtVars(user_er_delete);
-// #endif
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+    delExtVars(user_er_delete);
+#endif
     checkGarbage();
 }
 
@@ -765,7 +765,9 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
 #if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+            extTimerStart();
             user_er_filter_delete_incremental(db[i]);
+            extTimerStop(ext_delC_overhead);
 #endif
             removeClause(db[i]);
         } else {
@@ -774,7 +776,9 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
     }
     db.shrink(i - j);
 #if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    extTimerStart();
     user_er_filter_delete_flush();
+    extTimerStop(ext_delC_overhead);
 #endif
 }
 
@@ -856,9 +860,9 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
-    delExtVars(user_er_delete);
-#endif
+// #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+//     delExtVars(user_er_delete);
+// #endif
 
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
