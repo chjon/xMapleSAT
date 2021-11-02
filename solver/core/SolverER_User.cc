@@ -446,10 +446,9 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_random(
         Lit a = mkLit(varVec[i_a], irand(s.random_seed, 1));
         Lit b = mkLit(varVec[i_b], irand(s.random_seed, 1));
 
-        std::pair<Lit, Lit> key = mkLitPair(a, b);
         if (!s.extVarDefs.contains(a, b)) {
             // Add extension variable
-            extClauses.push_back(std::make_pair(x, key));
+            extClauses.push_back(std::make_pair(x, std::make_pair(a, b)));
             x++;
         }
     }
@@ -486,11 +485,12 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
         // Lits a and b must be different - otherwise, lits.size() == diffLits.size() == 0
         Lit a = *lits.begin();
         Lit b = *diffLits.begin();
-        std::pair<Lit, Lit> key = mkLitPair(~a, ~b);
+        // x = -(a ^ b)
+        // x = -a v -b
         if (!s.extVarDefs.contains(~a, ~b)) {
             // Add extension variable
             Var x = s.nVars() + s.extBuffer.size();
-            extDefPairs.push_back(std::make_pair(x, key));
+            extDefPairs.push_back(std::make_pair(x, std::make_pair(~a, ~b)));
         }
     }
 
@@ -503,6 +503,17 @@ std::vector< std::pair< Var, std::pair<Lit, Lit> > > Solver::user_er_add_glucosE
 #endif
 
 // EXTENDED RESOLUTION - variable deletion heuristic
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+std::tr1::unordered_set<Var> Solver::user_er_delete(Solver& s) {
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+    return user_er_delete_all(s);
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    return user_er_delete_activity(s);
+#endif
+}
+#endif
+
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
 std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
     std::tr1::unordered_set<Var> toDelete;
     for (int i = s.originalNumVars + 1; i < s.nVars(); i++)
@@ -510,6 +521,7 @@ std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
     return toDelete;
 }
 
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
 std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
     std::tr1::unordered_set<Var> toDelete;
     const double activityThreshold = 60; 
@@ -520,5 +532,6 @@ std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
     }
     return toDelete;
 }
+#endif
 
 }

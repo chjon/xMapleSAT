@@ -731,10 +731,8 @@ void Solver::reduceDB() {
 #endif
     // Delete extension variables
     // TODO: should this happen separately based on a different condition?
-// #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
-//     delExtVars(user_er_delete_all);
-// #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-//     delExtVars(user_er_delete_activity);
+// #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+//     delExtVars(user_er_delete);
 // #endif
     checkGarbage();
 }
@@ -858,10 +856,8 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
-    delExtVars(user_er_delete_all);
-#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-    delExtVars(user_er_delete_activity);
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+    delExtVars(user_er_delete);
 #endif
 
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE

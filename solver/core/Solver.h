@@ -35,73 +35,95 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-struct LitPairMap {
-    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > map;
-    std::tr1::unordered_map< Lit, std::pair<Lit, Lit> > xmap;
+struct ExtDefMap {
+    // Count of all literals that appear in an extension variable definition
+    std::tr1::unordered_map<Lit, int> lits;
+    
+    // Map of definitions to extension variable
+    std::tr1::unordered_map<std::pair<Lit, Lit>, Lit> map1;
+    // Map of extension variable to definition
+    std::tr1::unordered_map< Lit, std::pair<Lit, Lit> > map2;
 
-    inline bool contains (Lit a, Lit b) {
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = map.find(a);
-        if (it1 == map.end()) return false;
-        std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
-        return it2 != it1->second.end();
+    static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
+        return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
+
+    inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator find(Lit a, Lit b) { return map1.find(mkLitPair(a, b)); }
+    inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator end() { return map1.end(); }
+
+    inline bool contains (Lit a       ) { return lits.find(a)               != lits.end(); }
+    inline bool contains (Lit a, Lit b) { return map1.find(mkLitPair(a, b)) != map1.end(); }
 
     void insert (Lit x, Lit a, Lit b) {
-        xmap.insert(std::make_pair(x, std::make_pair(a, b)));
+        const std::pair<Lit, Lit> key = mkLitPair(a, b);
+        map2.insert(std::make_pair(x, key));
+        map1.insert(std::make_pair(key, x));
 
-        // Insert for tuple <a, b>
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
-        if (it1 == map.end()) {
-            std::tr1::unordered_map<Lit, Lit> submap;
-            submap.insert(std::make_pair(b, x));
-            map.insert(std::make_pair(a, submap));
-        } else {
-            it1->second.insert(std::make_pair(b, x));
-        }
+        // Increment count for Lit a
+        std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+        if (it1 == lits.end()) lits.insert(std::make_pair(a, 1));
+        else                   it1->second++;
 
-        // Insert for tuple <b, a>
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it2 = map.find(b);
-        if (it2 == map.end()) {
-            std::tr1::unordered_map<Lit, Lit> submap;
-            submap.insert(std::make_pair(a, x));
-            map.insert(std::make_pair(b, submap));
-        } else {
-            it2->second.insert(std::make_pair(a, x));
-        }
+        // Increment count for Lit b
+        std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+        if (it2 == lits.end()) lits.insert(std::make_pair(b, 1));
+        else                   it2->second++;
     }
 
-    inline void erase(Lit a, Lit b) {
+    void erase(Lit a, Lit b) {
+        const std::pair<Lit, Lit> key = mkLitPair(a, b);
+
         // Check if the pair is in the map
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
-        if (it1 == map.end()) return;
-        std::tr1::unordered_map<Lit, Lit>& submap = it1->second;
-        std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = submap.find(b);
-        if (it2 == submap.end()) return;
+        std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = map1.find(key);
+        if (it == map1.end()) return;
 
-        // Delete the pair
-        if (submap.size() == 0) map.erase(it1);
-        else                    submap.erase(it2);
+        // Erase from the reverse map
+        map2.erase(it->second);
 
-        // Delete the pair in the reverse order
-        it1 = map.find(b);
-        submap = it1->second;
-        it2 = submap.find(a);
-        if (submap.size() == 0) map.erase(it1);
-        else                    submap.erase(it2);
+        // Decrement count for Lit a
+        std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+        if (it1->second == 1) lits.erase(it1);
+        else                  it1->second--;
+
+        // Decrement count for Lit b
+        std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+        if (it2->second == 1) lits.erase(it2);
+        else                  it2->second--;
+
+        // Erase from the forward map
+        map1.erase(it);
     }
 
     void erase(const std::tr1::unordered_set<Var>& defsToDelete) {
         for (std::tr1::unordered_set<Var>::const_iterator i = defsToDelete.begin(); i != defsToDelete.end(); i++) {
-            std::tr1::unordered_map< Lit, std::pair<Lit, Lit> >::iterator it = xmap.find(mkLit(*i));
+            std::tr1::unordered_map< Lit, std::pair<Lit, Lit> >::iterator it = map2.find(mkLit(*i));
+            if (it == map2.end()) continue;
             std::pair<Lit, Lit>& def = it->second;
-            erase(def.first, def.second);
-            xmap.erase(it);
+
+            // Erase from the forward map
+            map1.erase(def);
+
+            // Decrement count for Lit a
+            Lit a = def.first;
+            std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+            if (it1->second == 1) lits.erase(it1);
+            else                  it1->second--;
+
+            // Decrement count for Lit b
+            Lit b = def.second;
+            std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+            if (it2->second == 1) lits.erase(it2);
+            else                  it2->second--;
+
+            // Erase from the reverse map
+            map2.erase(it);
         }
     }
 
     void clear(void) {
-        map.clear();
-        xmap.clear();
+        lits.clear();
+        map1.clear();
+        map2.clear();
     }
 };
 
@@ -345,7 +367,7 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    struct LitPairMap extVarDefs;
+    struct ExtDefMap extVarDefs;
                                              // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                              // This map is used for replacing disjunctions with the corresponding extension variable
                                              // This is NOT the same as the extension variable introduction heuristic
@@ -482,7 +504,7 @@ protected:
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         vec<CRef>& er_def_db,
-        struct LitPairMap& er_def_map,
+        struct ExtDefMap& er_def_map,
         const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
     );
 
@@ -513,10 +535,7 @@ protected:
     void substituteExt (vec<Lit>& out_learnt);
 
     // Internal helper for substituteExt
-    static void er_substitute(
-        vec<Lit>& out_learnt,
-        struct LitPairMap& extVarDefs
-    );
+    static void er_substitute(vec<Lit>& out_learnt, struct ExtDefMap& extVarDefs);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // EXTENDED RESOLUTION - user functions/heuristics
@@ -615,11 +634,18 @@ protected:
     // Return value:
     //   The function should return a list of extension variables that should be deleted
 
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+    static std::tr1::unordered_set<Var> user_er_delete(Solver& solver);
+#endif
+
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
     // Delete all extension variables
     static std::tr1::unordered_set<Var> user_er_delete_all(Solver& solver);
 
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     // Delete extension variables with activity below a threshold
     static std::tr1::unordered_set<Var> user_er_delete_activity(Solver& solver);
+#endif
 
     // EXTENDED RESOLUTION - statistics
     // Functions for measuring extended resolution overhead

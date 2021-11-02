@@ -24,7 +24,7 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
     for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
 }
 
-inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDefs) {
+inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
     // Get set of all literals in clause
     std::tr1::unordered_set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
@@ -35,21 +35,19 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDef
     // Check for extension variables over literal pairs
     for (int i = 1; i < clause.size(); i++) {
         // Check if any extension variables are defined over this literal
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator tmp1 = extVarDefs.map.find(clause[i]);
-        if (tmp1 == extVarDefs.map.end()) continue;
+        if (!extVarDefs.contains(clause[i])) continue;
 
         // TODO: would it be better to iterate over the extension definitions here?
         // Also consider sorting or doing a set intersection here
-        const std::tr1::unordered_map<Lit, Lit>& possibleDefs = tmp1->second;
         for (int j = i + 1; j < clause.size(); j++) {
             // Check if any extension variables are defined over this literal pair
-            std::tr1::unordered_map<Lit, Lit>::const_iterator tmp2 = possibleDefs.find(clause[j]);
-            if (tmp2 == possibleDefs.end()) continue;
+            std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[i], clause[j]);
+            if (it == extVarDefs.end()) continue;
 
             // Replace disjunction with intersection
-            learntLits.erase(tmp1->first);
-            learntLits.erase(tmp2->first);
-            learntLits.insert(tmp2->second);
+            learntLits.erase(clause[i]);
+            learntLits.erase(clause[j]);
+            learntLits.insert(it->second);
             goto ER_SUBSTITUTE_DOUBLE_BREAK;
         }
     }
@@ -109,7 +107,7 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
 
 inline std::vector<Var> Solver::er_add(
     vec<CRef>& er_def_db,
-    struct LitPairMap& er_def_map,
+    struct ExtDefMap& er_def_map,
     const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
 ) {
     // Add extension variables
@@ -211,12 +209,7 @@ void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solve
 
     // TODO: add an option to switch between these two modes
 
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
     // option 1: delete all clauses containing the extension variables
-    extLearnts.clear();
-    extDefs.clear(); 
-    extVarDefs.clear();
-#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     // Get variables to delete
     std::tr1::unordered_set<Var> varsToDelete = er_delete_heuristic(*this);
     delExtVars(extLearnts, varsToDelete);
@@ -224,7 +217,7 @@ void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solve
 
     // Remove definitions from data structures
     extVarDefs.erase(varsToDelete);
-#endif
+
     // option 2: substitute extension variable with definition
     // TODO
 
