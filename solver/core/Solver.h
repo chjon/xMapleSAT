@@ -528,6 +528,7 @@ protected:
     // Return value:
     //   A set of variables which could not be deleted due to locked clauses.
     std::tr1::unordered_set<Var> delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
+    std::tr1::unordered_set<Var> delExtVars (std::tr1::unordered_map< Var, std::vector<CRef> >& db, const std::tr1::unordered_set<Var>& varsToDeleteSet);
 
     // Description:
     //   Replace variable disjunctions in candidate learnt clauses with the corresponding extension variable

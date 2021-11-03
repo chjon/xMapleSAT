@@ -807,7 +807,6 @@ void Solver::removeSatisfied(std::tr1::unordered_map< Var, std::vector<CRef> >& 
             else
                 cs[j++] = cs[i];
         }
-        // cs.shrink(i - j);
         cs.erase(cs.begin() + j, cs.end());
     }
 }
