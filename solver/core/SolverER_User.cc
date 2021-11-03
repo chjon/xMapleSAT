@@ -59,7 +59,7 @@ void Solver::user_er_filter_delete_incremental(CRef cr) {
 }
 
 void Solver::user_er_filter_delete_flush(void) {
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || \
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE   || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD     || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST || \
     ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
@@ -512,8 +512,9 @@ std::tr1::unordered_set<Var> Solver::user_er_delete(Solver& s) {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
 std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
     std::tr1::unordered_set<Var> toDelete;
-    for (int i = s.originalNumVars + 1; i < s.nVars(); i++)
-        toDelete.insert(i);
+    for (std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = s.extVarDefs.map1.begin(); it != s.extVarDefs.map1.end(); it++) {
+        toDelete.insert(var(it->second));
+    }
     return toDelete;
 }
 
@@ -521,9 +522,10 @@ std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
 std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
     std::tr1::unordered_set<Var> toDelete;
     const double activityThreshold = 60; 
-    for (int i = s.originalNumVars + 1; i < s.nVars(); i++) {
-        if (s.activity[i] < activityThreshold) {
-            toDelete.insert(i);
+    for (std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = s.extVarDefs.map1.begin(); it != s.extVarDefs.map1.end(); it++) {
+        const Var x = var(it->second);
+        if (s.activity[x] < activityThreshold) {
+            toDelete.insert(x);
         }
     }
     return toDelete;

@@ -795,6 +795,22 @@ void Solver::removeSatisfied(vec<CRef>& cs)
     cs.shrink(i - j);
 }
 
+void Solver::removeSatisfied(std::tr1::unordered_map< Var, std::vector<CRef> >& defs)
+{
+    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = defs.begin(); it != defs.end(); it++) {
+        std::vector<CRef>& cs = it->second;
+        unsigned int i, j;
+        for (i = j = 0; i < cs.size(); i++){
+            Clause& c = ca[cs[i]];
+            if (satisfied(c))
+                removeClause(cs[i]);
+            else
+                cs[j++] = cs[i];
+        }
+        // cs.shrink(i - j);
+        cs.erase(cs.begin() + j, cs.end());
+    }
+}
 
 void Solver::rebuildOrderHeap()
 {
@@ -826,6 +842,7 @@ bool Solver::simplify()
 
     // Remove satisfied clauses:
     removeSatisfied(learnts);
+    removeSatisfied(extLearnts);
     if (remove_satisfied) {       // Can be turned off.
         removeSatisfied(clauses);
         removeSatisfied(extDefs);
@@ -859,10 +876,6 @@ lbool Solver::search(int nof_conflicts)
     int         conflictC = 0;
     vec<Lit>    learnt_clause;
     starts++;
-
-// #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
-//     delExtVars(user_er_delete);
-// #endif
 
 #if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
@@ -1251,9 +1264,13 @@ void Solver::relocAll(ClauseAllocator& to)
 
     for (int i = 0; i < learnts   .size(); i++) ca.reloc(learnts   [i], to); // All learnt
     for (int i = 0; i < extLearnts.size(); i++) ca.reloc(extLearnts[i], to); // All learnt extension
-    for (int i = 0; i < extDefs   .size(); i++) ca.reloc(extDefs   [i], to); // All extension definitions
     for (int i = 0; i < clauses   .size(); i++) ca.reloc(clauses   [i], to); // All original
-
+    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+        std::vector<CRef>& cs = it->second;
+        for (unsigned int i = 0; i < cs.size(); i++) {
+            ca.reloc(cs[i], to); // All extension definitions
+        }
+    }
     user_er_reloc(to);
 }
 

@@ -341,7 +341,7 @@ protected:
 
     // EXTENDED RESOLUTION - clause databases
     vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
-    vec<CRef>           extDefs;          // List of extension definition clauses.
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
 
     std::vector< std::pair< Var, std::pair<Lit, Lit> > > extBuffer; // Buffer of extension variable definitions to add
 
@@ -434,6 +434,7 @@ protected:
     void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
     void     reduceDB         (Minisat::vec<Minisat::CRef>& db);                       // Reduce the provided set of learnt clauses.
     void     removeSatisfied  (vec<CRef>& cs);                                         // Shrink 'cs' to contain only non-satisfied clauses.
+    void     removeSatisfied  (std::tr1::unordered_map< Var, std::vector<CRef> >& cs); // Shrink 'cs' to contain only non-satisfied clauses.
     void     rebuildOrderHeap ();
 
     // Maintaining Variable/Clause activity:
@@ -503,7 +504,7 @@ protected:
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
-        vec<CRef>& er_def_db,
+        std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
         struct ExtDefMap& er_def_map,
         const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
     );
@@ -523,7 +524,10 @@ protected:
     // Parameters:
     //   db     : The clause database to delete from
     //   extvars: The set of extension variables to delete
-    void delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
+    //
+    // Return value:
+    //   A set of variables which could not be deleted due to locked clauses.
+    std::tr1::unordered_set<Var> delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
 
     // Description:
     //   Replace variable disjunctions in candidate learnt clauses with the corresponding extension variable
