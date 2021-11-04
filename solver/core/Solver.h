@@ -51,6 +51,8 @@ struct ExtDefMap {
     inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator find(Lit a, Lit b) { return map1.find(mkLitPair(a, b)); }
     inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator end() { return map1.end(); }
 
+    inline unsigned int size() { return map1.size(); }
+
     inline bool contains (Lit a       ) { return lits.find(a)               != lits.end(); }
     inline bool contains (Lit a, Lit b) { return map1.find(mkLitPair(a, b)) != map1.end(); }
 
@@ -193,11 +195,6 @@ public:
     int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
 
-    // EXTENDED RESOLUTION - statistics
-    int     nExtLearnts()      const;       // The current number of learnt extension clauses.
-    int     nExtDefs   ()      const;       // The current number of extension definition clauses.
-    int     nExtVars   ()      const;       // The current number of extension variables.
-
     // Resource contraints:
     //
     void    setConfBudget(int64_t x);
@@ -275,6 +272,7 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
+    uint64_t total_ext_vars, deleted_ext_vars;
     
     // EXTENDED RESOLUTION - statistics
     // read-only member variables
@@ -750,11 +748,6 @@ inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
-
-// EXTENDED RESOLUTION - statistics
-inline int      Solver::nExtLearnts   ()      const   { return extLearnts.size(); }
-inline int      Solver::nExtDefs      ()      const   { return extDefs.size(); }
-inline int      Solver::nExtVars      ()      const   { return vardata.size() - originalNumVars; }
 
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }

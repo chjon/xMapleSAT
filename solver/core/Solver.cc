@@ -950,11 +950,9 @@ lbool Solver::search(int nof_conflicts)
                 extfrac_total += extFrac;
 
                 if (numExtVarsInClause > 0) {
-                    if (cr == 1727) printf("1727 in extlearnts\n");
                     extLearnts.push(cr);
                     learnt_extclauses++;
                 } else {
-                    if (cr == 1727) printf("1727 in learnts\n");
                     learnts.push(cr);
                 }
                 attachClause(cr);

@@ -66,7 +66,7 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs
 void Solver::substituteExt(vec<Lit>& out_learnt) {
     extTimerStart();
     // Ensure we have extension variables
-    if (nExtVars() > 0) {
+    if (extVarDefs.size() > 0) {
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
         // Check clause width
         int clause_width = out_learnt.size();
@@ -171,6 +171,7 @@ void Solver::addExtVars() {
     // Add the extension variables to our data structures
     extTimerStart();
     const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer);
+    total_ext_vars += new_variables.size();
     extBuffer.clear();
     er_prioritize(new_variables);
     extTimerStop(ext_add_overhead);
@@ -282,6 +283,7 @@ void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solve
     setSubtract(varsToDelete, notDeleted);
 
     // Remove variable definitions from other data structures
+    deleted_ext_vars += varsToDelete.size();
     extVarDefs.erase(varsToDelete);
 
     extTimerStop(ext_delV_overhead);
