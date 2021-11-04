@@ -186,14 +186,13 @@ static inline bool containsAny(Clause& c, const std::tr1::unordered_set<Var>& va
 }
 
 std::tr1::unordered_set<Var> Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
-    int i, j;
-
     // Set of variables whose definitions cannot be deleted due to being locked
     std::tr1::unordered_set<Var> notDeleted;
 
     // Delete clauses which contain the extension variable
     // TODO: is there a more efficient way to implement this? e.g. have a list of clauses for each extension variable?
     // TODO: Should we queue ER clauses to be deleted when they become unlocked?
+    int i, j;
     for (i = j = 0; i < db.size(); i++) {
         Clause& c = ca[db[i]];
         if (locked(c)) {
@@ -257,7 +256,7 @@ std::tr1::unordered_set<Var> Solver::delExtVars(std::tr1::unordered_map< Var, st
     return notDeleted;
 }
 
-static void setSubtract(std::tr1::unordered_set<Var>& a, const std::tr1::unordered_set<Var>& b) {
+static inline void setSubtract(std::tr1::unordered_set<Var>& a, const std::tr1::unordered_set<Var>& b) {
     for (std::tr1::unordered_set<Var>::const_iterator it = b.begin(); it != b.end(); it++) {
         a.erase(*it);
     }
@@ -272,6 +271,7 @@ void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solve
 
     // Option 1: delete all clauses containing the extension variables
     // Option 2: substitute extension variable with definition (TODO: unimplemented)
+    // TODO: we should check whether the extension variable occurs as part of the definition of another extension variable
 
     // Delete from learnt clauses
     std::tr1::unordered_set<Var> notDeleted = delExtVars(extLearnts, varsToDelete);

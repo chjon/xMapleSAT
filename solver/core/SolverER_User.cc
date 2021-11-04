@@ -505,6 +505,8 @@ std::tr1::unordered_set<Var> Solver::user_er_delete(Solver& s) {
     return user_er_delete_all(s);
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     return user_er_delete_activity(s);
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    return user_er_delete_activity2(s);
 #endif
 }
 #endif
@@ -521,13 +523,36 @@ std::tr1::unordered_set<Var> Solver::user_er_delete_all(Solver& s) {
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
 std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
     std::tr1::unordered_set<Var> toDelete;
-    const double activityThreshold = 60; 
     for (std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = s.extVarDefs.map1.begin(); it != s.extVarDefs.map1.end(); it++) {
         const Var x = var(it->second);
-        if (s.activity[x] < activityThreshold) {
+        if (s.activity[x] < s.ext_act_threshold) {
             toDelete.insert(x);
         }
     }
+    return toDelete;
+}
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+static bool varActCmp(const std::pair<Var, double>& a, const std::pair<Var, double>& b) {
+    return a.second < b.second;
+}
+
+std::tr1::unordered_set<Var> Solver::user_er_delete_activity2(Solver& s) {    
+    // Get min-heap of extension variables and their activities
+    std::vector< std::pair<Var, double> > varActs;
+    for (std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = s.extVarDefs.map1.begin(); it != s.extVarDefs.map1.end(); it++) {
+        const Var x = var(it->second);
+        varActs.push_back(std::make_pair(x, s.activity[x]));
+        std::push_heap(varActs.begin(), varActs.end(), varActCmp);
+    }
+
+    // Get variables with smallest activities
+    std::tr1::unordered_set<Var> toDelete;
+    for (int i = 0; i < static_cast<int>(s.ext_act_threshold * s.extVarDefs.map1.size()); i++) {
+        std::pop_heap(varActs.begin(), varActs.end(), varActCmp);
+        toDelete.insert(varActs.back().first);
+        varActs.pop_back();
+    }
+
     return toDelete;
 }
 #endif

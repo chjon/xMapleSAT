@@ -77,9 +77,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 // Define heuristics for deleting extension variables
-#define ER_DELETE_HEURISTIC_NONE     0 // Do not delete extension variables
-#define ER_DELETE_HEURISTIC_ALL      1 // Delete all extension variables
-#define ER_DELETE_HEURISTIC_ACTIVITY 2 // Delete low-activity extension variables
+#define ER_DELETE_HEURISTIC_NONE      0 // Do not delete extension variables
+#define ER_DELETE_HEURISTIC_ALL       1 // Delete all extension variables
+#define ER_DELETE_HEURISTIC_ACTIVITY  2 // Delete low-activity extension variables based on a constant activity threshold
+#define ER_DELETE_HEURISTIC_ACTIVITY2 3 // Delete low-activity extension variables based on a constant activity threshold
 #ifndef ER_USER_DELETE_HEURISTIC
     #define ER_USER_DELETE_HEURISTIC ER_DELETE_HEURISTIC_NONE
 #endif

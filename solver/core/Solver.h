@@ -255,12 +255,15 @@ public:
     int       ext_filter_num;     // Maximum number of clauses after the filter step
 #endif
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-    int       ext_sub_min_width;      // Minimum width of clauses to substitute into
-    int       ext_sub_max_width;      // Maximum width of clauses to substitute into
+    int       ext_sub_min_width;  // Minimum width of clauses to substitute into
+    int       ext_sub_max_width;  // Maximum width of clauses to substitute into
 #endif
 #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
     int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    double    ext_act_threshold;  // Activity threshold for deleting clauses
 #endif
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
@@ -648,8 +651,12 @@ protected:
     static std::tr1::unordered_set<Var> user_er_delete_all(Solver& solver);
 
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-    // Delete extension variables with activity below a threshold
+    // Delete extension variables with activity below a constant threshold
     static std::tr1::unordered_set<Var> user_er_delete_activity(Solver& solver);
+
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    // Delete extension variables with activity below a proportionality threshold
+    static std::tr1::unordered_set<Var> user_er_delete_activity2(Solver& solver);
 #endif
 
     // EXTENDED RESOLUTION - statistics

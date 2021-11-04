@@ -70,6 +70,12 @@ static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum
 static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
 #endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.9, DoubleRange(0, false, 1, false));
+#endif
 
 static inline void initOverhead(struct rusage& overhead, int s, int us) {
     overhead.ru_utime.tv_sec  = s;
@@ -124,6 +130,9 @@ Solver::Solver() :
 #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
   , ext_min_lbd      (opt_ext_min_lbd)
   , ext_max_lbd      (opt_ext_max_lbd)
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+  , ext_act_threshold(opt_ext_act_thresh)
 #endif
 
     // Parameters (the rest):
