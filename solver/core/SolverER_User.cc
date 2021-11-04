@@ -533,7 +533,7 @@ std::tr1::unordered_set<Var> Solver::user_er_delete_activity(Solver& s) {
 }
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
 static bool varActCmp(const std::pair<Var, double>& a, const std::pair<Var, double>& b) {
-    return a.second < b.second;
+    return a.second > b.second;
 }
 
 std::tr1::unordered_set<Var> Solver::user_er_delete_activity2(Solver& s) {    
