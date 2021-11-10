@@ -501,6 +501,7 @@ protected:
     // Description:
     //   Add extension variables from the extension definition buffer to our data structures and prioritize branching on them.
     void addExtVars ();
+    void addExtDefClause(std::vector<CRef>& db, const vec<Lit>& ext_def_clause);
 
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);

@@ -72,8 +72,7 @@ static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of cl
 #endif
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
 static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
-#endif
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
 static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.9, DoubleRange(0, false, 1, false));
 #endif
 
@@ -270,7 +269,6 @@ void Solver::attachClause(CRef cr) {
     watches[~c[1]].push(Watcher(cr, c[0]));
     if (c.learnt()) learnts_literals += c.size();
     else            clauses_literals += c.size(); }
-
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
@@ -885,9 +883,8 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE && ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
-#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
     if (!extBuffer.size()) {
         // Only try generating more extension variables if there aren't any buffered already
         if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
@@ -895,10 +892,9 @@ lbool Solver::search(int nof_conflicts)
             generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
         }
     }
-#endif
     
     // Add extension variables if there are any in the buffer
-    addExtVars();
+    if (extBuffer.size()) addExtVars();
 #endif
 
     for (;;){
@@ -971,11 +967,6 @@ lbool Solver::search(int nof_conflicts)
                 extTimerStop(ext_sel_overhead);
 #endif
 
-#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
-                // Try generating an extension variable based on the last learnt clauses
-                generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-#endif
-
 #if LBD_BASED_CLAUSE_DELETION
                 clause.activity() = clauseLBD;
                 lbd_total += clauseLBD;
@@ -983,6 +974,15 @@ lbool Solver::search(int nof_conflicts)
                 claBumpActivity(ca[cr]);
 #endif
                 uncheckedEnqueue(learnt_clause[0], cr);
+
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+                // Try generating an extension variable based on the last learnt clauses
+                generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
+
+                // Add extension variables if there are any in the buffer
+                // FIXME: we get a segfault if we add ext vars here (note that the clauses we add here get auto-simplified)
+                if (extBuffer.size()) addExtVars();
+#endif
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
