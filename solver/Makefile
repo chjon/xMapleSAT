@@ -22,13 +22,14 @@ maplesat:
 	$(call make_er_solver,maplesat,0,0,0,0,0,0)
 
 xmaplesat:
-	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1,1,1,0)
-	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,1,3,1,0)
-	$(call make_er_solver,xmaplesat_sub_rng,2,1,1,1,1,0)
-	$(call make_er_solver,xmaplesat_sub_lbd,2,3,1,3,1,0)
+	$(call make_er_solver,xmaplesat_rnd_rng,1,1,1,1,1,3)
+	$(call make_er_solver,xmaplesat_rnd_lbd,1,3,1,3,1,3)
+	$(call make_er_solver,xmaplesat_sub_rng,2,1,1,1,1,3)
+	$(call make_er_solver,xmaplesat_sub_lbd,2,3,1,3,1,3)
 
 glucoser:
-	$(call make_er_solver,glucoser,3,4,3,0,1,2)
+	$(call make_er_solver,glucoser_dcnst,3,4,3,1,1,2)
+	$(call make_er_solver,glucoser_dfrac,3,4,3,1,1,3)
 
 clean:
 	make -C core clean
