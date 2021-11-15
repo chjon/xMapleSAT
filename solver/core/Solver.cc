@@ -73,7 +73,7 @@ static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of cl
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
 static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.9, DoubleRange(0, false, 1, false));
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
 #endif
 
 static inline void initOverhead(struct rusage& overhead, int s, int us) {
