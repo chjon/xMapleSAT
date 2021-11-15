@@ -303,15 +303,21 @@ void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solve
 
     // Option 1: delete all clauses containing the extension variables
     // Option 2: substitute extension variable with definition (TODO: unimplemented)
-    // TODO: we should check whether the extension variable occurs as part of the definition of another extension variable
+
+    // Only consider extension variables which are not part of the definition of another extension variable
+    std::tr1::unordered_set<Var> cannotBeDeleted;
+    for (std::tr1::unordered_set<Var>::iterator it = varsToDelete.begin(); it != varsToDelete.end(); it++)
+        if (extVarDefs.contains(mkLit(*it, false)) || extVarDefs.contains(mkLit(*it, true)))
+            cannotBeDeleted.insert(*it);
+    setSubtract(varsToDelete, cannotBeDeleted);
 
     // Delete from learnt clauses
-    std::tr1::unordered_set<Var> notDeleted = delExtVars(extLearnts, varsToDelete);
-    setSubtract(varsToDelete, notDeleted);
+    cannotBeDeleted = delExtVars(extLearnts, varsToDelete);
+    setSubtract(varsToDelete, cannotBeDeleted);
 
     // Delete clauses from extension definitions
-    notDeleted = delExtVars(extDefs, varsToDelete);
-    setSubtract(varsToDelete, notDeleted);
+    cannotBeDeleted = delExtVars(extDefs, varsToDelete);
+    setSubtract(varsToDelete, cannotBeDeleted);
 
     // Remove variable definitions from other data structures
     deleted_ext_vars += varsToDelete.size();
