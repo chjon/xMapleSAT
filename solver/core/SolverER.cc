@@ -105,9 +105,10 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
     }
 }
 
-// Add clause to extension definitions without performing simplification
-void Solver::addExtDefClause(std::vector<CRef>& db, const vec<Lit>& ext_def_clause) {
-    if (ext_def_clause.size() == 1){
+// Add clause to extension definitions
+// Assumes that the first literal is the new extension variable
+void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
+    if (ext_def_clause.size() == 1) {
         uncheckedEnqueue(ext_def_clause[0]);
     } else {
         CRef cr = ca.alloc(ext_def_clause, false);
@@ -121,11 +122,25 @@ void Solver::addExtDefClause(std::vector<CRef>& db, const vec<Lit>& ext_def_clau
         double extFrac = numExtVarsInClause / (double) ext_def_clause.size();
         extfrac_total += extFrac;
 
+        // Set initial clause LBD
 #if LBD_BASED_CLAUSE_DELETION
         const int clauseLBD = lbd(ca[cr]);
         ca[cr].activity() = clauseLBD;
         lbd_total += clauseLBD;
 #endif
+
+        // Propagate extension variable
+        bool allFalsified = true;
+        for (int i = 1; i < ext_def_clause.size(); i++) {
+            if (value(ext_def_clause[i]) != l_False) {
+                allFalsified = false;
+                break;
+            }
+        }
+
+        if (allFalsified) {
+            uncheckedEnqueue(ext_def_clause[0], cr);
+        }
     }
 }
 
@@ -146,7 +161,6 @@ inline std::vector<Var> Solver::er_add(
     }
 
     // Add extension clauses
-    vec<Lit> tmp;
     for (std::vector< std::pair< Var, std::pair<Lit, Lit> > >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
         // Get literals
         Lit x = mkLit(i->first);
@@ -154,24 +168,15 @@ inline std::vector<Var> Solver::er_add(
         Lit b = i->second.second;
         assert(var(x) > var(a) && var(x) > var(b));
 
-        // Create extension clauses and add them to the extension definition database
-        std::vector<CRef> defs;
-        tmp.clear(); tmp.push(~x); tmp.push( a); tmp.push(b); addExtDefClause(defs, tmp);
-        tmp.clear(); tmp.push( x); tmp.push(~a);              addExtDefClause(defs, tmp);
-        tmp.clear(); tmp.push( x); tmp.push(~b);              addExtDefClause(defs, tmp);
-        er_def_db.insert(std::make_pair(i->first, defs));
-
-        // Propagate extension variable
-        if (value(a) == l_False && value(b) == l_False) {
-            uncheckedEnqueue(~x, defs[0]);
-        } else if (value(a) == l_True) {
-            uncheckedEnqueue(x, defs[1]);
-        } else if (value(b) == l_True) {
-            uncheckedEnqueue(x, defs[2]);
-        }
-
         // Save definition
         er_def_map.insert(x, a, b);
+
+        // Create extension clauses and add them to the extension definition database
+        std::vector<CRef> defs;
+        addExtDefClause(defs, ~x,  a,  b);
+        addExtDefClause(defs,  x, ~a    );
+        addExtDefClause(defs,  x,     ~b);
+        er_def_db.insert(std::make_pair(i->first, defs));
     }
 
     return new_variables;
