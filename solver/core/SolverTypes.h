@@ -31,20 +31,22 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 // Define heuristic for filtering clauses before clause selection
-#define ER_FILTER_HEURISTIC_NONE    0 // Consider all clauses
-#define ER_FILTER_HEURISTIC_RANGE   1 // Consider clauses whose widths are in a certain range 
-#define ER_FILTER_HEURISTIC_LONGEST 2 // Consider the longest clauses
-#define ER_FILTER_HEURISTIC_LBD     3 // Consider clauses whose LBDs are in a certain range
+#define ER_FILTER_HEURISTIC_NONE     0 // Consider all clauses
+#define ER_FILTER_HEURISTIC_RANGE    1 // Consider clauses whose widths are in a certain range 
+#define ER_FILTER_HEURISTIC_LONGEST  2 // Consider the longest clauses
+#define ER_FILTER_HEURISTIC_LBD      3 // Consider clauses whose LBDs are in a certain range
+#define ER_FILTER_HEURISTIC_GLUCOSER 4 // Consider the most recently learnt clauses
 #ifndef ER_USER_FILTER_HEURISTIC
-    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_RANGE
+    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_GLUCOSER
 #endif
 
 // Define heuristic for selecting clauses
 #define ER_SELECT_HEURISTIC_NONE      0 // Consider all clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY  1 // Select most active clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
+#define ER_SELECT_HEURISTIC_GLUCOSER  3 // Only consider the previous two learnt clauses
 #ifndef ER_USER_SELECT_HEURISTIC
-    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ACTIVITY
+    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_GLUCOSER
 #endif
 
 // Define heuristic for replacing extension definitions in clauses
@@ -52,15 +54,35 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_SUBSTITUTE_HEURISTIC_WIDTH 0x1 // Consider clauses within a clause width range
 #define ER_SUBSTITUTE_HEURISTIC_LBD   0x2 // Consider clauses within an LBD range
 #ifndef ER_USER_SUBSTITUTE_HEURISTIC
-    #define ER_USER_SUBSTITUTE_HEURISTIC (ER_SUBSTITUTE_HEURISTIC_LBD | ER_SUBSTITUTE_HEURISTIC_WIDTH)
+    #define ER_USER_SUBSTITUTE_HEURISTIC ER_SUBSTITUTE_HEURISTIC_NONE
 #endif
 
-#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
+// Define heuristics for adding extension definitions
+#define ER_ADD_HEURISTIC_NONE     0 // Do not add extension variables
+#define ER_ADD_HEURISTIC_RANDOM   1 // Add extension variables by selecting random pairs of literals
+#define ER_ADD_HEURISTIC_SUBEXPR  2 // Add extension variables by selecting the most common pairs of literals
+#define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
+#ifndef ER_USER_ADD_HEURISTIC
+    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
+#endif
+
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE && ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
     #error Must select at least one filter/selection heuristic
 #endif
 
-#ifndef ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    #define ER_USER_SELECT_CACHE_ACTIVE_CLAUSES false
+#if (ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER && ER_USER_SELECT_HEURISTIC != ER_SELECT_HEURISTIC_GLUCOSER)
+    #error ER_ADD_HEURISTIC_GLUCOSER requires ER_SELECT_HEURISTIC_GLUCOSER
+#elif (ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER && ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_GLUCOSER)
+    #error ER_SELECT_HEURISTIC_GLUCOSER requires ER_FILTER_HEURISTIC_GLUCOSER
+#endif
+
+// Define heuristics for deleting extension variables
+#define ER_DELETE_HEURISTIC_NONE      0 // Do not delete extension variables
+#define ER_DELETE_HEURISTIC_ALL       1 // Delete all extension variables
+#define ER_DELETE_HEURISTIC_ACTIVITY  2 // Delete low-activity extension variables based on a constant activity threshold
+#define ER_DELETE_HEURISTIC_ACTIVITY2 3 // Delete low-activity extension variables based on a constant activity threshold
+#ifndef ER_USER_DELETE_HEURISTIC
+    #define ER_USER_DELETE_HEURISTIC ER_DELETE_HEURISTIC_NONE
 #endif
 
 #ifndef BRANCHING_HEURISTIC
@@ -89,21 +111,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #error ANTI_EXPLORATION requires BRANCHING_HEURISTIC == LRB
 #endif
 
-#define NO_EXTENSION 0
-#define RANDOM_SAMPLE 1
-#define SUBEXPR_MATCH 2
-
 #ifndef EXTENSION_SUBSTITUTION
     #define EXTENSION_SUBSTITUTION true
 #endif
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef EXTENSION_HEURISTIC
-    #define EXTENSION_HEURISTIC RANDOM_SAMPLE
-#endif
-#if EXTENSION_SUBSTITUTION && EXTENSION_HEURISTIC == NO_EXTENSION
-    #error EXTENSION_SUBSTITUTION requires EXTENSION_HEURISTIC != NO_EXTENSION
+
+#if EXTENSION_SUBSTITUTION && ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_NONE
+    #error EXTENSION_SUBSTITUTION requires ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
 #endif
 
 #ifndef DELETE_LEARNT_CLAUSES
@@ -112,9 +128,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef DELETE_EXT_LEARNT_CLAUSES
     #define DELETE_EXT_LEARNT_CLAUSES true
 #endif
-#ifndef DELETE_EXT_VARS
-    #define DELETE_EXT_VARS false
-#endif
+
 #if DELETE_EXT_LEARNT_CLAUSES && !DELETE_LEARNT_CLAUSES
     #error DELETE_EXT_LEARNT_CLAUSES requires DELETE_LEARNT_CLAUSES
 #endif

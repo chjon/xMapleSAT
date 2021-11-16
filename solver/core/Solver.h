@@ -35,36 +35,97 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-struct LitPairMap {
-    std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> > map;
+struct ExtDefMap {
+    // Count of all literals that appear in an extension variable definition
+    std::tr1::unordered_map<Lit, int> lits;
+    
+    // Map of definitions to extension variable
+    std::tr1::unordered_map<std::pair<Lit, Lit>, Lit> map1;
+    // Map of extension variable to definition
+    std::tr1::unordered_map< Lit, std::pair<Lit, Lit> > map2;
 
-    inline bool contains (Lit a, Lit b) {
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator it1 = map.find(a);
-        if (it1 == map.end()) return false;
-        std::tr1::unordered_map<Lit, Lit>::const_iterator it2 = it1->second.find(b);
-        return it2 != it1->second.end();
+    static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
+        return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
 
-    inline void insert (Lit x, Lit a, Lit b) {
-        // Insert for tuple <a, b>
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it1 = map.find(a);
-        if (it1 == map.end()) {
-            std::tr1::unordered_map<Lit, Lit> submap;
-            submap.insert(std::make_pair(b, x));
-            map.insert(std::make_pair(a, submap));
-        } else {
-            it1->second.insert(std::make_pair(b, x));
-        }
+    inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator find(Lit a, Lit b) { return map1.find(mkLitPair(a, b)); }
+    inline std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator end() { return map1.end(); }
 
-        // Insert for tuple <b, a>
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::iterator it2 = map.find(b);
-        if (it2 == map.end()) {
-            std::tr1::unordered_map<Lit, Lit> submap;
-            submap.insert(std::make_pair(a, x));
-            map.insert(std::make_pair(b, submap));
-        } else {
-            it2->second.insert(std::make_pair(a, x));
+    inline unsigned int size() { return map1.size(); }
+
+    inline bool contains (Lit a       ) { return lits.find(a)               != lits.end(); }
+    inline bool contains (Lit a, Lit b) { return map1.find(mkLitPair(a, b)) != map1.end(); }
+
+    void insert (Lit x, Lit a, Lit b) {
+        const std::pair<Lit, Lit> key = mkLitPair(a, b);
+        map2.insert(std::make_pair(x, key));
+        map1.insert(std::make_pair(key, x));
+
+        // Increment count for Lit a
+        std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+        if (it1 == lits.end()) lits.insert(std::make_pair(a, 1));
+        else                   it1->second++;
+
+        // Increment count for Lit b
+        std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+        if (it2 == lits.end()) lits.insert(std::make_pair(b, 1));
+        else                   it2->second++;
+    }
+
+    void erase(Lit a, Lit b) {
+        const std::pair<Lit, Lit> key = mkLitPair(a, b);
+
+        // Check if the pair is in the map
+        std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = map1.find(key);
+        if (it == map1.end()) return;
+
+        // Erase from the reverse map
+        map2.erase(it->second);
+
+        // Decrement count for Lit a
+        std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+        if (it1->second == 1) lits.erase(it1);
+        else                  it1->second--;
+
+        // Decrement count for Lit b
+        std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+        if (it2->second == 1) lits.erase(it2);
+        else                  it2->second--;
+
+        // Erase from the forward map
+        map1.erase(it);
+    }
+
+    void erase(const std::tr1::unordered_set<Var>& defsToDelete) {
+        for (std::tr1::unordered_set<Var>::const_iterator i = defsToDelete.begin(); i != defsToDelete.end(); i++) {
+            std::tr1::unordered_map< Lit, std::pair<Lit, Lit> >::iterator it = map2.find(mkLit(*i));
+            if (it == map2.end()) continue;
+            std::pair<Lit, Lit>& def = it->second;
+
+            // Erase from the forward map
+            map1.erase(def);
+
+            // Decrement count for Lit a
+            Lit a = def.first;
+            std::tr1::unordered_map<Lit, int>::iterator it1 = lits.find(a);
+            if (it1->second == 1) lits.erase(it1);
+            else                  it1->second--;
+
+            // Decrement count for Lit b
+            Lit b = def.second;
+            std::tr1::unordered_map<Lit, int>::iterator it2 = lits.find(b);
+            if (it2->second == 1) lits.erase(it2);
+            else                  it2->second--;
+
+            // Erase from the reverse map
+            map2.erase(it);
         }
+    }
+
+    void clear(void) {
+        lits.clear();
+        map1.clear();
+        map2.clear();
     }
 };
 
@@ -134,11 +195,6 @@ public:
     int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
 
-    // EXTENDED RESOLUTION - statistics
-    int     nExtLearnts()      const;       // The current number of learnt extension clauses.
-    int     nExtDefs   ()      const;       // The current number of extension definition clauses.
-    int     nExtVars   ()      const;       // The current number of extension variables.
-
     // Resource contraints:
     //
     void    setConfBudget(int64_t x);
@@ -196,12 +252,15 @@ public:
     int       ext_filter_num;     // Maximum number of clauses after the filter step
 #endif
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-    int       ext_sub_min_width;      // Minimum width of clauses to substitute into
-    int       ext_sub_max_width;      // Maximum width of clauses to substitute into
+    int       ext_sub_min_width;  // Minimum width of clauses to substitute into
+    int       ext_sub_max_width;  // Maximum width of clauses to substitute into
 #endif
 #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
     int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    double    ext_act_threshold;  // Activity threshold for deleting clauses
 #endif
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
@@ -213,11 +272,11 @@ public:
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
+    uint64_t total_ext_vars, deleted_ext_vars;
     
     // EXTENDED RESOLUTION - statistics
     // read-only member variables
     uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
-    std::tr1::unordered_set<Var> confExtVars; // Set of variables that participate in conflicts
     double extfrac_total;
     struct rusage ext_timer_start, ext_timer_end;
     struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
@@ -283,15 +342,9 @@ protected:
 
     // EXTENDED RESOLUTION - clause databases
     vec<CRef>           extLearnts;       // List of learnt extension clauses (learnt clauses which contain extension variables).
-    vec<CRef>           extDefs;          // List of extension definition clauses.
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
 
     std::vector< std::pair< Var, std::pair<Lit, Lit> > > extBuffer; // Buffer of extension variable definitions to add
-
-    // Learnt clauses sorted by activity
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    vec<CRef>           learntsByActivity;
-    bool                useCachedActiveClauses;
-#endif
 
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
@@ -315,20 +368,15 @@ protected:
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
     
     // EXTENDED RESOLUTION - solver state
-    struct LitPairMap extVarDefs;
+    struct ExtDefMap extVarDefs;
                                              // Extension variable definitions - key is a pair of literals and value is the corresponding extension variable
                                              // This map is used for replacing disjunctions with the corresponding extension variable
                                              // This is NOT the same as the extension variable introduction heuristic
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    std::tr1::unordered_set<CRef> extFilteredClauses;
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    std::tr1::unordered_set<CRef> er_deletedClauses;
+    std::vector<CRef> er_filteredClauses;
                                              // List of clauses which can be selected by the clause selection heuristic
                                              // This represents the result of an initial filtering step, such as filtering by clause width
-                                             // Special care needs to be taken while deleting clauses
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    std::vector<CRef> extWidthFilteredClauses;
-                                             // List of clauses which can be selected by the clause selection heuristic
-                                             // This vector is treated as a min-heap, where we add clauses to the vector in order
-                                             // This represents the result of filtering the clauses by clause width
                                              // Special care needs to be taken while deleting clauses
 #endif
     int               originalNumVars;       // The number of variables in the original formula
@@ -387,6 +435,7 @@ protected:
     void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
     void     reduceDB         (Minisat::vec<Minisat::CRef>& db);                       // Reduce the provided set of learnt clauses.
     void     removeSatisfied  (vec<CRef>& cs);                                         // Shrink 'cs' to contain only non-satisfied clauses.
+    void     removeSatisfied  (std::tr1::unordered_map< Var, std::vector<CRef> >& cs); // Shrink 'cs' to contain only non-satisfied clauses.
     void     rebuildOrderHeap ();
 
     // Maintaining Variable/Clause activity:
@@ -452,12 +501,15 @@ protected:
     // Description:
     //   Add extension variables from the extension definition buffer to our data structures and prioritize branching on them.
     void addExtVars ();
+    void addExtDefClause(std::vector<CRef>& db, Lit x, Lit a);
+    void addExtDefClause(std::vector<CRef>& db, Lit x, Lit a, Lit b);
+    void addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause);
 
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
-        vec<CRef>& er_def_db,
-        struct LitPairMap& er_def_map,
+        std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
+        struct ExtDefMap& er_def_map,
         const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
     );
 
@@ -467,7 +519,7 @@ protected:
     // Parameters:
     //   er_delete_heuristic:
     //     A heuristic for identifying extension variables to delete.
-    void delExtVars (std::vector<Var>(*er_delete_heuristic)(Solver&));
+    void delExtVars (std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solver&));
 
     // Description:
     //   Delete a specified set of extension variables from a given clause database. This is a helper function
@@ -476,7 +528,11 @@ protected:
     // Parameters:
     //   db     : The clause database to delete from
     //   extvars: The set of extension variables to delete
-    void delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
+    //
+    // Return value:
+    //   A set of variables which could not be deleted due to locked clauses.
+    std::tr1::unordered_set<Var> delExtVars (Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& extvars);
+    std::tr1::unordered_set<Var> delExtVars (std::tr1::unordered_map< Var, std::vector<CRef> >& db, const std::tr1::unordered_set<Var>& varsToDeleteSet);
 
     // Description:
     //   Replace variable disjunctions in candidate learnt clauses with the corresponding extension variable
@@ -488,10 +544,7 @@ protected:
     void substituteExt (vec<Lit>& out_learnt);
 
     // Internal helper for substituteExt
-    static void er_substitute(
-        vec<Lit>& out_learnt,
-        struct LitPairMap& extVarDefs
-    );
+    static void er_substitute(vec<Lit>& out_learnt, struct ExtDefMap& extVarDefs);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // EXTENDED RESOLUTION - user functions/heuristics
@@ -528,12 +581,22 @@ protected:
     static void quickselect_count(std::vector< std::pair<Lit, Lit> >& db, std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_count, Solver& solver, int l, int r, int k);
 
     void user_er_filter_incremental(const CRef candidate);
-    void user_er_filter_batch();
-    void user_er_filter_batch_helper(vec<CRef>& db);
     static void user_er_select_filter_widths(vec<CRef>& output, const vec<CRef>& clauses, ClauseAllocator& ca, int minWidth, int maxWidth);
+    void user_er_filter_delete_incremental(CRef cr);
+    void user_er_filter_delete_flush(void);
+
+    void user_er_reloc(ClauseAllocator& to);
+
+    static std::vector<CRef> user_er_select          (Solver& solver, unsigned int numClauses);
+#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
     static std::vector<CRef> user_er_select_naive    (Solver& solver, unsigned int numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
     static std::vector<CRef> user_er_select_activity (Solver& solver, unsigned int numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
     static std::vector<CRef> user_er_select_activity2(Solver& solver, unsigned int numClauses);
+#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+    static std::vector<CRef> user_er_select_glucosER (Solver& solver, unsigned int numClauses);
+#endif
 
     ///// [ user_er_add_ ] /////
     // Description:
@@ -553,11 +616,22 @@ protected:
 
     static std::vector< std::pair<Lit, Lit> > getFreqSubexprs(std::tr1::unordered_map<std::pair<Lit, Lit>, int>& subexpr_counts, Solver& solver, unsigned int numSubexprs);
 
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+#endif
+
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
     // Subexpression-based literal selection - select the disjunction of literals which occurs the most often together.
     static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_subexpr(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
 
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
     // Random literal selection - select two literals at random and define a new extension variable over them.
-    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_random (Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_random(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+
+#elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+    // GlucosER literal selection - select the two literals which are not shared and define a new extension variable over them.
+    static std::vector< std::pair< Var, std::pair<Lit, Lit> > > user_er_add_glucosER(Solver& solver, std::vector<CRef>& candidateClauses, unsigned int maxNumNewVars);
+#endif
 
     ///// [ user_er_delete_ ] /////
     // Description:
@@ -569,8 +643,22 @@ protected:
     // Return value:
     //   The function should return a list of extension variables that should be deleted
 
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+    static std::tr1::unordered_set<Var> user_er_delete(Solver& solver);
+#endif
+
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
     // Delete all extension variables
-    static std::vector<Var> user_er_delete_all(Solver& solver);
+    static std::tr1::unordered_set<Var> user_er_delete_all(Solver& solver);
+
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    // Delete extension variables with activity below a constant threshold
+    static std::tr1::unordered_set<Var> user_er_delete_activity(Solver& solver);
+
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    // Delete extension variables with activity below a proportionality threshold
+    static std::tr1::unordered_set<Var> user_er_delete_activity2(Solver& solver);
+#endif
 
     // EXTENDED RESOLUTION - statistics
     // Functions for measuring extended resolution overhead
@@ -639,9 +727,11 @@ inline bool     Solver::addEmptyClause  ()                                    { 
 inline bool     Solver::addClause       (Lit p)                               { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q)                        { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)                 { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p)                { add_tmp.clear(); add_tmp.push(p); return addClauseToDB(db, add_tmp);}
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q)         { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClauseToDB(db, add_tmp);}
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClauseToDB(db, add_tmp);}
+inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p)                { add_tmp.clear(); add_tmp.push(p); return addClauseToDB(db, add_tmp); }
+inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q)         { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClauseToDB(db, add_tmp); }
+inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClauseToDB(db, add_tmp); }
+inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); return addExtDefClause(db, add_tmp); }
+inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a, Lit b) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); add_tmp.push(b); return addExtDefClause(db, add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const               { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                                    { trail_lim.push(trail.size()); }
 
@@ -663,11 +753,6 @@ inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
-
-// EXTENDED RESOLUTION - statistics
-inline int      Solver::nExtLearnts   ()      const   { return extLearnts.size(); }
-inline int      Solver::nExtDefs      ()      const   { return extDefs.size(); }
-inline int      Solver::nExtVars      ()      const   { return vardata.size() - originalNumVars; }
 
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }

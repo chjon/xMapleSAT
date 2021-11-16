@@ -24,7 +24,7 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
     for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
 }
 
-inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDefs) {
+inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
     // Get set of all literals in clause
     std::tr1::unordered_set<Lit> learntLits;
     for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
@@ -35,21 +35,19 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDef
     // Check for extension variables over literal pairs
     for (int i = 1; i < clause.size(); i++) {
         // Check if any extension variables are defined over this literal
-        std::tr1::unordered_map< Lit, std::tr1::unordered_map<Lit, Lit> >::const_iterator tmp1 = extVarDefs.map.find(clause[i]);
-        if (tmp1 == extVarDefs.map.end()) continue;
+        if (!extVarDefs.contains(clause[i])) continue;
 
         // TODO: would it be better to iterate over the extension definitions here?
         // Also consider sorting or doing a set intersection here
-        const std::tr1::unordered_map<Lit, Lit>& possibleDefs = tmp1->second;
         for (int j = i + 1; j < clause.size(); j++) {
             // Check if any extension variables are defined over this literal pair
-            std::tr1::unordered_map<Lit, Lit>::const_iterator tmp2 = possibleDefs.find(clause[j]);
-            if (tmp2 == possibleDefs.end()) continue;
+            std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[i], clause[j]);
+            if (it == extVarDefs.end()) continue;
 
             // Replace disjunction with intersection
-            learntLits.erase(tmp1->first);
-            learntLits.erase(tmp2->first);
-            learntLits.insert(tmp2->second);
+            learntLits.erase(clause[i]);
+            learntLits.erase(clause[j]);
+            learntLits.insert(it->second);
             goto ER_SUBSTITUTE_DOUBLE_BREAK;
         }
     }
@@ -68,7 +66,7 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct LitPairMap& extVarDef
 void Solver::substituteExt(vec<Lit>& out_learnt) {
     extTimerStart();
     // Ensure we have extension variables
-    if (nExtVars() > 0) {
+    if (extVarDefs.size() > 0) {
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
         // Check clause width
         int clause_width = out_learnt.size();
@@ -107,9 +105,48 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
     }
 }
 
+// Add clause to extension definitions
+// Assumes that the first literal is the new extension variable
+void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
+    if (ext_def_clause.size() == 1) {
+        uncheckedEnqueue(ext_def_clause[0]);
+    } else {
+        CRef cr = ca.alloc(ext_def_clause, false);
+
+        // Store clause in correct database
+        db.push_back(cr);
+        attachClause(cr);
+
+        // Clauses containing extension variables should go in a separate database
+        int numExtVarsInClause = getNumExtVars(ca[cr]);
+        double extFrac = numExtVarsInClause / (double) ext_def_clause.size();
+        extfrac_total += extFrac;
+
+        // Set initial clause LBD
+#if LBD_BASED_CLAUSE_DELETION
+        const int clauseLBD = lbd(ca[cr]);
+        ca[cr].activity() = clauseLBD;
+        lbd_total += clauseLBD;
+#endif
+
+        // Propagate extension variable
+        bool allFalsified = true;
+        for (int i = 1; i < ext_def_clause.size(); i++) {
+            if (value(ext_def_clause[i]) != l_False) {
+                allFalsified = false;
+                break;
+            }
+        }
+
+        if (allFalsified) {
+            uncheckedEnqueue(ext_def_clause[0], cr);
+        }
+    }
+}
+
 inline std::vector<Var> Solver::er_add(
-    vec<CRef>& er_def_db,
-    struct LitPairMap& er_def_map,
+    std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
+    struct ExtDefMap& er_def_map,
     const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
 ) {
     // Add extension variables
@@ -131,13 +168,15 @@ inline std::vector<Var> Solver::er_add(
         Lit b = i->second.second;
         assert(var(x) > var(a) && var(x) > var(b));
 
-        // Create extension clauses and add them to the extension definition database
-        addClauseToDB(er_def_db, ~x, a, b);
-        addClauseToDB(er_def_db, x, ~a);
-        addClauseToDB(er_def_db, x, ~b);
-
         // Save definition
         er_def_map.insert(x, a, b);
+
+        // Create extension clauses and add them to the extension definition database
+        std::vector<CRef> defs;
+        addExtDefClause(defs, ~x,  a,  b);
+        addExtDefClause(defs,  x, ~a    );
+        addExtDefClause(defs,  x,     ~b);
+        er_def_db.insert(std::make_pair(i->first, defs));
     }
 
     return new_variables;
@@ -168,51 +207,126 @@ void Solver::addExtVars() {
     // Add the extension variables to our data structures
     extTimerStart();
     const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer);
+    total_ext_vars += new_variables.size();
     extBuffer.clear();
     er_prioritize(new_variables);
     extTimerStop(ext_add_overhead);
 }
 
-void Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
-    int i, j;
+static inline bool containsAny(Clause& c, const std::tr1::unordered_set<Var>& varSet) {
+    for (int k = 0; k < c.size(); k++) {
+        if (varSet.find(var(c[k])) != varSet.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::tr1::unordered_set<Var> Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
+    // Set of variables whose definitions cannot be deleted due to being locked
+    std::tr1::unordered_set<Var> notDeleted;
 
     // Delete clauses which contain the extension variable
     // TODO: is there a more efficient way to implement this? e.g. have a list of clauses for each extension variable?
+    // TODO: Should we queue ER clauses to be deleted when they become unlocked?
+    int i, j;
     for (i = j = 0; i < db.size(); i++) {
         Clause& c = ca[db[i]];
-        bool containsVarToDelete = false;
-        for (int k = 0; k < c.size(); k++) {
-            if (varsToDeleteSet.find(var(c[k])) != varsToDeleteSet.end()) {
-                containsVarToDelete = true;
+        if (locked(c)) {
+            db[j++] = db[i];
+            // Add ext vars to notDeleted
+            for (int k = 0; k < c.size(); k++) {
+                if (varsToDeleteSet.find(var(c[k])) != varsToDeleteSet.end()) {
+                    notDeleted.insert(var(c[k]));
+                }
+            }
+        } else if (containsAny(c, varsToDeleteSet)) {
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+            user_er_filter_delete_incremental(db[i]);
+#endif
+            removeClause(db[i]);
+        } else {
+            db[j++] = db[i];
+        }
+    }
+    db.shrink(i - j);
+
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    user_er_filter_delete_flush();
+#endif
+    return notDeleted;
+}
+
+std::tr1::unordered_set<Var> Solver::delExtVars(std::tr1::unordered_map< Var, std::vector<CRef> >& db, const std::tr1::unordered_set<Var>& varsToDelete) {
+    std::tr1::unordered_set<Var> notDeleted;
+    
+    // Delete from variable definitions
+    for (std::tr1::unordered_set<Var>::const_iterator i = varsToDelete.begin(); i != varsToDelete.end(); i++) {
+        std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.find(*i);
+        std::vector<CRef>& defClauses = it->second;
+
+        // Check if any of the clauses are locked
+        bool canDelete = true;
+        for (std::vector<CRef>::iterator k = defClauses.begin(); k != defClauses.end(); k++) {
+            if (locked(ca[*k])) {
+                canDelete = false;
                 break;
             }
         }
 
-        if (containsVarToDelete)
-            removeClause(db[i]);
-        else
-            db[j++] = db[i];
+        // Delete definition clauses
+        if (canDelete) {
+            for (std::vector<CRef>::iterator k = defClauses.begin(); k != defClauses.end(); k++) {
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+                user_er_filter_delete_incremental(*k);
+#endif
+                removeClause(*k);
+            }
+        } else {
+            notDeleted.insert(*i);
+        }
     }
-    db.shrink(i - j);
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    user_er_filter_delete_flush();
+#endif
+
+    return notDeleted;
 }
 
-void Solver::delExtVars(std::vector<Var>(*er_delete_heuristic)(Solver&)) {
+static inline void setSubtract(std::tr1::unordered_set<Var>& a, const std::tr1::unordered_set<Var>& b) {
+    for (std::tr1::unordered_set<Var>::const_iterator it = b.begin(); it != b.end(); it++) {
+        a.erase(*it);
+    }
+}
+
+void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solver&)) {
+    // Delete variables
     extTimerStart();
 
     // Get variables to delete
-    std::vector<Var> varsToDelete = er_delete_heuristic(*this);
-    std::tr1::unordered_set<Var> varsToDeleteSet(varsToDelete.begin(), varsToDelete.end());
+    std::tr1::unordered_set<Var> varsToDelete = er_delete_heuristic(*this);
 
-    // Delete variables
+    // Option 1: delete all clauses containing the extension variables
+    // Option 2: substitute extension variable with definition (TODO: unimplemented)
 
-    // TODO: add an option to switch between these two modes
+    // Only consider extension variables which are not part of the definition of another extension variable
+    std::tr1::unordered_set<Var> cannotBeDeleted;
+    for (std::tr1::unordered_set<Var>::iterator it = varsToDelete.begin(); it != varsToDelete.end(); it++)
+        if (extVarDefs.contains(mkLit(*it, false)) || extVarDefs.contains(mkLit(*it, true)))
+            cannotBeDeleted.insert(*it);
+    setSubtract(varsToDelete, cannotBeDeleted);
 
-    // option 1: delete all clauses containing the extension variables
-    delExtVars(extLearnts, varsToDeleteSet);    
-    delExtVars(extDefs, varsToDeleteSet);    
+    // Delete from learnt clauses
+    cannotBeDeleted = delExtVars(extLearnts, varsToDelete);
+    setSubtract(varsToDelete, cannotBeDeleted);
 
-    // option 2: substitute extension variable with definition
-    // TODO
+    // Delete clauses from extension definitions
+    cannotBeDeleted = delExtVars(extDefs, varsToDelete);
+    setSubtract(varsToDelete, cannotBeDeleted);
+
+    // Remove variable definitions from other data structures
+    deleted_ext_vars += varsToDelete.size();
+    extVarDefs.erase(varsToDelete);
 
     extTimerStop(ext_delV_overhead);
 }

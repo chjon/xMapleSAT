@@ -70,6 +70,16 @@ static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum
 static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
 #endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
+#endif
+
+static inline void initOverhead(struct rusage& overhead, int s, int us) {
+    overhead.ru_utime.tv_sec  = s;
+    overhead.ru_utime.tv_usec = us;
+}
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -120,6 +130,9 @@ Solver::Solver() :
   , ext_min_lbd      (opt_ext_min_lbd)
   , ext_max_lbd      (opt_ext_max_lbd)
 #endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+  , ext_act_threshold(opt_ext_act_thresh)
+#endif
 
     // Parameters (the rest):
     //
@@ -143,9 +156,6 @@ Solver::Solver() :
 #endif
 
   , ok                 (true)
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-  , useCachedActiveClauses(false)
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
@@ -168,18 +178,13 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 {
-    ext_sel_overhead .ru_utime.tv_sec  = 0;
-    ext_sel_overhead .ru_utime.tv_usec = 0;
-    ext_add_overhead .ru_utime.tv_sec  = 0;
-    ext_add_overhead .ru_utime.tv_usec = 0;
-    ext_delC_overhead.ru_utime.tv_sec  = 0;
-    ext_delC_overhead.ru_utime.tv_usec = 0;
-    ext_delV_overhead.ru_utime.tv_sec  = 0;
-    ext_delV_overhead.ru_utime.tv_usec = 0;
-    ext_sub_overhead .ru_utime.tv_sec  = 0;
-    ext_sub_overhead .ru_utime.tv_usec = 0;
-    ext_stat_overhead.ru_utime.tv_sec  = 0;
-    ext_stat_overhead.ru_utime.tv_usec = 0;
+    // Initialize overhead measurement
+    initOverhead(ext_sel_overhead , 0, 0);
+    initOverhead(ext_add_overhead , 0, 0);
+    initOverhead(ext_delC_overhead, 0, 0);
+    initOverhead(ext_delV_overhead, 0, 0);
+    initOverhead(ext_sub_overhead , 0, 0);
+    initOverhead(ext_stat_overhead, 0, 0);
 }
 
 
@@ -249,7 +254,9 @@ bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
         CRef cr = ca.alloc(ps, false);
         clauseDB.push(cr);
         attachClause(cr);
+        extTimerStart();
         user_er_filter_incremental(cr);
+        extTimerStop(ext_sel_overhead);
     }
 
     return true;
@@ -262,7 +269,6 @@ void Solver::attachClause(CRef cr) {
     watches[~c[1]].push(Watcher(cr, c[0]));
     if (c.learnt()) learnts_literals += c.size();
     else            clauses_literals += c.size(); }
-
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
@@ -335,9 +341,6 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-        useCachedActiveClauses = false;
-#endif
     }}
 
 
@@ -415,10 +418,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         extTimerStart();
         if (getNumExtVars(c) > 0) {
             conflict_extclauses++;
-            for (int i = 0; i < c.size(); i++) {
-                Var v = var(c[i]);
-                if (isExtVar(v)) confExtVars.insert(v);
-            }
         }
         extTimerStop(ext_stat_overhead);
 
@@ -737,53 +736,12 @@ void Solver::reduceDB() {
     // EXTENDED RESOLUTION - delete learnt extension clauses
     reduceDB(extLearnts);
 #endif
-#if DELETE_EXT_VARS
     // Delete extension variables
     // TODO: should this happen separately based on a different condition?
-    delExtVars(/* Heuristic function */);
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+    delExtVars(user_er_delete);
 #endif
     checkGarbage();
-
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-    // Make a copy of the sorted clauses (caching results for ER selection)
-    extTimerStart();
-
-    learntsByActivity.clear();
-    int learnts_i = 0, extlearnts_i = 0;
-    while (
-        learnts_i + extlearnts_i < ext_window &&
-        learnts_i                < learnts   .size() &&
-        extlearnts_i             < extLearnts.size()
-    ) {
-        if (ca[learnts[learnts_i]].activity() > ca[extLearnts[extlearnts_i]].activity())
-            learntsByActivity.push(learnts[learnts_i++]);
-        else
-            learntsByActivity.push(extLearnts[extlearnts_i++]);
-    }
-
-    while (learnts_i + extlearnts_i < ext_window && learnts_i < learnts.size())
-        learntsByActivity.push(learnts[learnts_i++]);
-    while (learnts_i + extlearnts_i < ext_window && extlearnts_i < extLearnts.size())
-        learntsByActivity.push(extLearnts[extlearnts_i++]);
-
-    useCachedActiveClauses = true;
-
-    extTimerStop(ext_sel_overhead);
-
-    if (!extBuffer.size()) {
-        // Generate extension variables
-        generateExtVars(
-            user_er_select_activity,
-    #if EXTENSION_HEURISTIC == RANDOM_SAMPLE
-            user_er_add_random,
-    #elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-            user_er_add_subexpr,
-    #endif
-            ext_window,
-            ext_max_intro
-        );
-    }
-#endif
 }
 
 struct clause_width_lt { 
@@ -804,10 +762,6 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
     sort(db, reduceDB_lt(ca));
 #endif
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-    extWidthFilteredClauses.clear();
-#endif
-
     // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
     // and clauses with activity smaller than 'extra_lim':
     for (i = j = 0; i < db.size(); i++){
@@ -817,10 +771,9 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
 #else
         if (c.size() > 2 && !locked(c) && (i < db.size() / 2 || c.activity() < extra_lim)) {
 #endif
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
             extTimerStart();
-            extFilteredClauses.erase(db[i]);
+            user_er_filter_delete_incremental(db[i]);
             extTimerStop(ext_delC_overhead);
 #endif
             removeClause(db[i]);
@@ -829,6 +782,11 @@ void Solver::reduceDB(Minisat::vec<Minisat::CRef>& db)
         }
     }
     db.shrink(i - j);
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    extTimerStart();
+    user_er_filter_delete_flush();
+    extTimerStop(ext_delC_overhead);
+#endif
 }
 
 void Solver::removeSatisfied(vec<CRef>& cs)
@@ -844,6 +802,21 @@ void Solver::removeSatisfied(vec<CRef>& cs)
     cs.shrink(i - j);
 }
 
+void Solver::removeSatisfied(std::tr1::unordered_map< Var, std::vector<CRef> >& defs)
+{
+    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = defs.begin(); it != defs.end(); it++) {
+        std::vector<CRef>& cs = it->second;
+        unsigned int i, j;
+        for (i = j = 0; i < cs.size(); i++){
+            Clause& c = ca[cs[i]];
+            if (satisfied(c))
+                removeClause(cs[i]);
+            else
+                cs[j++] = cs[i];
+        }
+        cs.erase(cs.begin() + j, cs.end());
+    }
+}
 
 void Solver::rebuildOrderHeap()
 {
@@ -875,6 +848,7 @@ bool Solver::simplify()
 
     // Remove satisfied clauses:
     removeSatisfied(learnts);
+    removeSatisfied(extLearnts);
     if (remove_satisfied) {       // Can be turned off.
         removeSatisfied(clauses);
         removeSatisfied(extDefs);
@@ -909,38 +883,18 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
+#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE && ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
     // EXTENDED RESOLUTION - determine whether to try adding extension variables
-    // TODO: only introduce extvars after clause deletion in order to save on overhead associated with selecting based on clause activity
-#if EXTENSION_HEURISTIC != NO_EXTENSION
-
-#if !ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
     if (!extBuffer.size()) {
         // Only try generating more extension variables if there aren't any buffered already
         if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
             prevExtensionConflict = conflicts;
-
-            generateExtVars(
-#if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
-                user_er_select_naive,
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
-                user_er_select_activity,
-#elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY2
-                user_er_select_activity2,
-#endif
-#if EXTENSION_HEURISTIC == RANDOM_SAMPLE
-                user_er_add_random,
-#elif EXTENSION_HEURISTIC == SUBEXPR_MATCH
-                user_er_add_subexpr,
-#endif
-                ext_window,
-                ext_max_intro
-            );
+            generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
         }
     }
-#endif
     
     // Add extension variables if there are any in the buffer
-    addExtVars();
+    if (extBuffer.size()) addExtVars();
 #endif
 
     for (;;){
@@ -1004,13 +958,11 @@ lbool Solver::search(int nof_conflicts)
                 const int clauseLBD = lbd(clause);
 #endif
 
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+                extTimerStart();
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-                extTimerStart();
                 clause.set_lbd(ext_min_lbd <= clauseLBD && clauseLBD <= ext_max_lbd);
-                user_er_filter_incremental(cr);
-                extTimerStop(ext_sel_overhead);
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-                extTimerStart();
+#endif
                 user_er_filter_incremental(cr);
                 extTimerStop(ext_sel_overhead);
 #endif
@@ -1022,6 +974,15 @@ lbool Solver::search(int nof_conflicts)
                 claBumpActivity(ca[cr]);
 #endif
                 uncheckedEnqueue(learnt_clause[0], cr);
+
+#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+                // Try generating an extension variable based on the last learnt clauses
+                generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
+
+                // Add extension variables if there are any in the buffer
+                // FIXME: we get a segfault if we add ext vars here (note that the clauses we add here get auto-simplified)
+                if (extBuffer.size()) addExtVars();
+#endif
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -1064,12 +1025,6 @@ lbool Solver::search(int nof_conflicts)
 
 #if RAPID_DELETION
                 max_learnts += 500;
-#endif
-
-#if ER_USER_SELECT_CACHE_ACTIVE_CLAUSES
-                // Force a restart
-                cancelUntil(0);
-                return l_Undef;
 #endif
             }
 #endif
@@ -1290,24 +1245,10 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
 //=================================================================================================
 // Garbage Collection methods:
 
-void Solver::relocHelper(CRef& cr, ClauseAllocator& to, std::tr1::unordered_set<CRef>& newFilteredClauses) {
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    CRef before = cr;
-#endif
-    ca.reloc(cr, to);
-#if ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_RANGE || ER_FILTER_HEURISTIC_LBD == ER_FILTER_HEURISTIC_LBD
-    extTimerStart();
-    if (extFilteredClauses.find(before) != extFilteredClauses.end())
-        newFilteredClauses.insert(cr);
-    extTimerStop(ext_sel_overhead);
-#endif
-}
-
-void Solver::relocAll(ClauseAllocator& to)
+void Solver::relocAll(ClauseAllocator& to) 
 {
     // All watchers:
     //
-    std::tr1::unordered_set<CRef> tmpFiltered;
     // for (int i = 0; i < watches.size(); i++)
     watches.cleanAll();
     for (int v = 0; v < nVars(); v++)
@@ -1316,7 +1257,7 @@ void Solver::relocAll(ClauseAllocator& to)
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
             vec<Watcher>& ws = watches[p];
             for (int j = 0; j < ws.size(); j++)
-                relocHelper(ws[j].cref, to, tmpFiltered);
+                ca.reloc(ws[j].cref, to);
         }
 
     // All reasons:
@@ -1324,19 +1265,19 @@ void Solver::relocAll(ClauseAllocator& to)
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            relocHelper(vardata[v].reason, to, tmpFiltered);
+            ca.reloc(vardata[v].reason, to);
     }
 
-    for (int i = 0; i < learnts   .size(); i++) relocHelper(learnts   [i], to, tmpFiltered); // All learnt
-    for (int i = 0; i < extLearnts.size(); i++) relocHelper(extLearnts[i], to, tmpFiltered); // All learnt extension
-    for (int i = 0; i < extDefs   .size(); i++) relocHelper(extDefs   [i], to, tmpFiltered); // All extension definitions
-    for (int i = 0; i < clauses   .size(); i++) relocHelper(clauses   [i], to, tmpFiltered); // All original
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-    extTimerStart();
-    extFilteredClauses = tmpFiltered;
-    extTimerStop(ext_sel_overhead);
-#endif
+    for (int i = 0; i < learnts   .size(); i++) ca.reloc(learnts   [i], to); // All learnt
+    for (int i = 0; i < extLearnts.size(); i++) ca.reloc(extLearnts[i], to); // All learnt extension
+    for (int i = 0; i < clauses   .size(); i++) ca.reloc(clauses   [i], to); // All original
+    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+        std::vector<CRef>& cs = it->second;
+        for (unsigned int i = 0; i < cs.size(); i++) {
+            ca.reloc(cs[i], to); // All extension definitions
+        }
+    }
+    user_er_reloc(to);
 }
 
 void Solver::garbageCollect()
