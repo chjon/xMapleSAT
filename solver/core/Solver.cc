@@ -56,6 +56,7 @@ static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward m
 static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
 static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
@@ -116,6 +117,7 @@ Solver::Solver() :
   , ext_freq         (opt_ext_freq)
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
+  , ext_pref_sign    (opt_ext_sign)
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
   , ext_min_width    (opt_ext_min_width)
   , ext_max_width    (opt_ext_max_width)
@@ -980,7 +982,6 @@ lbool Solver::search(int nof_conflicts)
                 generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
 
                 // Add extension variables if there are any in the buffer
-                // FIXME: we get a segfault if we add ext vars here (note that the clauses we add here get auto-simplified)
                 if (extBuffer.size()) addExtVars();
 #endif
             }

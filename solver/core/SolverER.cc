@@ -157,7 +157,7 @@ inline std::vector<Var> Solver::er_add(
     // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
     std::vector<Var> new_variables;
     for (unsigned int i = 0; i < newDefMap.size(); i++) {
-        new_variables.push_back(newVar());
+        new_variables.push_back(newVar(ext_pref_sign));
     }
 
     // Add extension clauses

@@ -245,6 +245,7 @@ public:
     int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
     int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
+    bool      ext_pref_sign;      // Preferred sign for new variables                                                          (default true (negated))
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     int       ext_min_width;      // Minimum clause width to consider when selecting clauses
     int       ext_max_width;      // Maximum clause width to consider when selecting clauses
