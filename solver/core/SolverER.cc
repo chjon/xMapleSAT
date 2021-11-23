@@ -111,7 +111,7 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
     if (ext_def_clause.size() == 1) {
         uncheckedEnqueue(ext_def_clause[0]);
     } else {
-        CRef cr = ca.alloc(ext_def_clause, false);
+        CRef cr = ca.alloc(ext_def_clause, true);
 
         // Store clause in correct database
         db.push_back(cr);
