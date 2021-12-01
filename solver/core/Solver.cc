@@ -885,16 +885,14 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
-#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE && ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_GLUCOSER
-    // EXTENDED RESOLUTION - determine whether to try adding extension variables
-    if (!extBuffer.size()) {
-        // Only try generating more extension variables if there aren't any buffered already
-        if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
-            prevExtensionConflict = conflicts;
-            generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-        }
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+    // Only try generating more extension variables if there aren't any buffered already
+    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
+        prevExtensionConflict = conflicts;
+        generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
     }
-    
+#endif
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
     // Add extension variables if there are any in the buffer
     if (extBuffer.size()) addExtVars();
 #endif
@@ -977,10 +975,11 @@ lbool Solver::search(int nof_conflicts)
 #endif
                 uncheckedEnqueue(learnt_clause[0], cr);
 
-#if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
                 // Try generating an extension variable based on the last learnt clauses
                 generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-
+#endif
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
                 // Add extension variables if there are any in the buffer
                 if (extBuffer.size()) addExtVars();
 #endif

@@ -80,9 +80,25 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_DELETE_HEURISTIC_NONE      0 // Do not delete extension variables
 #define ER_DELETE_HEURISTIC_ALL       1 // Delete all extension variables
 #define ER_DELETE_HEURISTIC_ACTIVITY  2 // Delete low-activity extension variables based on a constant activity threshold
-#define ER_DELETE_HEURISTIC_ACTIVITY2 3 // Delete low-activity extension variables based on a constant activity threshold
+#define ER_DELETE_HEURISTIC_ACTIVITY2 3 // Delete low-activity extension variables based on a proportional activity threshold
 #ifndef ER_USER_DELETE_HEURISTIC
     #define ER_USER_DELETE_HEURISTIC ER_DELETE_HEURISTIC_NONE
+#endif
+
+// Define heuristics for location to generate variables
+#define ER_GEN_LOCATION_NONE           0 // Do not generate extension variables
+#define ER_GEN_LOCATION_AFTER_RESTART  1 // Generate extension variables after a restart
+#define ER_GEN_LOCATION_AFTER_CONFLICT 2 // Generate extension variables after a conflict
+#ifndef ER_USER_GEN_LOCATION
+    #define ER_USER_GEN_LOCATION ER_GEN_LOCATION_AFTER_RESTART
+#endif
+
+// Define heuristics for location to add variables
+#define ER_ADD_LOCATION_NONE           0 // Do not add extension variables
+#define ER_ADD_LOCATION_AFTER_RESTART  1 // Add extension variables after a restart
+#define ER_ADD_LOCATION_AFTER_CONFLICT 2 // Add extension variables after a conflict
+#ifndef ER_USER_ADD_LOCATION
+    #define ER_USER_ADD_LOCATION ER_GEN_LOCATION_AFTER_RESTART
 #endif
 
 #ifndef BRANCHING_HEURISTIC
