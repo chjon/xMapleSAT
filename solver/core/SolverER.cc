@@ -25,42 +25,40 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
 }
 
 inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
-    // Get set of all literals in clause
-    std::tr1::unordered_set<Lit> learntLits;
-    for (int i = 1; i < clause.size(); i++) learntLits.insert(clause[i]);
-
-    // Possible future investigation: should we ignore really long clauses in order to save time?
-    // This would need a command-line option to toggle ignoring the clauses
-
-    // Check for extension variables over literal pairs
-    for (int i = 1; i < clause.size(); i++) {
+    // Get indices of all literals that appear in an extension definition
+    std::vector<int> defLitIndex;
+    for (int i = 0; i < clause.size(); i++) {
         // Check if any extension variables are defined over this literal
-        if (!extVarDefs.contains(clause[i])) continue;
+        if (extVarDefs.contains(clause[i])) defLitIndex.push_back(i);
+    }
+    if (defLitIndex.size() <= 1) return;
 
-        // TODO: would it be better to iterate over the extension definitions here?
-        // Also consider sorting or doing a set intersection here
-        for (int j = i + 1; j < clause.size(); j++) {
+    // Check each pair of literals that appear in an extension definition
+    int replaced = 0;
+    for (unsigned int i = 0; i < defLitIndex.size(); i++) {
+        if (clause[defLitIndex[i]] == lit_Undef) continue;
+        for (unsigned int j = i + 1; j < defLitIndex.size(); j++) {
+            if (clause[defLitIndex[j]] == lit_Undef) continue;
+
             // Check if any extension variables are defined over this literal pair
-            std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[i], clause[j]);
+            std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[defLitIndex[i]], clause[defLitIndex[j]]);
             if (it == extVarDefs.end()) continue;
 
-            // Replace disjunction with intersection
-            learntLits.erase(clause[i]);
-            learntLits.erase(clause[j]);
-            learntLits.insert(it->second);
-            goto ER_SUBSTITUTE_DOUBLE_BREAK;
+            // Replace the first literal with the extension literal and mark the second literal as invalid
+            clause[defLitIndex[i]] = it->second;
+            clause[defLitIndex[j]] = lit_Undef;
+            replaced++;
+            break;
         }
     }
-    ER_SUBSTITUTE_DOUBLE_BREAK:;
 
     // Generate reduced learnt clause
-    std::tr1::unordered_set<Lit>::iterator it = learntLits.begin();
-    unsigned int i;
-    for (i = 1; i <= learntLits.size(); i++) {
-        clause[i] = *it;
-        it++;
+    if (replaced > 0) {
+        for (int i = 0, j = 0; i < clause.size(); i++) {
+            if (clause[i] != lit_Undef) clause[j++] = clause[i];
+        }
+        clause.shrink(replaced);
     }
-    clause.shrink(clause.size() - i);
 }
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
@@ -91,7 +89,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
 
 // Prioritize branching on a given set of literals
 inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
-    const double desiredActivity = activity[order_heap[0]] * 1.5;
+    const double desiredActivity = activity[order_heap[0]] * 100;
     for (std::vector<Var>::const_iterator i = toPrioritize.begin(); i != toPrioritize.end(); i++) {
         Var v = *i;
         // Prioritize branching on our extension variables
