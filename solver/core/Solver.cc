@@ -136,19 +136,20 @@ Solver::Solver() :
   , ext_act_threshold(opt_ext_act_thresh)
 #endif
 
-    // Parameters (the rest):
-    //
+  // Parameters (the rest):
+  //
   , learntsize_factor((double)1/(double)3), learntsize_inc(1.1)
 
-    // Parameters (experimental):
-    //
+  // Parameters (experimental):
+  //
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
 
-    // Statistics: (formerly in 'SolverStats')
-    //
+  // Statistics: (formerly in 'SolverStats')
+  //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
+  , total_ext_vars(0), deleted_ext_vars(0)
   , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0), extfrac_total(0)
 
   , lbd_calls(0)
@@ -174,8 +175,8 @@ Solver::Solver() :
   , originalNumVars    (0)
   , prevExtensionConflict(0)
 
-    // Resource constraints:
-    //
+  // Resource constraints:
+  //
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
@@ -417,11 +418,11 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
 
-        extTimerStart();
-        if (getNumExtVars(c) > 0) {
-            conflict_extclauses++;
-        }
-        extTimerStop(ext_stat_overhead);
+        // extTimerStart();
+        // if (getNumExtVars(c) > 0) {
+        //     conflict_extclauses++;
+        // }
+        // extTimerStop(ext_stat_overhead);
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
@@ -493,7 +494,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.shrink(i - j);
 #if EXTENSION_SUBSTITUTION
     // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-    // TODO: only do this for clauses with LBD less than some threshold (e.g. 3)
     substituteExt(out_learnt);
 # endif
     tot_literals += out_learnt.size();
@@ -1054,7 +1054,8 @@ lbool Solver::search(int nof_conflicts)
                     // Model found:
                     return l_True;
                 
-                if (isExtVar(var(next))) branchOnExt++;
+                if (isExtVar(var(next)))
+                    branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'

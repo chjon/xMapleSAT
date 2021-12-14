@@ -418,19 +418,6 @@ protected:
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
     bool     litRedundant     (Lit p, uint32_t abstract_levels);                       // (helper method for 'analyze()')
-
-    template<class V> int lbd (const V& clause) {
-        lbd_calls++;
-        int lbd = 0;
-        for (int i = 0; i < clause.size(); i++) {
-            int l = level(var(clause[i]));
-            if (lbd_seen[l] != lbd_calls) {
-                lbd++;
-                lbd_seen[l] = lbd_calls;
-            }
-        }
-        return lbd;
-    }
     lbool    search           (int nof_conflicts);                                     // Search for a given number of conflicts.
     lbool    solve_           ();                                                      // Main solve method (assumptions given in 'assumptions').
     void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
@@ -666,6 +653,19 @@ protected:
     void   extTimerStart();
     void   extTimerStop(struct rusage& ext_overhead);
 
+    template<class V> int lbd (const V& clause) {
+        lbd_calls++;
+        int lbd = 0;
+        for (int i = 0; i < clause.size(); i++) {
+            int l = level(var(clause[i]));
+            if (lbd_seen[l] != lbd_calls) {
+                lbd++;
+                lbd_seen[l] = lbd_calls;
+            }
+        }
+        return lbd;
+    }
+
     // Static helpers:
     //
 
@@ -754,7 +754,6 @@ inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nVars         ()      const   { return vardata.size(); }
-
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 
@@ -792,7 +791,6 @@ inline void     Solver::toDimacs     (const char* file){ vec<Lit> as; toDimacs(f
 inline void     Solver::toDimacs     (const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }
 inline void     Solver::toDimacs     (const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
 inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
-
 
 //=================================================================================================
 // Debug etc:
