@@ -2301,7 +2301,7 @@ uint32_t Solver::reduceduplicates(){
             for (auto &in_in_mp: inner_mp.second){
                 if (in_in_mp.second >= 2){
                 //min_number_of_learnts_copies
-                    tmp.push_back({outer_mp.first,inner_mp.first,in_in_mp.first,in_in_mp.second});
+                    tmp.push_back({static_cast<uint64_t>(outer_mp.first),static_cast<uint64_t>(inner_mp.first),in_in_mp.first,static_cast<uint64_t>(in_in_mp.second)});
                 }
             }                    
          }
