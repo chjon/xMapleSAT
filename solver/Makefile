@@ -104,12 +104,12 @@ define make_er_solver
 	mv core/maplesat_static core/$(1)
 endef
 
-all: maplesat xmaplesat glucoser
+all: maplesat xmaplesat
 
 maplesat:
 	$(call make_er_solver,maplesat,0,0,0,0,0,0,0,0)
 
-xmaplesat: xmaplesat_rnd_rng xmaplesat_rnd_lbd xmaplesat_sub_rng xmaplesat_sub_lbd
+xmaplesat: xmaplesat_rnd_rng xmaplesat_rnd_lbd xmaplesat_sub_rng xmaplesat_sub_lbd xmaplesat_glucoser
 
 xmaplesat_rnd_rng:
 	$(call make_er_solver,xmaplesat_rnd_rng,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
@@ -123,8 +123,8 @@ xmaplesat_sub_rng:
 xmaplesat_sub_lbd:
 	$(call make_er_solver,xmaplesat_sub_lbd,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_LBD),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-glucoser:
-	$(call make_er_solver,glucoser,$(ER_ADD_HEURISTIC_GLUCOSER),$(ER_FILTER_HEURISTIC_GLUCOSER),$(ER_SELECT_HEURISTIC_GLUCOSER),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_CONFLICT),$(ER_ADD_LOCATION_AFTER_CONFLICT))
+xmaplesat_glucoser:
+	$(call make_er_solver,xmaplesat_glucoser,$(ER_ADD_HEURISTIC_GLUCOSER),$(ER_FILTER_HEURISTIC_GLUCOSER),$(ER_SELECT_HEURISTIC_GLUCOSER),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_CONFLICT),$(ER_ADD_LOCATION_AFTER_CONFLICT))
 
 clean:
 	make -C core clean
