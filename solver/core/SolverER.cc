@@ -89,7 +89,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
 
 // Prioritize branching on a given set of literals
 inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
-    const double desiredActivity = activity[order_heap[0]] * 100;
+    const double desiredActivity = activity[order_heap[0]] * ext_prio_act;
     for (std::vector<Var>::const_iterator i = toPrioritize.begin(); i != toPrioritize.end(); i++) {
         Var v = *i;
         // Prioritize branching on our extension variables
@@ -208,6 +208,7 @@ void Solver::addExtVars() {
     total_ext_vars += new_variables.size();
     extBuffer.clear();
     er_prioritize(new_variables);
+    max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
     extTimerStop(ext_add_overhead);
 }
 
