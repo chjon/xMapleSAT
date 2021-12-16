@@ -52,6 +52,7 @@ void printStats(Solver& solver)
     printf("c conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     printf("c total ext vars        : %-12" PRIu64 "\n", solver.total_ext_vars);
     printf("c deleted ext vars      : %-12" PRIu64 "\n", solver.deleted_ext_vars);
+    printf("c max ext vars          : %-12" PRIu64 "\n", solver.max_ext_vars);
     printf("c conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
     printf("c learnt ext clauses    : %-12" PRIu64 "   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
     printf("c total lbd of learnts  : %-12" PRIu64 "   (%.0f /conf)\n", solver.lbd_total, solver.lbd_total / (float)solver.conflicts);

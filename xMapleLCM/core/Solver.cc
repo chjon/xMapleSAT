@@ -70,6 +70,7 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+static DoubleOption  opt_ext_prio       (_cat, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
 static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
 static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
@@ -137,6 +138,7 @@ Solver::Solver() :
   , ext_freq         (opt_ext_freq)
   , ext_window       (opt_ext_wndw)
   , ext_max_intro    (opt_ext_num)
+  , ext_prio_act     (opt_ext_prio)
   , ext_pref_sign    (opt_ext_sign)
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
   , ext_min_width    (opt_ext_min_width)
@@ -177,7 +179,7 @@ Solver::Solver() :
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
   , chrono_backtrack(0), non_chrono_backtrack(0)
-  , total_ext_vars(0), deleted_ext_vars(0)
+  , total_ext_vars(0), deleted_ext_vars(0), max_ext_vars(0)
   , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0), extfrac_total(0)
 
   , ok                 (true)
@@ -2133,9 +2135,6 @@ lbool Solver::search(int& nof_conflicts)
 
 #if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
                 extTimerStart();
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-                clause.set_lbd(ext_min_lbd <= lbd && lbd <= ext_max_lbd);
-#endif
                 user_er_filter_incremental(cr);
                 extTimerStop(ext_sel_overhead);
 #endif

@@ -36,7 +36,8 @@ void Solver::user_er_filter_incremental(const CRef candidate) {
     }
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     // Filter clauses based on their creation LBD
-    if (ca[candidate].good_lbd()) er_filteredClauses.push_back(candidate);
+    int lbd = ca[candidate].lbd();
+    if (ext_min_lbd <= lbd && lbd <= ext_max_lbd) er_filteredClauses.push_back(candidate);
 #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     if (ca[candidate].learnt()) {
         if (er_filteredClauses.size() > 1) {

@@ -75,7 +75,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
         {
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
             // Check LBD
-            int clause_lbd = lbd(out_learnt);
+            int clause_lbd = computeLBD(out_learnt);
             if (clause_lbd >= ext_min_lbd && clause_lbd <= ext_max_lbd)
 #endif
             {
@@ -89,8 +89,8 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
 
 // Prioritize branching on a given set of literals
 inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
-    const double desiredActivityCHB   = activity_CHB  [order_heap_CHB[0]] * 0.5;
-    const double desiredActivityVSIDS = activity_VSIDS[order_heap_VSIDS[0]] * 0.5;
+    const double desiredActivityCHB   = activity_CHB  [order_heap_CHB[0]] * ext_prio_act;
+    const double desiredActivityVSIDS = activity_VSIDS[order_heap_VSIDS[0]] * ext_prio_act;
     for (std::vector<Var>::const_iterator i = toPrioritize.begin(); i != toPrioritize.end(); i++) {
         Var v = *i;
         // Prioritize branching on our extension variables
@@ -126,7 +126,7 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
 
         // Set initial clause LBD
 #if LBD_BASED_CLAUSE_DELETION
-        const int clauseLBD = lbd(ca[cr]);
+        const int clauseLBD = computeLBD(ca[cr]);
         ca[cr].activity() = clauseLBD;
         lbd_total += clauseLBD;
 #endif
