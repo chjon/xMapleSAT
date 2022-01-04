@@ -115,6 +115,37 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
     } else {
         CRef cr = ca.alloc(ext_def_clause, true);
 
+        int lbd = computeLBD(ca[cr]);
+        // int  id = 0;
+        ca[cr].set_lbd(lbd);
+
+        // //duplicate learnts 
+        // if (lbd <= static_cast<int>(max_lbd_dup)){                        
+        //     std::vector<uint32_t> tmp;
+        //     for (int i = 0; i < ext_def_clause.size(); i++)
+        //         tmp.push_back(ext_def_clause[i].x);
+        //     id = is_duplicate(tmp);             
+        //     if (id == static_cast<int>(min_number_of_learnts_copies +1)){
+        //         duplicates_added_conflicts++;                        
+        //     }                    
+        //     if (id == static_cast<int>(min_number_of_learnts_copies)){
+        //         duplicates_added_tier2++;
+        //     }                                        
+        // }
+        // //duplicate learnts
+
+        // if ((lbd <= core_lbd_cut) || (id == static_cast<int>(min_number_of_learnts_copies+1))){
+        //     learnts_core.push(cr);
+        //     ca[cr].mark(CORE);
+        // }else if ((lbd <= 6)||(id == static_cast<int>(min_number_of_learnts_copies))){
+        //     learnts_tier2.push(cr);
+        //     ca[cr].mark(TIER2);
+        //     ca[cr].touched() = conflicts;
+        // }else{
+        //     learnts_local.push(cr);
+        //     claBumpActivity(ca[cr]); }
+
+
         // Store clause in correct database
         db.push_back(cr);
         attachClause(cr);
@@ -126,9 +157,8 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
 
         // Set initial clause LBD
 #if LBD_BASED_CLAUSE_DELETION
-        const int clauseLBD = computeLBD(ca[cr]);
-        ca[cr].activity() = clauseLBD;
-        lbd_total += clauseLBD;
+        ca[cr].activity() = lbd;
+        lbd_total += lbd;
 #endif
 
         // Propagate extension variable
@@ -141,7 +171,7 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
         }
 
         if (allFalsified) {
-            uncheckedEnqueue(ext_def_clause[0], cr);
+            uncheckedEnqueue(ext_def_clause[0], 0, cr);
         }
     }
 }
@@ -212,6 +242,7 @@ void Solver::addExtVars() {
     total_ext_vars += new_variables.size();
     extBuffer.clear();
     er_prioritize(new_variables);
+    max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
     extTimerStop(ext_add_overhead);
 }
 

@@ -215,10 +215,10 @@ public:
     bool    addClause (Lit p, Lit q, Lit r);                    // Add a ternary clause to the solver.
     bool    addClause_(      vec<Lit>& ps);                     // Add a clause to the solver without making superflous internal copy. Will
                                                                 // change the passed vector 'ps'.
-    bool    addClauseToDB(vec<CRef>& db, Lit p);                // Add a unit clause to the solver. 
-    bool    addClauseToDB(vec<CRef>& db, Lit p, Lit q);         // Add a binary clause to the solver. 
-    bool    addClauseToDB(vec<CRef>& db, Lit p, Lit q, Lit r);  // Add a ternary clause to the solver. 
-    bool    addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps);   // Add a clause to a specific clause DB without making superflous internal
+    // bool    addClauseToDB(vec<CRef>& db, Lit p);                // Add a unit clause to the solver. 
+    // bool    addClauseToDB(vec<CRef>& db, Lit p, Lit q);         // Add a binary clause to the solver. 
+    // bool    addClauseToDB(vec<CRef>& db, Lit p, Lit q, Lit r);  // Add a ternary clause to the solver. 
+    // bool    addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps);   // Add a clause to a specific clause DB without making superflous internal
                                                                 // copy. Will change the passed vector 'ps'.
 
     // Solving:
@@ -907,15 +907,15 @@ inline void Solver::checkGarbage(double gf){
 
 // NOTE: enqueue does not set the ok flag! (only public methods do)
 inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, decisionLevel(), from), true); }
-inline bool     Solver::addClause_      (      vec<Lit>& ps)    { return addClauseToDB(clauses, ps); }
+// inline bool     Solver::addClause_      (      vec<Lit>& ps)    { return addClauseToDB(clauses, ps); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p)                { add_tmp.clear(); add_tmp.push(p); return addClauseToDB(db, add_tmp); }
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q)         { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClauseToDB(db, add_tmp); }
-inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClauseToDB(db, add_tmp); }
+// inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p)                { add_tmp.clear(); add_tmp.push(p); return addClauseToDB(db, add_tmp); }
+// inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q)         { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClauseToDB(db, add_tmp); }
+// inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClauseToDB(db, add_tmp); }
 inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); return addExtDefClause(db, add_tmp); }
 inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a, Lit b) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); add_tmp.push(b); return addExtDefClause(db, add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const {

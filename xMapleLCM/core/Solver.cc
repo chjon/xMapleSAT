@@ -1021,7 +1021,7 @@ Var Solver::newVar(bool sign, bool dvar)
     return v;
 }
 
-bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
+bool Solver::addClause_(vec<Lit>& ps) {
     assert(decisionLevel() == 0);
     if (!ok) return false;
 
@@ -1063,11 +1063,11 @@ bool Solver::addClauseToDB(vec<CRef>& clauseDB, vec<Lit>& ps) {
         return ok = (propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
-        clauseDB.push(cr);
+        clauses.push(cr);
         attachClause(cr);
-        extTimerStart();
-        user_er_filter_incremental(cr);
-        extTimerStop(ext_sel_overhead);
+        // extTimerStart();
+        // user_er_filter_incremental(cr);
+        // extTimerStop(ext_sel_overhead);
     }
 
     return true;
@@ -1749,7 +1749,7 @@ void Solver::reduceDB()
         Clause& c = ca[learnts_local[i]];
         if (c.mark() == LOCAL)
             if (c.removable() && !locked(c) && i < limit) {
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
                 extTimerStart();
                 user_er_filter_delete_incremental(learnts_local[i]);
                 extTimerStop(ext_delC_overhead);
@@ -1762,7 +1762,7 @@ void Solver::reduceDB()
     }
     learnts_local.shrink(i - j);
 
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
     extTimerStart();
     user_er_filter_delete_flush();
     extTimerStop(ext_delC_overhead);
@@ -2096,13 +2096,13 @@ lbool Solver::search(int& nof_conflicts)
                 uncheckedEnqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
-                int numExtVarsInClause = getNumExtVars(ca[cr]);
-                double extFrac = numExtVarsInClause / (double) learnt_clause.size();
-                extfrac_total += extFrac;
+                // int numExtVarsInClause = getNumExtVars(ca[cr]);
+                // double extFrac = numExtVarsInClause / (double) learnt_clause.size();
+                // extfrac_total += extFrac;
 
-                if (numExtVarsInClause > 0) {
-                    learnt_extclauses++;
-                }
+                // if (numExtVarsInClause > 0) {
+                //     learnt_extclauses++;
+                // }
 
                 ca[cr].set_lbd(lbd);
                 //duplicate learnts 
@@ -2133,7 +2133,7 @@ lbool Solver::search(int& nof_conflicts)
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
 
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
                 extTimerStart();
                 user_er_filter_incremental(cr);
                 extTimerStop(ext_sel_overhead);
@@ -2188,7 +2188,7 @@ lbool Solver::search(int& nof_conflicts)
                 restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > global_lbd_sum / conflicts_VSIDS);
                 cached = true;
             }
-            if (restart /*|| !withinBudget()*/){
+            if (restart || !withinBudget()){
                 lbd_queue.clear();
                 cached = false;
                 // Reached bound on number of conflicts:
@@ -2231,8 +2231,10 @@ lbool Solver::search(int& nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
-                if (isExtVar(var(next)))
+                if (isExtVar(var(next))) {
                     branchOnExt++;
+                    // printf("d %s%d\n", sign(next) ? "-" : "", var(next));
+                }
             }
 
             // Increase decision level and enqueue 'next'
@@ -2340,8 +2342,9 @@ lbool Solver::solve_()
     add_tmp.clear();
 
     VSIDS = true;
+    originalNumVars = nVars();
     int init = 10000;
-    while (status == l_Undef && init > 0 /*&& withinBudget()*/)
+    while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
     VSIDS = false;
 

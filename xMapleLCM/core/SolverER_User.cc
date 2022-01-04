@@ -135,6 +135,13 @@ std::vector<CRef> Solver::user_er_select_activity(Solver& s, unsigned int numCla
     // Find the variables in the clauses with the top k highest activities
     std::vector<CRef> clauseWindow;
 
+    // Iterate through all clauses
+    s.er_filteredClauses.clear();
+    for (int i = 0; i < s.clauses      .size(); i++) s.user_er_filter_incremental(s.clauses      [i]);
+    for (int i = 0; i < s.learnts_core .size(); i++) s.user_er_filter_incremental(s.learnts_core [i]);
+    for (int i = 0; i < s.learnts_tier2.size(); i++) s.user_er_filter_incremental(s.learnts_tier2[i]);
+    // for (int i = 0; i < s.learnts_local.size(); i++) s.user_er_filter_incremental(s.learnts_local[i]);
+
     // Use incremental filtered clause list
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     for (std::vector<CRef>::iterator it = s.er_filteredClauses.begin(); it != s.er_filteredClauses.end(); it++)
@@ -205,6 +212,13 @@ std::vector<CRef> Solver::user_er_select_activity2(Solver& s, unsigned int numCl
 
     vec<CRef> clauses;
     vec<CRef> filteredClauses;
+
+    // Iterate through all clauses
+    s.er_filteredClauses.clear();
+    for (int i = 0; i < s.clauses      .size(); i++) s.user_er_filter_incremental(s.clauses      [i]);
+    for (int i = 0; i < s.learnts_core .size(); i++) s.user_er_filter_incremental(s.learnts_core [i]);
+    for (int i = 0; i < s.learnts_tier2.size(); i++) s.user_er_filter_incremental(s.learnts_tier2[i]);
+    // for (int i = 0; i < s.learnts_local.size(); i++) s.user_er_filter_incremental(s.learnts_local[i]);
 
     // Use incremental filtered clause list
 #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
