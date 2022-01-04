@@ -163,15 +163,17 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
 
         // Propagate extension variable
         bool allFalsified = true;
+        int highestLevel = 0;
         for (int i = 1; i < ext_def_clause.size(); i++) {
             if (value(ext_def_clause[i]) != l_False) {
                 allFalsified = false;
                 break;
             }
+            highestLevel = std::max(highestLevel, level(var(ext_def_clause[i])));
         }
 
         if (allFalsified) {
-            uncheckedEnqueue(ext_def_clause[0], 0, cr);
+            uncheckedEnqueue(ext_def_clause[0], highestLevel, cr);
         }
     }
 }
