@@ -109,7 +109,7 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
 
 // Add clause to extension definitions
 // Assumes that the first literal is the new extension variable
-void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
+int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
     if (ext_def_clause.size() == 1) {
         uncheckedEnqueue(ext_def_clause[0]);
     } else {
@@ -147,6 +147,7 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
 
 
         // Store clause in correct database
+        ca[cr].mark(CORE);
         db.push_back(cr);
         attachClause(cr);
 
@@ -162,26 +163,39 @@ void Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
 #endif
 
         // Propagate extension variable
+        int max_i = 1;
         bool allFalsified = true;
-        int highestLevel = 0;
         for (int i = 1; i < ext_def_clause.size(); i++) {
             if (value(ext_def_clause[i]) != l_False) {
                 allFalsified = false;
                 break;
             }
-            highestLevel = std::max(highestLevel, level(var(ext_def_clause[i])));
+            
+            // Find the first literal assigned at the next-highest level:
+            if (level(var(ext_def_clause[i])) > level(var(ext_def_clause[max_i])))
+                max_i = i;
         }
 
         if (allFalsified) {
-            uncheckedEnqueue(ext_def_clause[0], highestLevel, cr);
+            uncheckedEnqueue(ext_def_clause[0], level(var(ext_def_clause[max_i])), cr);
+
+            // Swap-in this literal at index 1:
+            Lit p                 = ext_def_clause[max_i];
+            ext_def_clause[max_i] = ext_def_clause[1];
+            ext_def_clause[1]     = p;
+            
+            return level(var(p));
         }
+
     }
+    return decisionLevel();
 }
 
 inline std::vector<Var> Solver::er_add(
     std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
     struct ExtDefMap& er_def_map,
-    const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
+    const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap,
+    int& out_bt_level
 ) {
     // Add extension variables
     // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
@@ -195,6 +209,7 @@ inline std::vector<Var> Solver::er_add(
     }
 
     // Add extension clauses
+    int bt_level = decisionLevel();
     for (std::vector< std::pair< Var, std::pair<Lit, Lit> > >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
         // Get literals
         Lit x = mkLit(i->first);
@@ -207,12 +222,12 @@ inline std::vector<Var> Solver::er_add(
 
         // Create extension clauses and add them to the extension definition database
         std::vector<CRef> defs;
-        addExtDefClause(defs, ~x,  a,  b);
-        addExtDefClause(defs,  x, ~a    );
-        addExtDefClause(defs,  x,     ~b);
+        bt_level = std::min(bt_level, addExtDefClause(defs, ~x,  a,  b));
+        bt_level = std::min(bt_level, addExtDefClause(defs,  x, ~a    ));
+        bt_level = std::min(bt_level, addExtDefClause(defs,  x,     ~b));
         er_def_db.insert(std::make_pair(i->first, defs));
     }
-
+    if (bt_level != decisionLevel()) out_bt_level = bt_level;
     return new_variables;
 }
 
@@ -237,15 +252,17 @@ void Solver::generateExtVars (
 // Add extension variables to our data structures and prioritize branching on them.
 // This calls a heuristic function which is responsible for identifying extension variable
 // definitions and adding the appropriate clauses and variables.
-void Solver::addExtVars() {
+int Solver::addExtVars() {
     // Add the extension variables to our data structures
+    int bt_level = -1;
     extTimerStart();
-    const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer);
+    const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer, bt_level);
     total_ext_vars += new_variables.size();
     extBuffer.clear();
     er_prioritize(new_variables);
     max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
     extTimerStop(ext_add_overhead);
+    return bt_level;
 }
 
 static inline bool containsAny(Clause& c, const std::tr1::unordered_set<Var>& varSet) {

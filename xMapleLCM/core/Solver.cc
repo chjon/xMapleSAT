@@ -2161,7 +2161,12 @@ lbool Solver::search(int& nof_conflicts)
 #endif
 #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
                 // Add extension variables if there are any in the buffer
-                if (extBuffer.size()) addExtVars();
+                if (extBuffer.size()) {
+                    int bt_level = addExtVars();
+                    if (bt_level > 0) {
+                        cancelUntil(bt_level - 1);
+                    }
+                }
 #endif
 
             if (VSIDS) varDecayActivity();

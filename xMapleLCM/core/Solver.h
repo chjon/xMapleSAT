@@ -594,17 +594,19 @@ protected:
 
     // Description:
     //   Add extension variables from the extension definition buffer to our data structures and prioritize branching on them.
-    void addExtVars ();
-    void addExtDefClause(std::vector<CRef>& db, Lit x, Lit a);
-    void addExtDefClause(std::vector<CRef>& db, Lit x, Lit a, Lit b);
-    void addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause);
+    // Return value: the required backtrack level (-1 if no backtracking required)
+    int addExtVars ();
+    int addExtDefClause(std::vector<CRef>& db, Lit x, Lit a);
+    int addExtDefClause(std::vector<CRef>& db, Lit x, Lit a, Lit b);
+    int addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause);
 
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(
         std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
         struct ExtDefMap& er_def_map,
-        const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap
+        const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap,
+        int& bt_level
     );
 
     // Description:
@@ -916,8 +918,8 @@ inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(
 // inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p)                { add_tmp.clear(); add_tmp.push(p); return addClauseToDB(db, add_tmp); }
 // inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q)         { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClauseToDB(db, add_tmp); }
 // inline bool     Solver::addClauseToDB   (vec<CRef>& db, Lit p, Lit q, Lit r)  { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClauseToDB(db, add_tmp); }
-inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); return addExtDefClause(db, add_tmp); }
-inline void     Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a, Lit b) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); add_tmp.push(b); return addExtDefClause(db, add_tmp); }
+inline int      Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); return addExtDefClause(db, add_tmp); }
+inline int      Solver::addExtDefClause (std::vector<CRef>& db, Lit x, Lit a, Lit b) { add_tmp.clear(); add_tmp.push(x); add_tmp.push(a); add_tmp.push(b); return addExtDefClause(db, add_tmp); }
 inline bool     Solver::locked          (const Clause& c) const {
     int i = c.size() != 2 ? 0 : (value(c[0]) == l_True ? 0 : 1);
     return value(c[i]) == l_True && reason(var(c[i])) != CRef_Undef && ca.lea(reason(var(c[i]))) == &c;
