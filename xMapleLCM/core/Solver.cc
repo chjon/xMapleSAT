@@ -1403,10 +1403,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
 
     max_literals += out_learnt.size();
     out_learnt.shrink(i - j);
-#if EXTENSION_SUBSTITUTION
-    // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-    substituteExt(out_learnt);
-# endif
     tot_literals += out_learnt.size();
 
     out_lbd = computeLBD(out_learnt);
@@ -1430,6 +1426,13 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
         out_learnt[1]     = p;
         out_btlevel       = level(var(p));
     }
+
+#if EXTENSION_SUBSTITUTION
+    // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+    //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+    //    because extension variables may be unassigned.
+    substituteExt(out_learnt);
+# endif
 
     if (VSIDS){
         for (int i = 0; i < add_tmp.size(); i++){
