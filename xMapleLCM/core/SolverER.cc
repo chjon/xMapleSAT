@@ -146,10 +146,6 @@ int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
         //     claBumpActivity(ca[cr]); }
 
 
-        // Store clause in correct database
-        ca[cr].mark(CORE);
-        db.push_back(cr);
-        attachClause(cr);
 
         // Clauses containing extension variables should go in a separate database
         int numExtVarsInClause = getNumExtVars(ca[cr]);
@@ -162,31 +158,38 @@ int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
         lbd_total += lbd;
 #endif
 
+        // Mark clause as "core" to prevent removal and store it in the database
+        ca[cr].mark(CORE);
+        // ca[cr].removable(false);
+        db.push_back(cr);
+        attachClause(cr);
+
         // Propagate extension variable
-        int max_i = 1;
-        bool allFalsified = true;
-        for (int i = 1; i < ext_def_clause.size(); i++) {
-            if (value(ext_def_clause[i]) != l_False) {
-                allFalsified = false;
-                break;
+        if (value(ext_def_clause[0]) == l_Undef) {
+            int max_i = 1;
+            bool allFalsified = true;
+            for (int i = 1; i < ext_def_clause.size(); i++) {
+                if (value(ext_def_clause[i]) != l_False) {
+                    allFalsified = false;
+                    break;
+                }
+                
+                // Find the first literal assigned at the next-highest level:
+                if (level(var(ext_def_clause[i])) > level(var(ext_def_clause[max_i])))
+                    max_i = i;
             }
-            
-            // Find the first literal assigned at the next-highest level:
-            if (level(var(ext_def_clause[i])) > level(var(ext_def_clause[max_i])))
-                max_i = i;
+
+            if (allFalsified) {
+                uncheckedEnqueue(ext_def_clause[0], level(var(ext_def_clause[max_i])), cr);
+
+                // Swap-in this literal at index 1:
+                Lit p                 = ext_def_clause[max_i];
+                ext_def_clause[max_i] = ext_def_clause[1];
+                ext_def_clause[1]     = p;
+                
+                return level(var(p));
+            }
         }
-
-        if (allFalsified) {
-            uncheckedEnqueue(ext_def_clause[0], level(var(ext_def_clause[max_i])), cr);
-
-            // Swap-in this literal at index 1:
-            Lit p                 = ext_def_clause[max_i];
-            ext_def_clause[max_i] = ext_def_clause[1];
-            ext_def_clause[1]     = p;
-            
-            return level(var(p));
-        }
-
     }
     return decisionLevel();
 }
