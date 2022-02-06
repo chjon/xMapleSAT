@@ -1189,6 +1189,21 @@ void Solver::cancelUntil(int bLevel) {
 		{
 			trail.push_(add_tmp[nLitId]);
 		}
+        // if (trail.size() > 25834 && var(trail[25834]) == 56065) {
+        //     printf("Pre-size: %d\n", trail.size() - add_tmp.size());
+        //     for (int iii = 0; iii < trail.size(); iii++) {
+        //         if (var(trail[iii]) == 51290) {
+        //             printf("cu: Found 51290 at %d\n", iii);
+        //         }
+        //     }
+        // }
+        // if (trail.size() > 25743 && var(trail[25743]) == 51290) {
+        //     for (int iii = 0; iii < trail.size(); iii++) {
+        //         if (var(trail[iii]) == 56065) {
+        //             printf("cu: Found 56065 at %d\n", iii);
+        //         }
+        //     }
+        // }
 		
 		add_tmp.clear();
     } }
@@ -1426,13 +1441,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
         out_learnt[1]     = p;
         out_btlevel       = level(var(p));
     }
-
-#if EXTENSION_SUBSTITUTION
-    // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-    //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
-    //    because extension variables may be unassigned.
-    substituteExt(out_learnt);
-# endif
 
     if (VSIDS){
         for (int i = 0; i < add_tmp.size(); i++){
@@ -2001,6 +2009,33 @@ CRef Solver::propagateLits(vec<Lit>& lits) {
     }
     return CRef_Undef;
 }
+
+// void Solver::checkTrailInvariant() {
+//     // Periodically check candidate invariant - do all literals appear before their respective implied literals?
+//     // i.e., if a implies b by unit propagation under some partial assignment, does a always
+//     // appear on the trail before b?
+
+//     if (conflicts < 43838) return;
+//     bool* tmp_seen = new bool[nVars()];
+//     // Initially, nothing is seen
+//     for (int i = 0; i < nVars(); i++)
+//         tmp_seen[i] = false;
+
+//     // Check reason vars
+//     for (int i = 0; i < trail.size(); i++) {
+//         Var v = var(trail[i]);
+//         tmp_seen[v] = true;
+
+//         if (reason(v) != CRef_Undef) {
+//             Clause& c = ca[reason(v)];
+//             for (int j = 0; j < c.size(); j++) {
+//                 assert(tmp_seen[var(c[j])]);
+//             }
+//         }
+//     }
+//     delete[] tmp_seen;
+// }
+
 /*_________________________________________________________________________________________________
 |
 |  search : (nof_conflicts : int) (params : const SearchParams&)  ->  [lbool]
@@ -2022,18 +2057,6 @@ lbool Solver::search(int& nof_conflicts)
     bool        cached = false;
     starts++;
 
-#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
-    // Only try generating more extension variables if there aren't any buffered already
-    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
-        prevExtensionConflict = conflicts;
-        generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-    }
-#endif
-#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
-    // Add extension variables if there are any in the buffer
-    if (extBuffer.size()) addExtVars();
-#endif
-
     // simplify
     //
     if (conflicts >= static_cast<unsigned int>(curSimplify * nbconfbeforesimplify)){
@@ -2048,6 +2071,19 @@ lbool Solver::search(int& nof_conflicts)
         curSimplify = (conflicts / nbconfbeforesimplify) + 1;
         nbconfbeforesimplify += incSimplify;
     }
+
+    // Maybe introduce extension variables here
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+    // Only try generating more extension variables if there aren't any buffered already
+    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
+        prevExtensionConflict = conflicts;
+        generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
+    }
+#endif
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
+    // Add extension variables if there are any in the buffer
+    if (extBuffer.size()) addExtVars();
+#endif
 
     for (;;){
         CRef confl = propagate();
@@ -2088,6 +2124,42 @@ lbool Solver::search(int& nof_conflicts)
 				cancelUntil(backtrack_level);
 			}
 
+            // Check if one literal is undef, the rest are false
+            // int num_undef = 0;
+            // for (int i = 0; i < learnt_clause.size(); i++) {
+            //     lbool val = value(learnt_clause[i]);
+            //     assert(val != l_True);
+            //     if (val == l_Undef) num_undef++;
+            // }
+            // assert(num_undef == 1);
+
+            // Do substitution here?
+#if EXTENSION_SUBSTITUTION
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+            //    because extension variables may be unassigned.
+
+            // if (conflicts == 43838) {
+            //     printf("Just before substitution: ( ");
+            //     for (int i = 0; i < learnt_clause.size(); i++) {
+            //         printf("%s%d ", sign(learnt_clause[i]) ? "-" : "", var(learnt_clause[i]));
+            //     }
+            //     printf(")\n");
+            // }
+
+            substituteExt(learnt_clause);
+
+            // if (conflicts == 43838) {
+            //     printf("Just after substitution:  ( ");
+            //     for (int i = 0; i < learnt_clause.size(); i++) {
+            //         printf("%s%d ", sign(learnt_clause[i]) ? "-" : "", var(learnt_clause[i]));
+            //     }
+            //     printf(")\n");
+
+            //     printf("val(46772)=%d, val(46773)=%d, val(56065)=%d\n", value(46772), value(46773), value(56065));
+            // }
+
+# endif
             lbd--;
             if (VSIDS){
                 cached = false;
@@ -2141,8 +2213,9 @@ lbool Solver::search(int& nof_conflicts)
                 user_er_filter_incremental(cr);
                 extTimerStop(ext_sel_overhead);
 #endif
-
+                // checkTrailInvariant();
                 uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
+                // checkTrailInvariant();
 #ifdef PRINT_OUT
                 std::cout << "new " << ca[cr] << "\n";
                 std::cout << "ci " << learnt_clause[0] << " l " << backtrack_level << "\n";
@@ -2551,9 +2624,14 @@ void Solver::relocAll(ClauseAllocator& to)
         ca.reloc(learnts_local[i], to);
     for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
         std::vector<CRef>& cs = it->second;
-        for (unsigned int i = 0; i < cs.size(); i++) {
-            ca.reloc(cs[i], to); // All extension definitions
+        unsigned int i, j;
+        for (i = j = 0; i < cs.size(); i++) {
+            // Reloc following example of clauses
+            if (ca[cs[i]].mark() != 1){
+                ca.reloc(cs[i], to);
+                cs[j++] = cs[i]; }
         }
+        cs.erase(cs.begin() + j, cs.end());
     }
     user_er_reloc(to);
 

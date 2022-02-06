@@ -640,7 +640,9 @@ protected:
     void substituteExt (vec<Lit>& out_learnt);
 
     // Internal helper for substituteExt
-    static void er_substitute(vec<Lit>& out_learnt, struct ExtDefMap& extVarDefs);
+    // Return value:
+    //   The set of extension variables which were substituted into the clause
+    static std::vector<Lit> er_substitute(vec<Lit>& out_learnt, struct ExtDefMap& extVarDefs);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // EXTENDED RESOLUTION - user functions/heuristics
@@ -760,6 +762,7 @@ protected:
     // Functions for measuring extended resolution overhead
     void   extTimerStart();
     void   extTimerStop(struct rusage& ext_overhead);
+    void   checkTrailInvariant();
 
 
     template<class V> int computeLBD(const V& c) {

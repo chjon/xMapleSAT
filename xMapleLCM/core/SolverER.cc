@@ -24,14 +24,15 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
     for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
 }
 
-inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
+inline std::vector<Lit> Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
     // Get indices of all literals that appear in an extension definition
     std::vector<int> defLitIndex;
+    std::vector<Lit> substituted;
     for (int i = 0; i < clause.size(); i++) {
         // Check if any extension variables are defined over this literal
         if (extVarDefs.contains(clause[i])) defLitIndex.push_back(i);
     }
-    if (defLitIndex.size() <= 1) return;
+    if (defLitIndex.size() <= 1) return substituted;
 
     // Check each pair of literals that appear in an extension definition
     int replaced = 0;
@@ -45,6 +46,7 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs
             if (it == extVarDefs.end()) continue;
 
             // Replace the first literal with the extension literal and mark the second literal as invalid
+            substituted.push_back(it->second);
             clause[defLitIndex[i]] = it->second;
             clause[defLitIndex[j]] = lit_Undef;
             replaced++;
@@ -59,6 +61,7 @@ inline void Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs
         }
         clause.shrink(replaced);
     }
+    return substituted;
 }
 
 void Solver::substituteExt(vec<Lit>& out_learnt) {
@@ -79,10 +82,42 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
             if (clause_lbd >= ext_min_lbd && clause_lbd <= ext_max_lbd)
 #endif
             {
-                er_substitute(out_learnt, extVarDefs);
+                std::vector<Lit> extToPropagate = er_substitute(out_learnt, extVarDefs);
+
+                // Extension variables might need to be propagated!
+                // Their definition literals could be set without also setting the value of the extension variable
+                // Propagate any extension variables that need to be propagated
+                // This should be safe after backtracking
+                for (unsigned int i = 0; i < extToPropagate.size(); i++) {
+                    Lit x = extToPropagate[i];
+                    if (value(x) == l_Undef) {
+                        // Check if any definition clauses are asserting
+                        // We have to iterate through the clauses because we need the CRef for the reason clause when we propagate
+                        std::vector<CRef> defClauses = extDefs.find(var(x))->second;
+                        for (unsigned int j = 0; j < defClauses.size(); j++) {
+                            Clause& c = ca[defClauses[j]];
+                            
+                            // Check if the clause is asserting
+                            Lit falseLit = lit_Undef;
+                            int numFalse = 0;
+                            for (int k = 0; k < c.size(); k++) {
+                                if (value(c[k]) == l_False) {
+                                    falseLit = c[k];
+                                    numFalse++;
+                                }
+                            }
+
+                            if (numFalse == c.size() - 1) {
+                                uncheckedEnqueue(x, level(var(falseLit)), defClauses[j]);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+
 
     extTimerStop(ext_sub_overhead);
 }
@@ -110,86 +145,64 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
 // Add clause to extension definitions
 // Assumes that the first literal is the new extension variable
 int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
+    // Try just using the default?
+    // addClause_(ext_def_clause);
+
     if (ext_def_clause.size() == 1) {
         uncheckedEnqueue(ext_def_clause[0]);
     } else {
         CRef cr = ca.alloc(ext_def_clause, true);
-
         int lbd = computeLBD(ca[cr]);
-        // int  id = 0;
         ca[cr].set_lbd(lbd);
 
-        // //duplicate learnts 
-        // if (lbd <= static_cast<int>(max_lbd_dup)){                        
-        //     std::vector<uint32_t> tmp;
-        //     for (int i = 0; i < ext_def_clause.size(); i++)
-        //         tmp.push_back(ext_def_clause[i].x);
-        //     id = is_duplicate(tmp);             
-        //     if (id == static_cast<int>(min_number_of_learnts_copies +1)){
-        //         duplicates_added_conflicts++;                        
-        //     }                    
-        //     if (id == static_cast<int>(min_number_of_learnts_copies)){
-        //         duplicates_added_tier2++;
-        //     }                                        
-        // }
-        // //duplicate learnts
-
-        // if ((lbd <= core_lbd_cut) || (id == static_cast<int>(min_number_of_learnts_copies+1))){
-        //     learnts_core.push(cr);
-        //     ca[cr].mark(CORE);
-        // }else if ((lbd <= 6)||(id == static_cast<int>(min_number_of_learnts_copies))){
-        //     learnts_tier2.push(cr);
-        //     ca[cr].mark(TIER2);
-        //     ca[cr].touched() = conflicts;
-        // }else{
-        //     learnts_local.push(cr);
-        //     claBumpActivity(ca[cr]); }
-
-
-
-        // Clauses containing extension variables should go in a separate database
+        // Compute some stats
         int numExtVarsInClause = getNumExtVars(ca[cr]);
         double extFrac = numExtVarsInClause / (double) ext_def_clause.size();
         extfrac_total += extFrac;
 
         // Set initial clause LBD
-#if LBD_BASED_CLAUSE_DELETION
-        ca[cr].activity() = lbd;
-        lbd_total += lbd;
-#endif
+        // lbd_total += lbd;
 
-        // Mark clause as "core" to prevent removal and store it in the database
-        ca[cr].mark(CORE);
-        // ca[cr].removable(false);
+        // Add clause to db
+        // clauses.push(cr);
         db.push_back(cr);
+
         attachClause(cr);
 
-        // Propagate extension variable
+        // Do we ever actually need to propagate here?
+        // BCP works by iterating through the literals on the trail 
+        //
+        // For ER_ADD_LOCATION_AFTER_RESTART:
+        //    This means there are unit literals on the trail
+        //    propagate() should handle this automatically
+        //    
+        // For ER_ADD_LOCATION_AFTER_CONFLICT:
+        //    x = a v b: (-x a b)(x -a)(x -b)
+        //    BCP will miss this if a and b were already set earlier
+        //    We should backtrack to the appropriate level (max(lvl(a), lvl(b))) if we want to propagate, and
+        //    let propagate() handle it for us
+
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
+        // Determine whether we need to propagate extension variable
         if (value(ext_def_clause[0]) == l_Undef) {
-            int max_i = 1;
+            int max_lvl = 0;
             bool allFalsified = true;
             for (int i = 1; i < ext_def_clause.size(); i++) {
                 if (value(ext_def_clause[i]) != l_False) {
                     allFalsified = false;
                     break;
                 }
-                
-                // Find the first literal assigned at the next-highest level:
-                if (level(var(ext_def_clause[i])) > level(var(ext_def_clause[max_i])))
-                    max_i = i;
+
+                // Find the backtrack level in case we need to propagate
+                int lvl = level(var(ext_def_clause[i]));
+                if (lvl > max_lvl) max_lvl = lvl;
             }
 
             if (allFalsified) {
-                uncheckedEnqueue(ext_def_clause[0], level(var(ext_def_clause[max_i])), cr);
-
-                // Swap-in this literal at index 1:
-                Lit p                 = ext_def_clause[max_i];
-                ext_def_clause[max_i] = ext_def_clause[1];
-                ext_def_clause[1]     = p;
-                
-                return level(var(p));
+                return max_lvl;
             }
         }
+#endif
     }
     return decisionLevel();
 }
