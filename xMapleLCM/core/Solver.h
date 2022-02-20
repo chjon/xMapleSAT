@@ -600,6 +600,9 @@ protected:
     int addExtDefClause(std::vector<CRef>& db, Lit x, Lit a, Lit b);
     int addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause);
 
+    // Move unassigned literals to the beginning of the clause
+    void shiftUnassigned(vec<Lit>& clause);
+
     // Internal helpers for addExtVars
     void er_prioritize(const std::vector<Var>& toPrioritize);
     std::vector<Var> er_add(

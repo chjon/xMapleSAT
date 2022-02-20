@@ -26,9 +26,12 @@ static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vect
 
 inline std::vector<Lit> Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
     // Get indices of all literals that appear in an extension definition
+    std::set<Lit> clauseLits;
     std::vector<int> defLitIndex;
     std::vector<Lit> substituted;
     for (int i = 0; i < clause.size(); i++) {
+        clauseLits.insert(clause[i]);
+
         // Check if any extension variables are defined over this literal
         if (extVarDefs.contains(clause[i])) defLitIndex.push_back(i);
     }
@@ -44,6 +47,10 @@ inline std::vector<Lit> Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap
             // Check if any extension variables are defined over this literal pair
             std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[defLitIndex[i]], clause[defLitIndex[j]]);
             if (it == extVarDefs.end()) continue;
+
+            // Check if the extension variable already occurs in the clause
+            std::set<Lit>::iterator it2 = clauseLits.find(it->second);
+            if (it2 == clauseLits.end()) continue;
 
             // Replace the first literal with the extension literal and mark the second literal as invalid
             substituted.push_back(it->second);
@@ -82,6 +89,7 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
             if (clause_lbd >= ext_min_lbd && clause_lbd <= ext_max_lbd)
 #endif
             {
+                // er_substitute returns a list of every extension literal that was substituted into the clause
                 std::vector<Lit> extToPropagate = er_substitute(out_learnt, extVarDefs);
 
                 // Extension variables might need to be propagated!
@@ -89,29 +97,58 @@ void Solver::substituteExt(vec<Lit>& out_learnt) {
                 // Propagate any extension variables that need to be propagated
                 // This should be safe after backtracking
                 for (unsigned int i = 0; i < extToPropagate.size(); i++) {
-                    Lit x = extToPropagate[i];
-                    if (value(x) == l_Undef) {
+                    if (value(extToPropagate[i]) == l_Undef) {
                         // Check if any definition clauses are asserting
                         // We have to iterate through the clauses because we need the CRef for the reason clause when we propagate
-                        std::vector<CRef> defClauses = extDefs.find(var(x))->second;
+                        std::vector<CRef> defClauses = extDefs.find(var(extToPropagate[i]))->second;
                         for (unsigned int j = 0; j < defClauses.size(); j++) {
                             Clause& c = ca[defClauses[j]];
-                            
-                            // Check if the clause is asserting
+
+                            // Find the extension variable and count the number of falsified non-extension literals
+                            Lit extLit   = lit_Undef;
                             Lit falseLit = lit_Undef;
                             int numFalse = 0;
-                            for (int k = 0; k < c.size(); k++) {
-                                if (value(c[k]) == l_False) {
+                            for (int k = 0; k < c.size(); k++) { // Definition clauses have size either 2 or 3
+                                if (isExtVar(var(c[k]))) {
+                                    extLit = c[k];
+                                } else if (value(c[k]) == l_False) {
                                     falseLit = c[k];
                                     numFalse++;
                                 }
                             }
 
-                            if (numFalse == c.size() - 1) {
-                                uncheckedEnqueue(x, level(var(falseLit)), defClauses[j]);
+                            // The clause will only be asserting if every literal but one is falsified
+                            // This is an extension definition clause, so extLit should never be lit_Undef
+                            assert(extLit != lit_Undef);
+                            if (value(extLit) == l_Undef && numFalse == c.size() - 1) {
+                                uncheckedEnqueue(extLit, level(var(falseLit)), defClauses[j]);
                                 break;
                             }
                         }
+                    }
+                }
+
+                // shiftUnassigned(out_learnt);
+
+                // Shift unassigned literal to the beginning of the clause
+                // There should be exactly one unassigned literal
+                int i, j;
+                for (i = j = 0; i < out_learnt.size(); i++) {
+                    if (value(out_learnt[i]) == l_Undef) {
+                        Lit tmp = out_learnt[i];
+                        out_learnt[i] = out_learnt[j];
+                        out_learnt[j] = tmp;
+                        j++;
+                    }
+                }
+                assert(j == 1);
+
+                // Ensure the highest level is in index 1
+                for (i = 1; i < out_learnt.size(); i++) {
+                    if (level(var(out_learnt[i]) > level(var(out_learnt[1])))) {
+                        Lit tmp = out_learnt[1];
+                        out_learnt[1] = out_learnt[i];
+                        out_learnt[i] = tmp;
                     }
                 }
             }
@@ -142,6 +179,39 @@ inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
     }
 }
 
+void Solver::shiftUnassigned(vec<Lit>& clause) {
+    if (clause.size() == 1) return;
+
+    // Shift all unassigned literals to the beginning of the clause
+    int i, j;
+    for (i = j = 0; i < clause.size(); i++) {
+        if (value(clause[i]) == l_Undef) {
+            Lit tmp = clause[i]; clause[i] = clause[j]; clause[j] = tmp;
+            j++;
+        } else if (value(clause[i]) == l_True) {
+            printf("Clause is satisfied!\n");
+        }
+    }
+
+    const int num_unassigned = j;
+    if (num_unassigned == 0) {
+        // Ensure the highest level is in index 1 and the second-highest level is in index 0
+        for (i = 0; i < clause.size(); i++) {
+            if (level(var(clause[i])) >= level(var(clause[1]))) {
+                Lit tmp = clause[0];
+                clause[0] = clause[1];
+                clause[1] = clause[i];
+                clause[i] = tmp;
+            }
+        }
+    } else if (num_unassigned == 1) {
+        // Ensure the first literal has a value
+        Lit tmp = clause[0];
+        clause[0] = clause[1];
+        clause[1] = tmp;
+    }
+}
+
 // Add clause to extension definitions
 // Assumes that the first literal is the new extension variable
 int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
@@ -151,6 +221,10 @@ int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
     if (ext_def_clause.size() == 1) {
         uncheckedEnqueue(ext_def_clause[0]);
     } else {
+        // Make sure the first two literals are in the right order for the watchers
+        shiftUnassigned(ext_def_clause);
+
+        // Add clause to data structures
         CRef cr = ca.alloc(ext_def_clause, true);
         int lbd = computeLBD(ca[cr]);
         ca[cr].set_lbd(lbd);
