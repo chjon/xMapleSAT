@@ -105,12 +105,6 @@ Solver::Solver() :
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
 
-
-  , min_number_of_learnts_copies(opt_min_dupl_app)  
-  , max_lbd_dup(opt_max_lbd_dup)
-  , dupl_db_init_size(opt_dupl_db_init_size)
-  , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
-
   // Parameters (the rest):
   //
   , learntsize_factor((double)1/(double)3), learntsize_inc(1.1)
@@ -119,6 +113,11 @@ Solver::Solver() :
   //
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
+
+  , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
+  , min_number_of_learnts_copies(opt_min_dupl_app)  
+  , dupl_db_init_size(opt_dupl_db_init_size)
+  , max_lbd_dup(opt_max_lbd_dup)
 
   // Statistics: (formerly in 'SolverStats')
   //
@@ -136,6 +135,7 @@ Solver::Solver() :
   , simpDB_props       (0)
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
+  , order_heap_distance(VarOrderLt(activity_distance))
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -164,10 +164,9 @@ Solver::Solver() :
   , nbconfbeforesimplify(1000)
   , incSimplify(1000)
 
+  , var_iLevel_inc     (1)
   , my_var_decay       (0.6)
   , DISTANCE           (true)
-  , var_iLevel_inc     (1)
-  , order_heap_distance(VarOrderLt(activity_distance))
 
 {}
 
@@ -408,8 +407,8 @@ void Solver::simplifyLearnt(Clause& c)
     //sort(&c[0], c.size(), VarOrderLevelLt(vardata));
 
     bool True_confl = false;
-    int beforeSize, afterSize;
-    beforeSize = c.size();
+    // int beforeSize, afterSize;
+    // beforeSize = c.size();
     int i, j;
     CRef confl;
 
@@ -438,7 +437,7 @@ void Solver::simplifyLearnt(Clause& c)
         }
     }
     c.shrink(c.size() - j);
-    afterSize = c.size();
+    // afterSize = c.size();
     //printf("\nbefore : %d, after : %d ", beforeSize, afterSize);
 
 
@@ -467,8 +466,8 @@ void Solver::simplifyLearnt(Clause& c)
 
 bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
 {
-    int beforeSize, afterSize;
-    int learnts_x_size_before = learnts_x.size();
+    // int beforeSize, afterSize;
+    // int learnts_x_size_before = learnts_x.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -518,12 +517,12 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
 
                 //printf("beforeSize: %2d, afterSize: %2d\n", beforeSize, afterSize);
 
@@ -543,7 +542,7 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                     learnts_x[cj++] = learnts_x[ci];
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -578,8 +577,8 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
 
 bool Solver::simplifyLearnt_core()
 {
-    int beforeSize, afterSize;
-    int learnts_core_size_before = learnts_core.size();
+    // int beforeSize, afterSize;
+    // int learnts_core_size_before = learnts_core.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -633,12 +632,12 @@ bool Solver::simplifyLearnt_core()
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
                 
                 if(drup_file && saved_size !=c.size()){
 #ifdef BIN_DRUP
@@ -682,7 +681,7 @@ bool Solver::simplifyLearnt_core()
                     learnts_core[cj++] = learnts_core[ci];
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -744,8 +743,8 @@ int Solver::is_duplicate(std::vector<uint32_t>&c){
 
 bool Solver::simplifyLearnt_tier2()
 {
-    int beforeSize, afterSize;
-    int learnts_tier2_size_before = learnts_tier2.size();
+    // int beforeSize, afterSize;
+    // int learnts_tier2_size_before = learnts_tier2.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -799,12 +798,12 @@ bool Solver::simplifyLearnt_tier2()
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
                 
                 if(drup_file && saved_size!=c.size()){
 
@@ -848,7 +847,7 @@ bool Solver::simplifyLearnt_tier2()
                     
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -863,13 +862,13 @@ bool Solver::simplifyLearnt_tier2()
                                         
                     //duplicate learnts 
 
-                    if (id < min_number_of_learnts_copies+2){
+                    if (static_cast<unsigned int>(id) < min_number_of_learnts_copies+2){
                         attachClause(cr);
                         learnts_tier2[cj++] = learnts_tier2[ci];                    
-                        if (id == min_number_of_learnts_copies+1){                            
+                        if (static_cast<unsigned int>(id) == min_number_of_learnts_copies+1){                            
                             duplicates_added_minimization++;                                  
                         }
-                        if ((c.lbd() <= core_lbd_cut)||(id == min_number_of_learnts_copies+1)){
+                        if ((c.lbd() <= core_lbd_cut)||(static_cast<unsigned int>(id) == min_number_of_learnts_copies+1)){
                         //if (id == min_number_of_learnts_copies+1){
                             cj--;
                             learnts_core.push(cr);
@@ -1643,7 +1642,9 @@ NextClause:;
         ws.shrink(i - j);
     }
 
+#ifndef LOOSE_PROP_STAT
 ExitProp:;
+#endif
     propagations += num_props;
     simpDB_props -= num_props;
 
@@ -1920,7 +1921,7 @@ lbool Solver::search(int& nof_conflicts)
 
     // simplify
     //
-    if (conflicts >= curSimplify * nbconfbeforesimplify){
+    if (conflicts >= static_cast<uint64_t>(curSimplify * nbconfbeforesimplify)){
         //        printf("c ### simplifyAll on conflict : %lld\n", conflicts);
         //printf("nbClauses: %d, nbLearnts_core: %d, nbLearnts_tier2: %d, nbLearnts_local: %d, nbLearnts: %d\n",
         //	clauses.size(), learnts_core.size(), learnts_tier2.size(), learnts_local.size(),
@@ -1961,7 +1962,7 @@ lbool Solver::search(int& nof_conflicts)
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
             // check chrono backtrack condition
-            if ((confl_to_chrono < 0 || confl_to_chrono <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
+            if ((confl_to_chrono < 0 || static_cast<uint64_t>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
             {
 				++chrono_backtrack;
 				cancelUntil(data.nHighestLevel -1);
@@ -1986,24 +1987,24 @@ lbool Solver::search(int& nof_conflicts)
                 ca[cr].set_lbd(lbd);
                 //duplicate learnts 
                 int  id = 0;
-                if (lbd <= max_lbd_dup){                        
+                if (static_cast<uint32_t>(lbd) <= max_lbd_dup){                        
                     std::vector<uint32_t> tmp;
                     for (int i = 0; i < learnt_clause.size(); i++)
                         tmp.push_back(learnt_clause[i].x);
                     id = is_duplicate(tmp);             
-                    if (id == min_number_of_learnts_copies +1){
+                    if (static_cast<unsigned int>(id) == min_number_of_learnts_copies +1){
                         duplicates_added_conflicts++;                        
                     }                    
-                    if (id == min_number_of_learnts_copies){
+                    if (static_cast<unsigned int>(id) == min_number_of_learnts_copies){
                         duplicates_added_tier2++;
                     }                                        
                 }
                 //duplicate learnts
 
-                if ((lbd <= core_lbd_cut) || (id == min_number_of_learnts_copies+1)){
+                if ((lbd <= core_lbd_cut) || (static_cast<unsigned int>(id) == min_number_of_learnts_copies+1)){
                     learnts_core.push(cr);
                     ca[cr].mark(CORE);
-                }else if ((lbd <= 6)||(id == min_number_of_learnts_copies)){
+                }else if ((lbd <= 6)||(static_cast<unsigned int>(id) == min_number_of_learnts_copies)){
                     learnts_tier2.push(cr);
                     ca[cr].mark(TIER2);
                     ca[cr].touched() = conflicts;
@@ -2162,14 +2163,14 @@ uint32_t Solver::reduceduplicates(){
             for (auto &in_in_mp: inner_mp.second){
                 if (in_in_mp.second >= 2){
                 //min_number_of_learnts_copies
-                    tmp.push_back({outer_mp.first,inner_mp.first,in_in_mp.first,in_in_mp.second});
+                    tmp.push_back({static_cast<uint64_t>(outer_mp.first),inner_mp.first,in_in_mp.first,in_in_mp.second});
                 }
             }                    
          }
     }          
     removed_duplicates = dupl_db_size-tmp.size();  
     ht.clear();
-    for (auto i=0;i<tmp.size();i++){
+    for (size_t i=0;i<tmp.size();i++){
         ht[tmp[i][0]][tmp[i][1]][tmp[i][2]]=tmp[i][3];
     }
     return removed_duplicates;
@@ -2220,11 +2221,11 @@ lbool Solver::solve_()
     uint32_t removed_duplicates =0;
     while (status == l_Undef && withinBudget()){
         if (dupl_db_size >= dupl_db_size_limit){    
-            printf("c Duplicate learnts added (Minimization) %i\n",duplicates_added_minimization);    
-            printf("c Duplicate learnts added (conflicts) %i\n",duplicates_added_conflicts);    
-            printf("c Duplicate learnts added (tier2) %i\n",duplicates_added_tier2);    
-            printf("c Duptime: %i\n",duptime.count());
-            printf("c Number of conflicts: %i\n",conflicts);
+            printf("c Duplicate learnts added (Minimization) %lu\n",duplicates_added_minimization);    
+            printf("c Duplicate learnts added (conflicts) %lu\n",duplicates_added_conflicts);    
+            printf("c Duplicate learnts added (tier2) %lu\n",duplicates_added_tier2);    
+            printf("c Duptime: %li\n",duptime.count());
+            printf("c Number of conflicts: %lu\n",conflicts);
             printf("c Core size: %i\n",learnts_core.size());
             
             removed_duplicates = reduceduplicates();
