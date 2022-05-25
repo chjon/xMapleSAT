@@ -104,6 +104,8 @@ define make_er_solver
 	mv core/glucose_static core/$(1)
 endef
 
+.PHONY: all clean test
+
 all: maplelcm xmaplelcm
 
 .prev_%:
@@ -133,3 +135,6 @@ xmaplelcm_glucoser: .prev_xmaplelcm_glucoser
 
 clean:
 	make -C core clean
+
+test:
+	make -C test
