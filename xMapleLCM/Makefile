@@ -135,6 +135,7 @@ xmaplelcm_glucoser: .prev_xmaplelcm_glucoser
 
 clean:
 	make -C core clean
+	make -C test clean
 
 test:
 	make -C test
