@@ -1,7 +1,9 @@
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
+#include <stdio.h>
 #include <mtl/ExtDefMap.h>
+#include <mtl/Vec.h>
 
 TEST_CASE("Inserting extension variable definitions", "[ExtDefMap]") {
     int x = 0, a = 100, b = 200;
@@ -267,4 +269,63 @@ TEST_CASE("Searching for extension variable definitions", "[ExtDefMap]") {
     it = xdm.find(200, 101);
     REQUIRE(it != xdm.end());
     REQUIRE(it->second == 2);
+}
+
+static void printVec(Minisat::vec<int>& v) {
+    printf("[");
+    if (v.size()) printf("%d", v[0]);
+    for (int i = 1; i < v.size(); i++) printf(", %d", v[i]);
+    printf("]");
+}
+
+static bool requireVecEqual(Minisat::vec<int>& actual, Minisat::vec<int>& expect) {
+    REQUIRE(actual.size() == expect.size());
+    if (actual.size() == expect.size()) {
+        unsigned int numDifferences = 0;
+        for (int i = 0; i < actual.size(); i++) {
+            if (actual[i] != expect[i])
+                numDifferences++;
+        }
+        REQUIRE(numDifferences == 0);
+        if (numDifferences == 0) return true;
+    }
+
+    printf("Actual: "); printVec(actual); printf("\n");
+    printf("Expect: "); printVec(expect); printf("\n");
+    return false;
+}
+
+TEST_CASE("Substituting into clauses", "[ExtDefMap]") {
+    Minisat::ExtDefMap<int> xdm;
+    xdm.insert(0, 100, 200);
+    xdm.insert(1, 100, 201);
+    xdm.insert(2, 101, 200);
+    xdm.insert(3, 102, 202);
+
+    Minisat::vec<int> clause;
+    Minisat::vec<int> expect;
+
+    // Zero basis literals
+    clause.clear(); clause.push(301); clause.push(302); clause.push(303); clause.push(304); clause.push(305);
+    expect.clear(); expect.push(301); expect.push(302); expect.push(303); expect.push(304); expect.push(305);
+    xdm.substitute(clause);
+    REQUIRE(requireVecEqual(clause, expect));
+
+    // Basis literals with no corresponding extension variables
+    clause.clear(); clause.push(100); clause.push(101); clause.push(300); clause.push(301); clause.push(302);
+    expect.clear(); expect.push(100); expect.push(101); expect.push(300); expect.push(301); expect.push(302);
+    xdm.substitute(clause);
+    REQUIRE(requireVecEqual(clause, expect));
+
+    // Pair of basis literals with a corresponding extension variable
+    clause.clear(); clause.push(100); clause.push(200); clause.push(300); clause.push(301); clause.push(302);
+    expect.clear(); expect.push(  0);                   expect.push(300); expect.push(301); expect.push(302);
+    xdm.substitute(clause);
+    REQUIRE(requireVecEqual(clause, expect));
+
+    // Multiple pairs of basis literals with corresponding extension variables
+    clause.clear(); clause.push(100); clause.push(300); clause.push(202); clause.push(301); clause.push(302); clause.push(102); clause.push(200); clause.push(303);
+    expect.clear(); expect.push(  0); expect.push(300); expect.push(  3); expect.push(301); expect.push(302);                                     expect.push(303);
+    xdm.substitute(clause);
+    REQUIRE(requireVecEqual(clause, expect));
 }
