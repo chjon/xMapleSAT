@@ -205,13 +205,13 @@ public:
             for (int i = 0, j = 0; i < clause.size(); i++) {
                 // Impl1:
                 // Naive implementation:
-                if (validIndex[i]) clause[j++] = clause[i];
+                // if (validIndex[i]) clause[j++] = clause[i];
 
                 // Impl2:
                 // Avoid branching
                 // Implementation conducive to SIMD instructions (similar to Stream VByte)
-                // clause[j] = clause[i];
-                // j += validIndex[i];
+                clause[j] = clause[i];
+                j += validIndex[i];
             }
             clause.shrink(numReplaced);
         }
