@@ -15,7 +15,7 @@ TEST_CASE("Enforce watcher invariants", "[SolverER]") {
 
     vec<Lit> clause, prefix, expect;
 
-    // Multiple undefined variables: undefined literals should be moved to the front
+    // Multiple unassigned variables: unassigned literals should be moved to the front
     setLitVec(clause, {100, 200, 101, 102, 103});
     setLitVec(prefix, {101, 102, 103});
     ser.enforceWatcherInvariant(clause);
@@ -26,13 +26,13 @@ TEST_CASE("Enforce watcher invariants", "[SolverER]") {
     ser.enforceWatcherInvariant(clause);
     REQUIRE(requireVecPrefix(clause, prefix));
 
-    // Single undefined variable: undefined literal should be moved to index 1
+    // Single unassigned variable: unassigned literal should be moved to index 1 and highest-level literal should be in index 0
     setLitVec(clause, {100, 200, 101});
+    setLitVec(prefix, {101, 200});
     ser.enforceWatcherInvariant(clause);
-    REQUIRE(clause[0] != mkLit(101));
-    REQUIRE(clause[1] == mkLit(101));
+    REQUIRE(requireVecPrefix(clause, prefix));
 
-    // Zero undefined variables: literal with highest level should be in index 0; literal with second-highest level should be in index 1
+    // Zero unassigned variables: literal with highest level should be in index 0; literal with second-highest level should be in index 1
     setLitVec(clause, {100, 200, 300});
     setLitVec(prefix, {200, 300});
     ser.enforceWatcherInvariant(clause);

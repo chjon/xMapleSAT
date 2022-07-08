@@ -56,7 +56,7 @@ namespace Minisat {
 
         const int num_unassigned = j;
         if (num_unassigned == 0) {
-            // Ensure the highest level is in index 1 and the second-highest level is in index 0 (O(n) partial selection sort)
+            // Move the two literals with the highest levels to the first two indices (O(n) partial selection sort)
             for (i = 0; i < 2; i++) {
                 int maxLvl_j = i;
                 for (j = i; j < clause.size(); j++) {
@@ -66,11 +66,21 @@ namespace Minisat {
                 }
                 Lit tmp = clause[i]; clause[i] = clause[maxLvl_j]; clause[maxLvl_j] = tmp;
             }
+
+            // Swap the first two literals so that the highest level is in index 1 and the second-highest level is in index 0
             Lit tmp = clause[0]; clause[0] = clause[1]; clause[1] = tmp;
 
         } else if (num_unassigned == 1) {
-            // Ensure the first literal has a value
-            Lit tmp = clause[0]; clause[0] = clause[1]; clause[1] = tmp;
+            // Find the first literal assigned at the next-highest level:
+            int maxLvl_j = 1;
+            for (j = 1; j < clause.size(); j++)
+                if (level(var(clause[j])) > level(var(clause[maxLvl_j])))
+                    maxLvl_j = j;
+
+            // Swap-in this literal at index 1:
+            Lit tmp          = clause[1];
+            clause[1]        = clause[maxLvl_j];
+            clause[maxLvl_j] = tmp;
         }
     }
 
