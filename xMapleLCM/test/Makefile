@@ -1,5 +1,5 @@
 EXEC      = test
-DEPDIR    = mtl utils
-MROOT     = ../
+DEPDIR    = mtl utils core
+MROOT     = ..
 
 include $(MROOT)/mtl/template.mk

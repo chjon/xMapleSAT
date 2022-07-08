@@ -25,6 +25,7 @@ LFLAGS    ?= -Wall
 COPTIMIZE ?= -O3
 
 CFLAGS    += -I$(MROOT) -D __STDC_LIMIT_MACROS -D __STDC_FORMAT_MACROS
+CFLAGS    += $(CMD_CFLAGS)
 LFLAGS    += -lz
 
 .PHONY : s p d r rs clean 

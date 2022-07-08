@@ -28,19 +28,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 // Template specializations for hashing
 namespace std { namespace tr1 {
-    // template<>
-    // std::size_t std::tr1::hash<std::pair<Minisat::Lit, Minisat::Lit> >::operator()(std::pair<Minisat::Lit, Minisat::Lit> p) const {
-    //     return std::size_t(p.first.x) << 32 | p.second.x;
-    // }
-
-    // template<>
-    // std::size_t std::tr1::hash<Minisat::Lit>::operator()(Minisat::Lit p) const {
-    //     return p.x;
-    // }
+    template<>
+    std::size_t std::tr1::hash<std::pair<Minisat::Lit, Minisat::Lit> >::operator()(std::pair<Minisat::Lit, Minisat::Lit> p) const {
+        return std::size_t(p.first.x) << 32 | p.second.x;
+    }
 
     template<>
-    std::size_t std::tr1::hash<std::pair<int, int> >::operator()(std::pair<int, int> p) const {
-        return std::size_t(p.first) << 32 | p.second;
+    std::size_t std::tr1::hash<Minisat::Lit>::operator()(Minisat::Lit p) const {
+        return p.x;
     }
 }}
 

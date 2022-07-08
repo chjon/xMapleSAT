@@ -50,7 +50,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 
-
 // duplicate learnts version
 #include <chrono>
 #include <vector>
@@ -68,6 +67,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define CORE  3
 
 namespace Minisat {
+
+class SolverER;
 
 //=================================================================================================
 // Solver -- the main class:
@@ -501,6 +502,9 @@ public:
     vec<Lit> involved_lits;
     double    my_var_decay;
     bool   DISTANCE;
+
+private:
+    friend class SolverER;
 };
 
 

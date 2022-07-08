@@ -138,4 +138,4 @@ clean:
 	make -C test clean
 
 test:
-	make -C test
+	make CMD_CFLAGS="-D TESTING" -C test
