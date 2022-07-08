@@ -1,23 +1,10 @@
 #include "catch.hpp"
-
-#include <stdio.h>
-#include <initializer_list>
+#include <test/Util.h>
 #include <core/SolverTypes.h>
 #include <mtl/ExtDefMap.h>
 #include <mtl/Vec.h>
 
 namespace Minisat {
-
-static std::tr1::unordered_set<Lit> mkLitSet(std::initializer_list<int> elements) {
-    std::tr1::unordered_set<Lit> s;
-    for (auto element : elements) s.insert(mkLit(element));
-    return s;
-}
-
-static void setLitVec(vec<Lit>& v, std::initializer_list<int> elements) {
-    v.clear();
-    for (auto element : elements) v.push(mkLit(element));
-}
 
 TEST_CASE("Inserting extension variable definitions", "[ExtDefMap]") {
     Lit x = mkLit(0), a = mkLit(100), b = mkLit(200);
@@ -272,30 +259,6 @@ TEST_CASE("Searching for extension variable definitions", "[ExtDefMap]") {
     it = xdm.find(mkLit(200), mkLit(101));
     REQUIRE(it != xdm.end());
     REQUIRE(it->second == mkLit(2));
-}
-
-static void printVec(Minisat::vec<Lit>& v) {
-    printf("[");
-    if (v.size()) printf("%s%d", sign(v[0]) ? "-" : "", var(v[0]));
-    for (int i = 1; i < v.size(); i++) printf(", %s%d", sign(v[i]) ? "-" : "", var(v[i]));
-    printf("]");
-}
-
-static bool requireVecEqual(Minisat::vec<Lit>& actual, Minisat::vec<Lit>& expect) {
-    REQUIRE(actual.size() == expect.size());
-    if (actual.size() == expect.size()) {
-        unsigned int numDifferences = 0;
-        for (int i = 0; i < actual.size(); i++) {
-            if (actual[i] != expect[i])
-                numDifferences++;
-        }
-        REQUIRE(numDifferences == 0);
-        if (numDifferences == 0) return true;
-    }
-
-    printf("Actual: "); printVec(actual); printf("\n");
-    printf("Expect: "); printVec(expect); printf("\n");
-    return false;
 }
 
 TEST_CASE("Substituting into clauses", "[ExtDefMap]") {
