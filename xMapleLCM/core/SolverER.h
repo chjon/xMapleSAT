@@ -42,10 +42,12 @@ public:
 #endif
 
     int addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
-protected:
+    
     // Make sure the first two literals are in the right order for the watchers
+    // Condition: clause must have length > 1 -- a unary clause should be propagated directly and not learnt
     void enforceWatcherInvariant(vec<Lit>& clause);
 
+protected:
     // // Update stats
     // void updateExtFracStat(vec<Lit>& clause) {
     //     int numExtVarsInClause = getNumExtVars(clause);
@@ -57,14 +59,13 @@ protected:
 
 #ifdef TESTING
     std::map< Var, std::pair<lbool, int> > test_value;
-    std::map< Var, std::pair<int  , int> > test_level;
 #endif
 
 };
 
 #ifdef TESTING
 void  SolverER::set_value(Var x, lbool v, int l) { test_value.insert(std::make_pair(x, std::make_pair(v, l))); }
-int   SolverER::level(Var x) const { auto it = test_level.find(x); return (it == test_level.end()) ? (-1     ) : (it->second.second); }
+int   SolverER::level(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (-1     ) : (it->second.second); }
 lbool SolverER::value(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (l_Undef) : (it->second.first ); }
 lbool SolverER::value(Lit p) const { return value(var(p)) ^ sign(p); }
 #else

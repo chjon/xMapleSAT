@@ -43,7 +43,7 @@ namespace Minisat {
     SolverER::~SolverER() {}
 
     void SolverER::enforceWatcherInvariant(vec<Lit>& clause) {
-        if (clause.size() == 1) return;
+        assert(clause.size() > 1);
 
         // Swap all unassigned literals to the beginning of the clause
         int i, j;
@@ -56,20 +56,21 @@ namespace Minisat {
 
         const int num_unassigned = j;
         if (num_unassigned == 0) {
-            // Ensure the highest level is in index 1 and the second-highest level is in index 0
-            for (i = 0; i < clause.size(); i++) {
-                if (level(var(clause[i])) >= level(var(clause[1]))) {
-                    Lit tmp = clause[0];
-                    clause[0] = clause[1];
-                    clause[1] = clause[i];
-                    clause[i] = tmp;
+            // Ensure the highest level is in index 1 and the second-highest level is in index 0 (O(n) partial selection sort)
+            for (i = 0; i < 2; i++) {
+                int maxLvl_j = i;
+                for (j = i; j < clause.size(); j++) {
+                    if (level(var(clause[j])) > level(var(clause[maxLvl_j]))) {
+                        maxLvl_j = j;
+                    }
                 }
+                Lit tmp = clause[i]; clause[i] = clause[maxLvl_j]; clause[maxLvl_j] = tmp;
             }
+            Lit tmp = clause[0]; clause[0] = clause[1]; clause[1] = tmp;
+
         } else if (num_unassigned == 1) {
             // Ensure the first literal has a value
-            Lit tmp = clause[0];
-            clause[0] = clause[1];
-            clause[1] = tmp;
+            Lit tmp = clause[0]; clause[0] = clause[1]; clause[1] = tmp;
         }
     }
 
