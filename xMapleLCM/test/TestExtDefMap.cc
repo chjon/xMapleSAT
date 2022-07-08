@@ -1,11 +1,23 @@
 #include "catch.hpp"
 
 #include <stdio.h>
+#include <initializer_list>
 #include <core/SolverTypes.h>
 #include <mtl/ExtDefMap.h>
 #include <mtl/Vec.h>
 
 namespace Minisat {
+
+static std::tr1::unordered_set<Lit> mkLitSet(std::initializer_list<int> elements) {
+    std::tr1::unordered_set<Lit> s;
+    for (auto element : elements) s.insert(mkLit(element));
+    return s;
+}
+
+static void setLitVec(vec<Lit>& v, std::initializer_list<int> elements) {
+    v.clear();
+    for (auto element : elements) v.push(mkLit(element));
+}
 
 TEST_CASE("Inserting extension variable definitions", "[ExtDefMap]") {
     Lit x = mkLit(0), a = mkLit(100), b = mkLit(200);
@@ -152,8 +164,7 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     xdm.insert(mkLit(0), mkLit(100), mkLit(200));
     xdm.insert(mkLit(1), mkLit(100), mkLit(201));
     xdm.insert(mkLit(2), mkLit(101), mkLit(200));
-    query.clear(); query.insert(mkLit(0));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0}));
     REQUIRE(xdm.size() == 2);
     REQUIRE(xdm.degree(mkLit(100)) == 1);
     REQUIRE(xdm.degree(mkLit(200)) == 1);
@@ -162,8 +173,7 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
 
     // Reusing the same extension variable name
     xdm.insert(mkLit(0), mkLit(101), mkLit(201));
-    query.clear(); query.insert(mkLit(0));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0}));
     REQUIRE(xdm.size() == 2);
     REQUIRE(xdm.degree(mkLit(100)) == 1);
     REQUIRE(xdm.degree(mkLit(200)) == 1);
@@ -171,16 +181,14 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     REQUIRE(xdm.degree(mkLit(201)) == 1);
 
     // Deleting a single extension variable with no other definitions
-    query.clear(); query.insert(mkLit(1));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({1}));
     REQUIRE(xdm.size() == 1);
     REQUIRE(xdm.degree(mkLit(100)) == 0);
     REQUIRE(xdm.degree(mkLit(200)) == 1);
     REQUIRE(xdm.degree(mkLit(101)) == 1);
     REQUIRE(xdm.degree(mkLit(201)) == 0);
 
-    query.clear(); query.insert(mkLit(2));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({2}));
     REQUIRE(xdm.size() == 0);
     REQUIRE(xdm.degree(mkLit(200)) == 0);
     REQUIRE(xdm.degree(mkLit(101)) == 0);
@@ -190,8 +198,7 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     xdm.insert(mkLit(2), mkLit(101), mkLit(200));
 
     // Deleting the empty set
-    query.clear();
-    xdm.erase(query);
+    xdm.erase(mkLitSet({}));
     REQUIRE(xdm.size() == 3);
     REQUIRE(xdm.degree(mkLit(100)) == 2);
     REQUIRE(xdm.degree(mkLit(200)) == 2);
@@ -199,8 +206,7 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     REQUIRE(xdm.degree(mkLit(201)) == 1);
 
     // Deleting multiple extension variables at once
-    query.clear(); query.insert(mkLit(0)); query.insert(mkLit(1));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0, 1}));
     REQUIRE(xdm.size() == 1);
     REQUIRE(xdm.degree(mkLit(100)) == 0);
     REQUIRE(xdm.degree(mkLit(200)) == 1);
@@ -208,10 +214,8 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     REQUIRE(xdm.degree(mkLit(201)) == 0);
 
     // Deleting variables that are not in the map
-    query.clear(); query.insert(mkLit(0)); query.insert(mkLit(1));
-    xdm.erase(query);
-    query.clear(); query.insert(mkLit(3));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0, 1}));
+    xdm.erase(mkLitSet({3}));
     REQUIRE(xdm.size() == 1);
     REQUIRE(xdm.degree(mkLit(100)) == 0);
     REQUIRE(xdm.degree(mkLit(200)) == 1);
@@ -223,16 +227,14 @@ TEST_CASE("Deleting multiple extension variable definitions", "[ExtDefMap]") {
     xdm.insert(mkLit(0), mkLit(100), mkLit(200));
     xdm.insert(mkLit(1), mkLit(101), mkLit(201));
     xdm.insert(mkLit(2), mkLit(102), mkLit(202));
-    query.clear(); query.insert(mkLit(0)); query.insert(mkLit(2)); query.insert(mkLit(3));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0, 2, 3}));
     REQUIRE(xdm.size() == 1);
     REQUIRE(xdm.degree(mkLit(100)) == 0); REQUIRE(xdm.degree(mkLit(200)) == 0);
     REQUIRE(xdm.degree(mkLit(101)) == 1); REQUIRE(xdm.degree(mkLit(201)) == 1);
     REQUIRE(xdm.degree(mkLit(102)) == 0); REQUIRE(xdm.degree(mkLit(202)) == 0);
 
     // Deleting the last extension variable from the map
-    query.clear(); query.insert(mkLit(0)); query.insert(mkLit(1)); query.insert(mkLit(2)); query.insert(mkLit(3));
-    xdm.erase(query);
+    xdm.erase(mkLitSet({0, 1, 2, 3}));
     REQUIRE(xdm.size() == 0);
     REQUIRE(xdm.degree(mkLit(100)) == 0); REQUIRE(xdm.degree(mkLit(200)) == 0);
     REQUIRE(xdm.degree(mkLit(101)) == 0); REQUIRE(xdm.degree(mkLit(201)) == 0);
@@ -307,26 +309,26 @@ TEST_CASE("Substituting into clauses", "[ExtDefMap]") {
     Minisat::vec<Lit> expect;
 
     // Zero basis literals
-    clause.clear(); clause.push(mkLit(301)); clause.push(mkLit(302)); clause.push(mkLit(303)); clause.push(mkLit(304)); clause.push(mkLit(305));
-    expect.clear(); expect.push(mkLit(301)); expect.push(mkLit(302)); expect.push(mkLit(303)); expect.push(mkLit(304)); expect.push(mkLit(305));
+    setLitVec(clause, {301, 302, 303, 304, 305});
+    setLitVec(expect, {301, 302, 303, 304, 305});
     xdm.substitute(clause);
     REQUIRE(requireVecEqual(clause, expect));
 
     // Basis literals with no corresponding extension variables
-    clause.clear(); clause.push(mkLit(100)); clause.push(mkLit(101)); clause.push(mkLit(300)); clause.push(mkLit(301)); clause.push(mkLit(302));
-    expect.clear(); expect.push(mkLit(100)); expect.push(mkLit(101)); expect.push(mkLit(300)); expect.push(mkLit(301)); expect.push(mkLit(302));
+    setLitVec(clause, {101, 300, 301, 302});
+    setLitVec(expect, {101, 300, 301, 302});
     xdm.substitute(clause);
     REQUIRE(requireVecEqual(clause, expect));
 
     // Pair of basis literals with a corresponding extension variable
-    clause.clear(); clause.push(mkLit(100)); clause.push(mkLit(200)); clause.push(mkLit(300)); clause.push(mkLit(301)); clause.push(mkLit(302));
-    expect.clear(); expect.push(mkLit(  0));                          expect.push(mkLit(300)); expect.push(mkLit(301)); expect.push(mkLit(302));
+    setLitVec(clause, {100, 200, 300, 301, 302});
+    setLitVec(expect, {  0,      300, 301, 302});
     xdm.substitute(clause);
     REQUIRE(requireVecEqual(clause, expect));
 
     // Multiple pairs of basis literals with corresponding extension variables
-    clause.clear(); clause.push(mkLit(100)); clause.push(mkLit(300)); clause.push(mkLit(202)); clause.push(mkLit(301)); clause.push(mkLit(302)); clause.push(mkLit(102)); clause.push(mkLit(200)); clause.push(mkLit(303));
-    expect.clear(); expect.push(mkLit(  0)); expect.push(mkLit(300)); expect.push(mkLit(  3)); expect.push(mkLit(301)); expect.push(mkLit(302));                                                   expect.push(mkLit(303));
+    setLitVec(clause, {100, 300, 202, 301, 302, 102, 200, 303});
+    setLitVec(expect, {  0, 300,   3, 301, 302,           303});
     xdm.substitute(clause);
     REQUIRE(requireVecEqual(clause, expect));
 }
