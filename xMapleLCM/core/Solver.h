@@ -503,6 +503,8 @@ public:
     double    my_var_decay;
     bool   DISTANCE;
 
+    SolverER* ser;
+
 private:
     friend class SolverER;
 };

@@ -22,9 +22,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <map>
 #include <vector>
-#include "core/Solver.h"
-#include "core/SolverTypes.h"
-#include "mtl/Vec.h"
+#include <utility>
+#include <mtl/Vec.h>
+#include <mtl/ExtDefMap.h>
+#include <core/Solver.h>
+#include <core/SolverTypes.h>
 
 namespace Minisat {
 
@@ -41,11 +43,47 @@ public:
     inline void set_value(Var x, lbool v, int l);
 #endif
 
-    int addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
-    
-    // Make sure the first two literals are in the right order for the watchers
-    // Condition: clause must have length > 1 -- a unary clause should be propagated directly and not learnt
+    using ProtoClause = vec<Lit>;
+    using ExtDef = std::pair< Lit, std::vector<ProtoClause> >;
+
+    // Clause Selection
+    void selectClauses(std::vector<CRef>& selectedClauses);
+
+    // Extension Variable Definition
+    void defineExtVars(std::vector<ExtDef>& extVarDefs, const std::vector<CRef>& selectedClauses);
+
+    // Extension Variable Introduction
+    void introduceExtVars(const std::vector<ExtDef>& extVarDefs);
+
+    /**
+     * @brief Adds an extension definition clause to the appropriate clause database
+     * 
+     * @param ca Clause allocator to register the clause with the solver
+     * @param db The clause database to which to add the clause
+     * @param ext_lit The extension variable corresponding to the given clause
+     * @param clause The vector of literals to add as a clause
+     * 
+     * @note Condition: current level must be zero
+     */
+    void addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
+
+    /**
+     * @brief Ensures the first two literals are in the right order for the watchers
+     * 
+     * @param clause a vector of multiple literals
+     * 
+     * @note @code{clause} must have length > 1. Unary clauses should be propagated directly and not learnt
+     */
     void enforceWatcherInvariant(vec<Lit>& clause);
+
+    // Extension Variable Substitution
+
+    /**
+     * @brief Substitute extension variables into a clause
+     * 
+     * @param clause The vector of literals in which to substitute
+     */
+    inline void substitute(vec<Lit>& clause) const;
 
 protected:
     // // Update stats
@@ -56,6 +94,10 @@ protected:
     // }
 
     Solver* solver;
+    ExtDefMap<Lit> xdm;
+
+    std::vector<CRef> m_selectedClauses;
+    std::vector<ExtDef> m_extVarDefs;
 
 #ifdef TESTING
     std::map< Var, std::pair<lbool, int> > test_value;
@@ -73,6 +115,8 @@ int   SolverER::level(Var x) const { return solver->level(x); }
 lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
+
+void SolverER::substitute(vec<Lit>& clause) const { xdm.substitute(clause); }
 
 }
 

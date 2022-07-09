@@ -36,6 +36,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "mtl/Sort.h"
 #include "core/Solver.h"
+#include "core/SolverER.h"
 
 using namespace Minisat;
 
@@ -168,11 +169,13 @@ Solver::Solver() :
   , my_var_decay       (0.6)
   , DISTANCE           (true)
 
-{}
+  , ser (nullptr)
+{ ser = new SolverER(this); }
 
 
 Solver::~Solver()
 {
+    delete ser;
 }
 
 
@@ -1933,6 +1936,11 @@ lbool Solver::search(int& nof_conflicts)
         curSimplify = (conflicts / nbconfbeforesimplify) + 1;
         nbconfbeforesimplify += incSimplify;
     }
+
+    // TODO: generate extension variable definitions
+    
+    // TODO: add extension variable clauses
+    // ser->addExtDefClause();
 
     for (;;){
         CRef confl = propagate();

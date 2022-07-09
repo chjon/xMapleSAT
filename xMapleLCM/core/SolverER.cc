@@ -84,8 +84,7 @@ namespace Minisat {
         }
     }
 
-    // Add clause to extension definition database
-    int SolverER::addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {
+    void SolverER::addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {
         // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
         // Do we need to propagate here?
         // BCP works by iterating through the literals on the trail 
@@ -104,7 +103,7 @@ namespace Minisat {
             solver->uncheckedEnqueue(ext_lit);
         } else {
             // Make sure the first two literals are in the right order for the watchers
-            // shiftUnassigned(clause);
+            enforceWatcherInvariant(clause);
 
             // Add clause to data structures
             CRef cr = ca.alloc(clause, false); // Allocating clause as if it were an original clause
@@ -113,7 +112,5 @@ namespace Minisat {
             db.push_back(cr);
             solver->attachClause(cr);
         }
-
-        return 0;
     }
 }
