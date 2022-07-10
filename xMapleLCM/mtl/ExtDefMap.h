@@ -26,19 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <utility>
 #include <mtl/Vec.h>
 
-// Template specializations for hashing
-namespace std { namespace tr1 {
-    template<>
-    std::size_t std::tr1::hash<std::pair<Minisat::Lit, Minisat::Lit> >::operator()(std::pair<Minisat::Lit, Minisat::Lit> p) const {
-        return std::size_t(p.first.x) << 32 | p.second.x;
-    }
-
-    template<>
-    std::size_t std::tr1::hash<Minisat::Lit>::operator()(Minisat::Lit p) const {
-        return p.x;
-    }
-}}
-
 namespace Minisat {
 
 template<class L> // Literal - must implement operator<
@@ -163,7 +150,7 @@ public:
         lp_map.clear();
     }
 
-    void substitute(vec<L>& clause) {
+    void substitute(vec<L>& clause) const {
         // Get indices of all basis literals (in increasing order)
         vec<int> defLitIndex;
         vec<bool> validIndex; // True if corresponding literal is in clause
@@ -184,8 +171,8 @@ public:
                 if (!validIndex[defLitIndex[i]]) continue;
 
                 // Check whether any extension variables are defined over this literal pair
-                typename PLMap::iterator it = pl_map.find(mkLitPair(clause[defLitIndex[i]], clause[defLitIndex[j]]));
-                if (it == end()) continue;
+                typename PLMap::const_iterator it = pl_map.find(mkLitPair(clause[defLitIndex[i]], clause[defLitIndex[j]]));
+                if (it == pl_map.end()) continue;
 
                 // Replace the first literal with the extension literal and mark the second literal as invalid
                 clause[defLitIndex[i]] = it->second;

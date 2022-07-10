@@ -20,15 +20,21 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_SolverER_h
 #define Minisat_SolverER_h
 
+#include <sys/resource.h>
+#include <functional>
+#include <initializer_list>
 #include <map>
-#include <vector>
+#include <tuple>
 #include <utility>
+#include <vector>
 #include <mtl/Vec.h>
 #include <mtl/ExtDefMap.h>
 #include <core/Solver.h>
 #include <core/SolverTypes.h>
 
 namespace Minisat {
+
+using SubstitutePredicate = std::function<bool(vec<Lit>&)>;
 
 class SolverER {
 public:
@@ -43,29 +49,32 @@ public:
     inline void set_value(Var x, lbool v, int l);
 #endif
 
-    using ProtoClause = vec<Lit>;
-    using ExtDef = std::pair< Lit, std::vector<ProtoClause> >;
+    struct ExtDef {
+        Lit x, a, b;
+        std::vector<std::vector<Lit>> additionalClauses;
+    };
 
     // Clause Selection
     void selectClauses(std::vector<CRef>& selectedClauses);
 
     // Extension Variable Definition
-    void defineExtVars(std::vector<ExtDef>& extVarDefs, const std::vector<CRef>& selectedClauses);
+    void defineExtVars(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses);
 
     // Extension Variable Introduction
-    void introduceExtVars(const std::vector<ExtDef>& extVarDefs);
+    void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
 
     /**
      * @brief Adds an extension definition clause to the appropriate clause database
      * 
-     * @param ca Clause allocator to register the clause with the solver
      * @param db The clause database to which to add the clause
      * @param ext_lit The extension variable corresponding to the given clause
      * @param clause The vector of literals to add as a clause
      * 
      * @note Condition: current level must be zero
      */
-    void addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
+    void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
+    void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause);
+    void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause);
 
     /**
      * @brief Ensures the first two literals are in the right order for the watchers
@@ -79,13 +88,20 @@ public:
     // Extension Variable Substitution
 
     /**
-     * @brief Substitute extension variables into a clause
+     * @brief Check whether the given clause meets some condition and substitute extension variables into a clause
      * 
      * @param clause The vector of literals in which to substitute
+     * @param predicate The condition with which to check the clause
      */
-    inline void substitute(vec<Lit>& clause) const;
+    inline void substitute(vec<Lit>& clause, SubstitutePredicate& p) const;
 
 protected:
+
+    ////////////////
+    // Statistics //
+    ////////////////
+
+    uint64_t total_ext_vars, deleted_ext_vars, max_ext_vars;
     // // Update stats
     // void updateExtFracStat(vec<Lit>& clause) {
     //     int numExtVarsInClause = getNumExtVars(clause);
@@ -93,11 +109,25 @@ protected:
     //     extfrac_total += extFrac;
     // }
 
+    // Measuring extended resolution overhead
+    struct rusage ext_timer_start, ext_timer_end;
+    struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
+    struct rusage ext_add_overhead; // Overhead for adding extension variables
+    struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
+    struct rusage ext_delV_overhead; // Overhead for deleting extension variables
+    struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
+    struct rusage ext_stat_overhead; // Overhead for measuring statistics
+
+    void   extTimerStart();
+    void   extTimerStop(struct rusage& ext_overhead);
+    double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
+
     Solver* solver;
     ExtDefMap<Lit> xdm;
 
     std::vector<CRef> m_selectedClauses;
-    std::vector<ExtDef> m_extVarDefs;
+    std::vector<ExtDef> m_extVarDefBuffer;
+    vec<Lit> tmp;
 
 #ifdef TESTING
     std::map< Var, std::pair<lbool, int> > test_value;
@@ -116,7 +146,44 @@ lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
-void SolverER::substitute(vec<Lit>& clause) const { xdm.substitute(clause); }
+void SolverER::substitute(vec<Lit>& clause, SubstitutePredicate& p) const {
+    if (p(clause)) xdm.substitute(clause);
+}
+
+// EXTENDED RESOLUTION - statistics
+inline void SolverER::extTimerStart() {
+    getrusage(RUSAGE_SELF, &ext_timer_start);
+}
+
+inline void SolverER::extTimerStop(struct rusage& ext_overhead) {
+    getrusage(RUSAGE_SELF, &ext_timer_end);
+    
+    // Add to total overhead
+    ext_overhead.ru_utime.tv_sec  += ext_timer_end.ru_utime.tv_sec - ext_timer_start.ru_utime.tv_sec;
+    ext_overhead.ru_utime.tv_usec += ext_timer_end.ru_utime.tv_usec;
+
+    // Check if subtracting the initial time would result in underflow
+    if (ext_timer_start.ru_utime.tv_usec > ext_overhead.ru_utime.tv_usec) {
+        ext_overhead.ru_utime.tv_usec += 1000000;
+        ext_overhead.ru_utime.tv_sec  -= 1;
+    }
+    ext_overhead.ru_utime.tv_usec -= ext_timer_start.ru_utime.tv_usec;
+
+    // Check if we carry over to the next second
+    if (ext_overhead.ru_utime.tv_usec >= 1000000) {
+        ext_overhead.ru_utime.tv_usec -= 1000000;
+        ext_overhead.ru_utime.tv_sec  += 1;
+    }
+}
+
+inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
+    tmp.clear(); for (const auto l : clause) tmp.push(l);
+    addExtDefClause(db, ext_lit, tmp);
+}
+inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause) {
+    tmp.clear(); for (const auto l : clause) tmp.push(l);
+    addExtDefClause(db, ext_lit, tmp);
+}
 
 }
 

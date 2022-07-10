@@ -35,6 +35,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/Solver.h"
 #include "core/SolverER.h"
 
+// Template specializations for hashing
+namespace std { namespace tr1 {
+    template<>
+    std::size_t std::tr1::hash<std::pair<Minisat::Lit, Minisat::Lit> >::operator()(std::pair<Minisat::Lit, Minisat::Lit> p) const {
+        return std::size_t(p.first.x) << 32 | p.second.x;
+    }
+
+    template<>
+    std::size_t std::tr1::hash<Minisat::Lit>::operator()(Minisat::Lit p) const {
+        return p.x;
+    }
+}}
+
 namespace Minisat {
     SolverER::SolverER(Solver* s)
         : solver(s)
@@ -84,7 +97,52 @@ namespace Minisat {
         }
     }
 
-    void SolverER::addExtDefClause(ClauseAllocator& ca, std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {
+    void SolverER::introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db) {
+        if (m_extVarDefBuffer.size() == 0) return;
+
+        extTimerStart();
+
+        // Add extension variables
+        // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
+        // for the provided literal pairs
+        const bool ext_pref_sign = solver->ext_pref_sign;
+        for (auto i = m_extVarDefBuffer.begin(); i != m_extVarDefBuffer.end(); i++) solver->newVar(ext_pref_sign);
+
+        // Add extension definition clauses
+        for (const ExtDef& def : m_extVarDefBuffer) {
+            const Lit x = def.x, a = def.a, b = def.b;
+            assert(var(x) > var(a) && var(x) > var(b));
+
+            // Save definition (x <=> a v b)
+            xdm.insert(x, a, b);
+
+            // Create extension clauses and save their IDs
+            std::vector<CRef> defs;
+
+            // Encode (x <=> a v b) as three clauses
+            addExtDefClause(defs, x, {~x,  a,  b});
+            addExtDefClause(defs, x, { x, ~a    });
+            addExtDefClause(defs, x, { x,     ~b});
+
+            // Introduce additional helper clauses
+            for (const std::vector<Lit>& c : def.additionalClauses) addExtDefClause(defs, x, c);
+
+            // Add extension clause IDs to the extension definition database
+            ext_def_db.insert(std::make_pair(var(x), defs));
+        }
+
+        // TODO: Prioritize new variables
+        // for (ExtDef& def : m_extVarDefBuffer) er_prioritize(def.x);
+
+        // Update stats and clean up
+        total_ext_vars += m_extVarDefBuffer.size();
+        max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
+        m_extVarDefBuffer.clear();
+
+        extTimerStop(ext_add_overhead);
+    }
+
+    void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {
         // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
         // Do we need to propagate here?
         // BCP works by iterating through the literals on the trail 
@@ -106,7 +164,7 @@ namespace Minisat {
             enforceWatcherInvariant(clause);
 
             // Add clause to data structures
-            CRef cr = ca.alloc(clause, false); // Allocating clause as if it were an original clause
+            CRef cr = solver->ca.alloc(clause, false); // Allocating clause as if it were an original clause
 
             // Add clause to db
             db.push_back(cr);
