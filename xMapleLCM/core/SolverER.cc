@@ -51,9 +51,55 @@ namespace std { namespace tr1 {
 namespace Minisat {
     SolverER::SolverER(Solver* s)
         : solver(s)
-    {}
+    {
+        using namespace std::placeholders;
+
+        // Bind clause selection heuristic
+        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+            user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_all, this, _1, _2, _3);
+        #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
+            user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_activity, this, _1, _2, _3);
+        #endif
+
+        // Bind extension variable definition heuristic
+        #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
+            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_subexpression, this, _1, _2, _3);
+        #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
+            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_random, this, _1, _2, _3);
+        #endif
+
+        // Bind clause substitution predicate
+        user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
+    }
 
     SolverER::~SolverER() {}
+
+    void SolverER::filterBatch(const std::vector<CRef>& candidates, FilterPredicate& filterPredicate) {
+        extTimerStart();
+
+        for (CRef candidate : candidates)
+            if (filterPredicate(candidate))
+                m_filteredClauses.push_back(candidate);
+
+        extTimerStop(ext_sel_overhead);
+    }
+
+    void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate) {
+        extTimerStart();
+        
+        if (filterPredicate(candidate))
+            m_filteredClauses.push_back(candidate);
+        
+        extTimerStop(ext_sel_overhead);
+    }
+
+    void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
+        extTimerStart();
+
+        selectionHeuristic(m_selectedClauses, m_filteredClauses, solver->ext_window);
+        
+        extTimerStop(ext_sel_overhead);
+    }
 
     void SolverER::enforceWatcherInvariant(vec<Lit>& clause) {
         assert(clause.size() > 1);
@@ -97,6 +143,17 @@ namespace Minisat {
         }
     }
 
+    void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic) {
+        extTimerStart();
+
+        // Generate extension variable definitions
+        extDefHeuristic(m_extVarDefBuffer, m_selectedClauses, solver->ext_max_intro);
+
+        // Update stats and clean up
+        m_selectedClauses.clear();
+        extTimerStop(ext_add_overhead);
+    }
+
     void SolverER::introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db) {
         if (m_extVarDefBuffer.size() == 0) return;
 
@@ -132,7 +189,7 @@ namespace Minisat {
         }
 
         // TODO: Prioritize new variables
-        // for (ExtDef& def : m_extVarDefBuffer) er_prioritize(def.x);
+        // er_prioritize(m_extVarDefBuffer);
 
         // Update stats and clean up
         total_ext_vars += m_extVarDefBuffer.size();
@@ -140,6 +197,25 @@ namespace Minisat {
         m_extVarDefBuffer.clear();
 
         extTimerStop(ext_add_overhead);
+    }
+
+    void SolverER::prioritize(const std::vector<ExtDef>& defs) {
+        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
+        const double desiredActivityCHB   = solver->activity_CHB  [solver->order_heap_CHB  [0]] * solver->ext_prio_act;
+        const double desiredActivityVSIDS = solver->activity_VSIDS[solver->order_heap_VSIDS[0]] * solver->ext_prio_act;
+        for (const ExtDef& def : defs) {
+            Var v = var(def.x);
+            // Prioritize branching on our extension variables
+            solver->activity_CHB  [v] = desiredActivityCHB;
+            solver->activity_VSIDS[v] = desiredActivityVSIDS;
+
+#if EXTENSION_FORCE_BRANCHING
+            // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
+            solver->canceled[v] = conflicts;
+#endif
+            if (solver->order_heap_CHB  .inHeap(v)) solver->order_heap_CHB  .decrease(v);
+            if (solver->order_heap_VSIDS.inHeap(v)) solver->order_heap_VSIDS.decrease(v);
+        }
     }
 
     void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {

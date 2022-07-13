@@ -49,6 +49,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
+#include "core/SolverERTypes.h"
 
 // duplicate learnts version
 #include <tr1/unordered_map>

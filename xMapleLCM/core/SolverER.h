@@ -31,10 +31,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <mtl/ExtDefMap.h>
 #include <core/Solver.h>
 #include <core/SolverTypes.h>
+#include <core/SolverERTypes.h>
 
 namespace Minisat {
-
-using SubstitutePredicate = std::function<bool(vec<Lit>&)>;
 
 class SolverER {
 public:
@@ -49,16 +48,46 @@ public:
     inline void set_value(Var x, lbool v, int l);
 #endif
 
-    struct ExtDef {
-        Lit x, a, b;
-        std::vector<std::vector<Lit>> additionalClauses;
-    };
-
     // Clause Selection
-    void selectClauses(std::vector<CRef>& selectedClauses);
+
+    /**
+     * @brief Filter clauses for clause selection
+     * 
+     * @param candidates a list of clauses to check
+     * @param filterPredicate a method for selecting clauses for defining extension variables
+     * 
+     * @note Saves outputs in @code{m_filteredClauses}
+     */
+    void filterBatch(const std::vector<CRef>& candidates, FilterPredicate& filterPredicate);
+
+    /**
+     * @brief Filter clauses for clause selection
+     * 
+     * @param candidate the clause to check
+     * @param filterPredicate a method for selecting clauses for defining extension variables
+     * 
+     * @note Saves outputs in @code{m_filteredClauses}
+     */
+    void filterIncremental(const CRef candidate, FilterPredicate& filterPredicate);
+
+    /**
+     * @brief Select clauses for defining extension variables
+     * 
+     * @param selectionHeuristic a method for selecting clauses for defining extension variables
+     * 
+     * @note Takes input from @code{m_filteredClauses}
+     * @note Saves outputs in @code{m_selectedClauses}
+     */
+    void selectClauses(SelectionHeuristic& selectionHeuristic);
 
     // Extension Variable Definition
-    void defineExtVars(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses);
+
+    /**
+     * @brief Generate extension variable definitions
+     * 
+     * @param extDefHeuristic a method for generating extension variable definitions given a list of selected clauses
+     */
+    void defineExtVars(ExtDefHeuristic& extDefHeuristic);
 
     // Extension Variable Introduction
     void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
@@ -70,11 +99,18 @@ public:
      * @param ext_lit The extension variable corresponding to the given clause
      * @param clause The vector of literals to add as a clause
      * 
-     * @note Condition: current level must be zero
+     * @note Condition: current decision level must be zero
      */
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause);
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause);
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause);
+
+    /**
+     * @brief Prioritize branching on a given set of variables
+     * 
+     * @param defs Extension variable definitions -- the extension variables will be prioritized
+     */
+    void prioritize(const std::vector<ExtDef>& defs);
 
     /**
      * @brief Ensures the first two literals are in the right order for the watchers
@@ -93,7 +129,26 @@ public:
      * @param clause The vector of literals in which to substitute
      * @param predicate The condition with which to check the clause
      */
-    inline void substitute(vec<Lit>& clause, SubstitutePredicate& p) const;
+    inline void substitute(vec<Lit>& clause, SubstitutionPredicate& p) const;
+
+    /////////////////////////////
+    // USER-DEFINED HEURISTICS //
+    /////////////////////////////
+    bool user_extFilPredicate(CRef cr);
+    
+    // Select all clauses
+    void user_extSelHeuristic_all     (std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
+    // Select clauses with highest activities
+    void user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
+    
+    void user_extDefHeuristic_random       (std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
+    void user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
+    
+    bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
+
+    ExtDefHeuristic       user_extDefHeuristic;
+    SelectionHeuristic    user_extSelHeuristic;
+    SubstitutionPredicate user_extSubPredicate;
 
 protected:
 
@@ -125,6 +180,7 @@ protected:
     Solver* solver;
     ExtDefMap<Lit> xdm;
 
+    std::vector<CRef> m_filteredClauses;
     std::vector<CRef> m_selectedClauses;
     std::vector<ExtDef> m_extVarDefBuffer;
     vec<Lit> tmp;
@@ -146,7 +202,7 @@ lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
-void SolverER::substitute(vec<Lit>& clause, SubstitutePredicate& p) const {
+void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
     if (p(clause)) xdm.substitute(clause);
 }
 

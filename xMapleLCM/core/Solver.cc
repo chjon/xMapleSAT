@@ -1987,19 +1987,20 @@ lbool Solver::search(int& nof_conflicts)
         nbconfbeforesimplify += incSimplify;
     }
 
-// #if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
     // Generate extension variable definitions
     // Only try generating more extension variables if there aren't any buffered already
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
-        // generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
+        ser->selectClauses(ser->user_extSelHeuristic);
+        ser->defineExtVars(ser->user_extDefHeuristic);
     }
-// #endif
+#endif
 
-// #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
     // Add extension variables
     ser->introduceExtVars(extDefs);
-// #endif
+#endif
 
     for (;;){
         CRef confl = propagate();
@@ -2039,6 +2040,11 @@ lbool Solver::search(int& nof_conflicts)
 				++non_chrono_backtrack;
 				cancelUntil(backtrack_level);
 			}
+
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+            //    because extension variables may be unassigned.
+            ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
             lbd--;
             if (VSIDS){
