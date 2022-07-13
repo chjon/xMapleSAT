@@ -6,16 +6,22 @@
 
 namespace Minisat {
 
-bool SolverER::user_extFilPredicate(CRef cr) {
+bool SolverER::user_extFilPredicate_width(CRef cr) {
     const Clause& clause = solver->ca[cr];
+    // for (int i = 0; i < clause.size(); i++)
+    //     assert(var(clause[i]) >= 0);
 
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     const int sz = clause.size();
     return solver->ext_min_width <= sz && sz <= solver->ext_max_width;
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+}
+
+bool SolverER::user_extFilPredicate_lbd(CRef cr) {
+    const Clause& clause = solver->ca[cr];
+    // for (int i = 0; i < clause.size(); i++)
+    //     assert(var(clause[i]) >= 0);
+
     const int lbd = clause.lbd();
     return solver->ext_min_lbd <= lbd && lbd <= solver->ext_max_lbd;
-#endif
 }
 
 void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
@@ -24,15 +30,15 @@ void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::ve
 
 void SolverER::user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
     ClauseAllocator& ca = solver->ca;
-    for (const CRef cr : input) {
-        CRef clauseIndex = cr, tmp = 0;
+    for (unsigned int i = 0; i < input.size(); i++) {
+        CRef clauseIndex = input[i], tmp = 0;
         double clauseActivity = ca[clauseIndex].activity();
 
-        for (unsigned int i = 0; i < output.size() && i < numClauses; i++) {
-            if (clauseIndex == output[i]) goto user_extSelHeuristic_activity_SKIP;
-            if (clauseActivity > ca[output[i]].activity()) {
-                tmp = output[i];
-                output[i] = clauseIndex;
+        for (unsigned int j = 0; j < output.size() && j < numClauses; j++) {
+            if (clauseIndex == output[j]) goto user_extSelHeuristic_activity_SKIP;
+            if (clauseActivity > ca[output[j]].activity()) {
+                tmp = output[j];
+                output[j] = clauseIndex;
                 clauseActivity = ca[tmp].activity();
                 clauseIndex = tmp;
             }
@@ -110,7 +116,7 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
     const int clause_width = clause.size();
-    if (clause_width < ext_sub_min_width || ext_sub_min_width > ext_sub_max_width) return false;
+    if (clause_width < solver->ext_sub_min_width) return false;
 #endif
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD

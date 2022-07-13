@@ -44,6 +44,11 @@ public:
     inline lbool value(Var x) const;
     inline lbool value(Lit p) const;
 
+    int originalNumVars; // The number of variables in the original formula
+                         // This value is used to quickly check whether a variable is an extension variable
+
+    inline bool isExtVar(Var x) const;
+
 #ifdef TESTING
     inline void set_value(Var x, lbool v, int l);
 #endif
@@ -58,7 +63,7 @@ public:
      * 
      * @note Saves outputs in @code{m_filteredClauses}
      */
-    void filterBatch(const std::vector<CRef>& candidates, FilterPredicate& filterPredicate);
+    void filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate);
 
     /**
      * @brief Filter clauses for clause selection
@@ -134,7 +139,8 @@ public:
     /////////////////////////////
     // USER-DEFINED HEURISTICS //
     /////////////////////////////
-    bool user_extFilPredicate(CRef cr);
+    bool user_extFilPredicate_width(CRef cr);
+    bool user_extFilPredicate_lbd(CRef cr);
     
     // Select all clauses
     void user_extSelHeuristic_all     (std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
@@ -146,17 +152,22 @@ public:
     
     bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
 
-    ExtDefHeuristic       user_extDefHeuristic;
+    FilterPredicate       user_extFilPredicate;
     SelectionHeuristic    user_extSelHeuristic;
+    ExtDefHeuristic       user_extDefHeuristic;
     SubstitutionPredicate user_extSubPredicate;
-
-protected:
 
     ////////////////
     // Statistics //
     ////////////////
 
     uint64_t total_ext_vars, deleted_ext_vars, max_ext_vars;
+    uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+
+    double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
+
+protected:
+
     // // Update stats
     // void updateExtFracStat(vec<Lit>& clause) {
     //     int numExtVarsInClause = getNumExtVars(clause);
@@ -175,7 +186,6 @@ protected:
 
     void   extTimerStart();
     void   extTimerStop(struct rusage& ext_overhead);
-    double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
     Solver* solver;
     ExtDefMap<Lit> xdm;
@@ -232,6 +242,21 @@ inline void SolverER::extTimerStop(struct rusage& ext_overhead) {
     }
 }
 
+static inline double readTimer(struct rusage& ext_overhead) {
+    return (double)ext_overhead.ru_utime.tv_sec + (double)ext_overhead.ru_utime.tv_usec / 1000000;
+}
+inline double SolverER::extTimerRead(unsigned int i) {
+    switch(i) {
+        case 0: return readTimer(ext_sel_overhead);
+        case 1: return readTimer(ext_add_overhead);
+        case 2: return readTimer(ext_delC_overhead);
+        case 3: return readTimer(ext_delV_overhead);
+        case 4: return readTimer(ext_sub_overhead);
+        case 5: return readTimer(ext_stat_overhead);
+        default: return -1.;
+    }
+}
+
 inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
     tmp.clear(); for (const auto l : clause) tmp.push(l);
     addExtDefClause(db, ext_lit, tmp);
@@ -239,6 +264,10 @@ inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const 
 inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause) {
     tmp.clear(); for (const auto l : clause) tmp.push(l);
     addExtDefClause(db, ext_lit, tmp);
+}
+
+inline bool SolverER::isExtVar(Var x) const {
+    return x > originalNumVars;
 }
 
 }

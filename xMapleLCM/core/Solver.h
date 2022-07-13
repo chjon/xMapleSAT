@@ -205,23 +205,14 @@ public:
     int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
     double    ext_prio_act;       // The fraction of maximum activity that should be given to new variables                    (default 0.5)
     bool      ext_pref_sign;      // Preferred sign for new variables                                                          (default true (negated))
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     int       ext_min_width;      // Minimum clause width to consider when selecting clauses
     int       ext_max_width;      // Maximum clause width to consider when selecting clauses
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
     int       ext_filter_num;     // Maximum number of clauses after the filter step
-#endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
     int       ext_sub_min_width;  // Minimum width of clauses to substitute into
     int       ext_sub_max_width;  // Maximum width of clauses to substitute into
-#endif
-#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
     int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
-#endif
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     double    ext_act_threshold;  // Activity threshold for deleting clauses
-#endif
 
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
@@ -337,8 +328,6 @@ protected:
     uint64_t            next_T2_reduce,
     next_L_reduce;
 
-    int               originalNumVars;       // The number of variables in the original formula
-                                             // This value is used to quickly check whether a variable is an extension variable
     long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
                                              // This is used to check whether to run the extension variable introduction heuristic after a restart
 

@@ -50,9 +50,24 @@ namespace std { namespace tr1 {
 
 namespace Minisat {
     SolverER::SolverER(Solver* s)
-        : solver(s)
+        : total_ext_vars     (0)
+        , deleted_ext_vars   (0)
+        , max_ext_vars       (0)
+        , conflict_extclauses(0)
+        , learnt_extclauses  (0)
+        , lbd_total          (0)
+        , branchOnExt        (0)
+
+        , solver(s)
     {
         using namespace std::placeholders;
+
+        // Bind filter heuristic
+        #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_width, this, _1);
+        #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_lbd, this, _1);
+        #endif
 
         // Bind clause selection heuristic
         #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
@@ -74,12 +89,14 @@ namespace Minisat {
 
     SolverER::~SolverER() {}
 
-    void SolverER::filterBatch(const std::vector<CRef>& candidates, FilterPredicate& filterPredicate) {
+    void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate) {
         extTimerStart();
 
-        for (CRef candidate : candidates)
+        for (int i = 0; i < candidates.size(); i++) {
+            CRef candidate = candidates[i];
             if (filterPredicate(candidate))
                 m_filteredClauses.push_back(candidate);
+        }
 
         extTimerStop(ext_sel_overhead);
     }
@@ -94,9 +111,13 @@ namespace Minisat {
     }
 
     void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
+        filterBatch(solver->learnts_core , user_extFilPredicate);
+        filterBatch(solver->learnts_tier2, user_extFilPredicate);
+
         extTimerStart();
 
         selectionHeuristic(m_selectedClauses, m_filteredClauses, solver->ext_window);
+        m_filteredClauses.clear();
         
         extTimerStop(ext_sel_overhead);
     }

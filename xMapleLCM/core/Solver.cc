@@ -73,16 +73,10 @@ static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to 
 static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
 static DoubleOption  opt_ext_prio       (_cat, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
 static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
 static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-static IntOption     opt_ext_filter_num (_cat, "ext-filter-num", "Maximum number of clauses after the filter step\n", 200, IntRange(0, INT32_MAX));
-#endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", 100, IntRange(0, INT32_MAX));
-#endif
+static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(2, INT32_MAX));
+static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(0, INT32_MAX));
 #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
 static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
@@ -193,7 +187,6 @@ Solver::Solver() :
   , lbd_queue          (50)
   , next_T2_reduce     (10000)
   , next_L_reduce      (15000)
-  , originalNumVars    (0)
   , prevExtensionConflict(0)
   , confl_to_chrono    (opt_conf_to_chrono)
   , chrono			   (opt_chrono)
@@ -2169,6 +2162,9 @@ lbool Solver::search(int& nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+
+                if (ser->isExtVar(var(next)))
+                    ser->branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
@@ -2276,7 +2272,7 @@ lbool Solver::solve_()
     add_tmp.clear();
 
     VSIDS = true;
-    originalNumVars = nVars();
+    ser->originalNumVars = nVars();
     int init = 10000;
     while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
