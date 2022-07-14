@@ -155,6 +155,17 @@ using ExtDefHeuristic = std::function<void(std::vector<ExtDef>&, const std::vect
  */
 using SubstitutionPredicate = std::function<bool(vec<Lit>&)>;
 
+// Extension Variable Deletion
+
+/**
+ * @brief A user-defined predicate for determining whether to delete a variable
+ * 
+ * @param x the candidate variable to delete
+ * @return true if the solver should delete the variable
+ * @return false otherwise
+ */
+using DeletionPredicate = std::function<bool(Var)>;
+
 }
 
 #endif

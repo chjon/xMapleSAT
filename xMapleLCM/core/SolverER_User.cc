@@ -66,7 +66,7 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     ClauseAllocator& ca = solver->ca;
     std::tr1::unordered_set<Lit> litSet;
     for (unsigned int i = 0; i < selectedClauses.size(); i++) {
-        Clause c = ca[selectedClauses[i]];
+        Clause& c = ca[selectedClauses[i]];
         for (int j = 0; j < c.size(); j++) litSet.insert(c[j]);
     }
 
@@ -125,6 +125,13 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 #endif
 
     return true;
+}
+
+bool SolverER::user_extDelPredicate_none(Var x) { return false; }
+bool SolverER::user_extDelPredicate_all(Var x) { return true; }
+bool SolverER::user_extDelPredicate_activity(Var x) {
+    // return solver->activity_CHB[x] < solver->ext_act_threshold;
+    return solver->activity_VSIDS[x] < solver->ext_act_threshold;
 }
 
 }

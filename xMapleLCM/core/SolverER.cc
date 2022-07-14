@@ -48,6 +48,11 @@ namespace std { namespace tr1 {
     }
 }}
 
+static inline void initOverhead(struct rusage& overhead, int s, int us) {
+    overhead.ru_utime.tv_sec  = s;
+    overhead.ru_utime.tv_usec = us;
+}
+
 namespace Minisat {
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
@@ -85,6 +90,23 @@ namespace Minisat {
 
         // Bind clause substitution predicate
         user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
+
+        // Bind variable deletion predicate
+        #if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_NONE
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_none, this, _1);
+        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
+        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
+        #endif
+
+        // Initialize overhead measurement
+        initOverhead(ext_sel_overhead , 0, 0);
+        initOverhead(ext_add_overhead , 0, 0);
+        initOverhead(ext_delC_overhead, 0, 0);
+        initOverhead(ext_delV_overhead, 0, 0);
+        initOverhead(ext_sub_overhead , 0, 0);
+        initOverhead(ext_stat_overhead, 0, 0);
     }
 
     SolverER::~SolverER() {}
@@ -267,5 +289,58 @@ namespace Minisat {
             db.push_back(cr);
             solver->attachClause(cr);
         }
+    }
+
+    void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
+        extTimerStart();
+
+        // Iterating through current extension variables
+        std::tr1::unordered_set<Lit> varsToDelete;
+        for (auto it = solver->extDefs.begin(); it != solver->extDefs.end(); it++) {
+            Var x = it->first;
+
+            // Find all extension variables that are not basis literals
+            // Extension variables that participate in definitions of other variables cannot be deleted
+            if (xdm.degree(mkLit(x, false)) > 0 || xdm.degree(mkLit(x, true)) > 0) continue;
+
+            // Check whether the solver should delete the variable
+            if (!deletionPredicate(x)) continue;
+
+            // Check whether any of the extension definition clauses are not removable
+            bool canDeleteDef = true;
+            for (CRef cr : it->second) {
+                Clause& c = solver->ca[cr];
+                if (c.mark() == CORE || !c.removable() || solver->locked(c)) {
+                    canDeleteDef = false;
+                    break;
+                }
+            }
+
+            // Queue extension variable to be deleted
+            if (canDeleteDef) {
+                varsToDelete.insert(mkLit(x));
+            }
+        }
+
+        // Delete clauses containing the extension variable
+
+        // 1. TODO: Delete learnt clauses containing the extension variable
+        //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay 
+
+        // 2. Delete extension variable definition clauses
+        for (Lit x : varsToDelete) {
+            for (CRef cr : solver->extDefs.find(var(x))->second) {
+                // TODO: also remove CRef from buffers (e.g. from incremental clause filtering)
+                solver->removeClause(cr);
+            }
+            solver->extDefs.erase(var(x));
+        }
+
+        // 3. Remove extension variable from definition map to prevent future clause substitution
+        xdm.erase(varsToDelete); 
+
+        // Update stats
+        deleted_ext_vars += varsToDelete.size();
+        extTimerStop(ext_delV_overhead);
     }
 }

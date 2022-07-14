@@ -136,6 +136,9 @@ public:
      */
     inline void substitute(vec<Lit>& clause, SubstitutionPredicate& p) const;
 
+    // Extension Variable Deletion
+    void deleteExtVars(DeletionPredicate& p);
+
     /////////////////////////////
     // USER-DEFINED HEURISTICS //
     /////////////////////////////
@@ -152,10 +155,18 @@ public:
     
     bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
 
+    // Never delete extension variables
+    bool user_extDelPredicate_none(Var x);
+    // Always delete extension variables
+    bool user_extDelPredicate_all(Var x);
+    // Only delete extension variables with low activities
+    bool user_extDelPredicate_activity(Var x);
+
     FilterPredicate       user_extFilPredicate;
     SelectionHeuristic    user_extSelHeuristic;
     ExtDefHeuristic       user_extDefHeuristic;
     SubstitutionPredicate user_extSubPredicate;
+    DeletionPredicate     user_extDelPredicate;
 
     ////////////////
     // Statistics //
@@ -176,16 +187,16 @@ protected:
     // }
 
     // Measuring extended resolution overhead
-    struct rusage ext_timer_start, ext_timer_end;
-    struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
-    struct rusage ext_add_overhead; // Overhead for adding extension variables
-    struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
-    struct rusage ext_delV_overhead; // Overhead for deleting extension variables
-    struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
-    struct rusage ext_stat_overhead; // Overhead for measuring statistics
+    mutable struct rusage ext_timer_start, ext_timer_end;
+    mutable struct rusage ext_sel_overhead; // Overhead for selecting clauses for adding extension variables
+    mutable struct rusage ext_add_overhead; // Overhead for adding extension variables
+    mutable struct rusage ext_delC_overhead; // Overhead for deleting clauses containing extension variables
+    mutable struct rusage ext_delV_overhead; // Overhead for deleting extension variables
+    mutable struct rusage ext_sub_overhead; // Overhead for substituting disjunctions containing extension variables
+    mutable struct rusage ext_stat_overhead; // Overhead for measuring statistics
 
-    void   extTimerStart();
-    void   extTimerStop(struct rusage& ext_overhead);
+    void   extTimerStart() const;
+    void   extTimerStop(struct rusage& ext_overhead) const;
 
     Solver* solver;
     ExtDefMap<Lit> xdm;
@@ -213,15 +224,17 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
 void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
+    extTimerStart();
     if (p(clause)) xdm.substitute(clause);
+    extTimerStop(ext_sub_overhead);
 }
 
 // EXTENDED RESOLUTION - statistics
-inline void SolverER::extTimerStart() {
+inline void SolverER::extTimerStart() const {
     getrusage(RUSAGE_SELF, &ext_timer_start);
 }
 
-inline void SolverER::extTimerStop(struct rusage& ext_overhead) {
+inline void SolverER::extTimerStop(struct rusage& ext_overhead) const {
     getrusage(RUSAGE_SELF, &ext_timer_end);
     
     // Add to total overhead
