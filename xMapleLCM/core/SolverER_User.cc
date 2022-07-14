@@ -106,7 +106,7 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
 
         // Add extension variable
         generatedPairs.insert(litPair);
-        extVarDefBuffer.push_back(ExtDef { x, a, b, std::vector< std::vector<Lit> >() });
+        extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
         x++;
     }
 }
