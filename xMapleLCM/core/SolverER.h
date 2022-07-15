@@ -47,8 +47,14 @@ public:
     int originalNumVars; // The number of variables in the original formula
                          // This value is used to quickly check whether a variable is an extension variable
 
+    // Determine whether a variable is an extension variable
     inline bool isExtVar(Var x) const;
+    
+    // Determine whether a variable is an extension variable in the data structure for variable substitution
     inline bool isCurrentExtVar(Var x) const;
+
+    // Determine whether a pair of literals can be used as the basis literals for a new extension variable
+    inline bool isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set< std::pair<Lit, Lit> >& generatedPairs) const;
 
 #ifdef TESTING
     inline void set_value(Var x, lbool v, int l);
@@ -216,7 +222,11 @@ protected:
 };
 
 #ifdef TESTING
-void  SolverER::set_value(Var x, lbool v, int l) { test_value.insert(std::make_pair(x, std::make_pair(v, l))); }
+void  SolverER::set_value(Var x, lbool v, int l) {
+    auto it = test_value.find(x);
+    if (it == test_value.end()) test_value.insert(std::make_pair(x, std::make_pair(v, l)));
+    else it->second = std::make_pair(v, l);
+}
 void  SolverER::addToExtDefBuffer(ExtDef extDef) { m_extVarDefBuffer.push_back(extDef); }
 unsigned int SolverER::extDefBufferSize() { return m_extVarDefBuffer.size(); }
 
@@ -291,6 +301,21 @@ inline bool SolverER::isExtVar(Var x) const {
 
 inline bool SolverER::isCurrentExtVar(Var x) const {
     return x >= originalNumVars && xdm.containsExt(mkLit(x));
+}
+
+// FIXME: need to handle the case where the pair is currently queued for variable introduction in the extVarDefBuffer
+// We cannot just add directly to xdm since it might result in substitution before we introduce the new var
+inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set< std::pair<Lit, Lit> >& generatedPairs) const {
+    // Ensure literal pair consists of different variables
+    if (var(a) == var(b)) return false;
+
+    // Ensure literals in pair are not set at level 0
+    if (value(a) != l_Undef && level(var(a)) == 0) return false;
+    if (value(b) != l_Undef && level(var(b)) == 0) return false;
+    
+    // Ensure literal pair has not already been added
+    if (xdm.containsPair(a, b)) return false;
+    return generatedPairs.find(mkLitPair(a, b)) == generatedPairs.end();
 }
 
 }

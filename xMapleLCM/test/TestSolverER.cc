@@ -95,4 +95,30 @@ TEST_CASE("Introducing extension variables", "[SolverER]") {
     // Check whether the buffer has been cleared
     REQUIRE(ser.extDefBufferSize() == 0);
 }
+
+TEST_CASE("Testing for valid definition pairs", "[SolverER]") {
+    SolverER ser(nullptr);
+    std::tr1::unordered_set< std::pair<Lit, Lit> > generatedPairs;
+
+    // Ensure literal pair consists of different variables
+    Lit a = mkLit(1), b = mkLit(2);
+    REQUIRE_FALSE(ser.isValidDefPair(mkLit(1, false), mkLit(1, true), generatedPairs));
+    REQUIRE(ser.isValidDefPair(a, b, generatedPairs));
+    REQUIRE(ser.isValidDefPair(b, a, generatedPairs));
+    
+    // Ensure literals in pair are not set at level 0
+    ser.set_value(1, l_True, 0); ser.set_value(2, l_True, 0);
+    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+    ser.set_value(1, l_True, 0); ser.set_value(2, l_True, 1);
+    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+    ser.set_value(1, l_True, 1); ser.set_value(2, l_True, 0);
+    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+    ser.set_value(1, l_True, 1); ser.set_value(2, l_True, 1);
+    REQUIRE      (ser.isValidDefPair(a, b, generatedPairs));
+
+    // Ensure literal pair has not already been added
+    generatedPairs.insert(mkLitPair(a, b));
+    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+    REQUIRE_FALSE(ser.isValidDefPair(b, a, generatedPairs));
+}
 }

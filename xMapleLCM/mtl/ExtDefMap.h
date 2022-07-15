@@ -81,8 +81,9 @@ public:
         const P key = mkLitPair(a, b);
         if (pl_map.find(key) != pl_map.end()) return;
 
-        lp_map.insert(std::make_pair(x, key));
-        pl_map.insert(std::make_pair(key, x));
+        auto lp_pair = lp_map.insert(std::make_pair(x, key));
+        auto pl_pair = pl_map.insert(std::make_pair(key, x));
+        assert(lp_pair.second && pl_pair.second);
 
         // Increment count for Lit a
         typename RCMap::iterator it1 = rc_map.find(a);

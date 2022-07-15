@@ -94,20 +94,12 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
         Lit a = litVec[i_a], b = litVec[i_b];
         std::pair<Lit, Lit> litPair = mkLitPair(a, b);
 
-        // Ensure literal pair consists of different variables
-        // Ensure literal pair has not already been added
-        // FIXME: need to handle the case where the pair is currently queued for variable introduction in the extVarDefBuffer
-        // We cannot just add directly to xdm since it might result in substitution before we introduce the new var
-        if (
-            var(a) == var(b) ||
-            xdm.contains(a, b) ||
-            generatedPairs.find(litPair) != generatedPairs.end()
-        ) continue;
-
-        // Add extension variable
-        generatedPairs.insert(litPair);
-        extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
-        x++;
+        if (isValidDefPair(a, b, generatedPairs)) {
+            // Add extension variable
+            generatedPairs.insert(litPair);
+            extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
+            x++;
+        }
     }
 }
 
