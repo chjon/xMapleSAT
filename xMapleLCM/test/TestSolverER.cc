@@ -97,8 +97,14 @@ TEST_CASE("Introducing extension variables", "[SolverER]") {
 }
 
 TEST_CASE("Testing for valid definition pairs", "[SolverER]") {
-    SolverER ser(nullptr);
+    Solver s;
+    SolverER& ser = *(s.ser);
+    std::tr1::unordered_map<Var, std::vector<CRef> > db;
     std::tr1::unordered_set< std::pair<Lit, Lit> > generatedPairs;
+
+    // Set up variables for testing
+    ser.originalNumVars = 10;
+    for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
 
     // Ensure literal pair consists of different variables
     Lit a = mkLit(1), b = mkLit(2);
@@ -119,6 +125,11 @@ TEST_CASE("Testing for valid definition pairs", "[SolverER]") {
     // Ensure literal pair has not already been added
     generatedPairs.insert(mkLitPair(a, b));
     REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+    REQUIRE_FALSE(ser.isValidDefPair(b, a, generatedPairs));
+    generatedPairs.clear();
+    
+    ser.addToExtDefBuffer(ExtDef{ mkLit(10), a, b, std::vector< std::vector<Lit> >() });
+    ser.introduceExtVars(db);
     REQUIRE_FALSE(ser.isValidDefPair(b, a, generatedPairs));
 }
 }
