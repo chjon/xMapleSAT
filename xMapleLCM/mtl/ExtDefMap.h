@@ -64,13 +64,16 @@ public:
     inline typename PLMap::iterator end() { return pl_map.end(); }
 
     // Return the number of stored extension variable definitions
-    inline unsigned int size() { return pl_map.size(); }
+    inline unsigned int size() const { return pl_map.size(); }
 
     // Return the number of extension variable definitions in which the literal participates
-    inline unsigned int degree(L a) { auto it = rc_map.find(a); return it == rc_map.end() ? 0 : it->second; }
+    inline unsigned int degree(L a) const { auto it = rc_map.find(a); return it == rc_map.end() ? 0 : it->second; }
 
     // Check whether a pair of literals has a corresponding extension variable definition
-    inline bool contains (L a, L b) { return pl_map.find(mkLitPair(a, b)) != pl_map.end(); }
+    inline bool containsPair (L a, L b) const { return pl_map.find(mkLitPair(a, b)) != pl_map.end(); }
+
+    // Check whether a variable is a current extension variable
+    inline bool containsExt (L x) const { return lp_map.find(x) != lp_map.end(); }
 
     // Insert a definition for an extension variable
     // x <=> (a v b)

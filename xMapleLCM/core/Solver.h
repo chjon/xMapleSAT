@@ -251,6 +251,11 @@ public:
     vec<uint32_t> canceled;
 #endif
 
+    // Getting clauses for testing
+#ifdef TESTING
+    const Clause& getClause(CRef cr) const;
+#endif
+
 protected:
 
     // Helper structures:
@@ -636,6 +641,11 @@ inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ ve
 
 
 //=================================================================================================
+#ifdef TESTING
+inline const Clause& Solver::getClause(CRef cr) const { assert(cr < ca.size()); return ca[cr]; }
+#endif
+
+
 }
 
 #endif

@@ -48,9 +48,12 @@ public:
                          // This value is used to quickly check whether a variable is an extension variable
 
     inline bool isExtVar(Var x) const;
+    inline bool isCurrentExtVar(Var x) const;
 
 #ifdef TESTING
     inline void set_value(Var x, lbool v, int l);
+    inline void addToExtDefBuffer(ExtDef extDef);
+    inline unsigned int extDefBufferSize();
 #endif
 
     // Clause Selection
@@ -214,6 +217,9 @@ protected:
 
 #ifdef TESTING
 void  SolverER::set_value(Var x, lbool v, int l) { test_value.insert(std::make_pair(x, std::make_pair(v, l))); }
+void  SolverER::addToExtDefBuffer(ExtDef extDef) { m_extVarDefBuffer.push_back(extDef); }
+unsigned int SolverER::extDefBufferSize() { return m_extVarDefBuffer.size(); }
+
 int   SolverER::level(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (-1     ) : (it->second.second); }
 lbool SolverER::value(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (l_Undef) : (it->second.first ); }
 lbool SolverER::value(Lit p) const { return value(var(p)) ^ sign(p); }
@@ -280,7 +286,11 @@ inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const 
 }
 
 inline bool SolverER::isExtVar(Var x) const {
-    return x > originalNumVars;
+    return x >= originalNumVars;
+}
+
+inline bool SolverER::isCurrentExtVar(Var x) const {
+    return x >= originalNumVars && xdm.containsExt(mkLit(x));
 }
 
 }

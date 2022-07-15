@@ -4,15 +4,15 @@
 
 namespace Minisat {
 
-std::tr1::unordered_set<Lit> mkLitSet(std::initializer_list<int> elements) {
+std::tr1::unordered_set<Lit> mkLitSet(const std::initializer_list<int>& elements) {
     std::tr1::unordered_set<Lit> s;
-    for (auto element : elements) s.insert(mkLit(element));
+    for (const auto element : elements) s.insert(mkLit(element));
     return s;
 }
 
-void setLitVec(vec<Lit>& v, std::initializer_list<int> elements) {
+void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements) {
     v.clear();
-    for (auto element : elements) v.push(mkLit(element));
+    for (const auto element : elements) v.push(mkLit(element));
 }
 
 static void printVec(Minisat::vec<Lit>& v) {
@@ -60,5 +60,21 @@ bool requireVecPrefix(Minisat::vec<Lit>& actual, Minisat::vec<Lit>& prefix) {
     return false;
 }
 
+bool requireClauseEqual(const Clause& actual, const std::initializer_list<Lit>& elements) {
+    // Ensure clause sizes are equal
+    const unsigned int sz = static_cast<unsigned int>(actual.size());
+    REQUIRE(sz == elements.size());
+    if (sz != elements.size()) return false;
+
+    // Ensure clauses contain the same elements
+    unsigned int i = 0, numDiffs = 0;
+    for (Lit l : elements) {
+        if (actual[i++] != l) numDiffs++;
+    }
+    REQUIRE(numDiffs == 0);
+    if (numDiffs != 0) return false;
+
+    return true;
+}
 
 }

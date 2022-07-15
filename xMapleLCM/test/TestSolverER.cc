@@ -49,4 +49,50 @@ TEST_CASE("Enforce watcher invariants", "[SolverER]") {
     REQUIRE(requireVecPrefix(clause, prefix));
 }
 
+TEST_CASE("Introducing extension variables", "[SolverER]") {
+    Lit x, a, b;
+    Solver s;
+    SolverER& ser = *(s.ser);
+    std::tr1::unordered_map<Var, std::vector<CRef> > db;
+    std::vector< std::vector<Lit> > additional;
+
+    // Set up variables for testing
+    ser.originalNumVars = 10;
+    for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
+
+    // Test whether definition clauses are defined correctly
+    x = mkLit(10), a = mkLit(0), b = mkLit(1);
+    additional.clear(); additional.push_back(std::vector<Lit>({x, a, b, mkLit(2)}));
+    ser.addToExtDefBuffer(ExtDef{ x, a, b, additional });
+    ser.introduceExtVars(db);
+
+    // Test whether clauses were added to the database
+    std::tr1::unordered_map<Var, std::vector<CRef> >::iterator it = db.find(10);
+    REQUIRE(it != db.end());
+
+    if (it != db.end()) {
+        // Test whether we get the expected number of clauses
+        std::vector<CRef>& clauses = it->second;
+        REQUIRE(clauses.size() == 4);
+
+        if (clauses.size() == 4) {
+            // Test whether we get the expected definition clauses
+            REQUIRE(requireClauseEqual(s.getClause(clauses[0]), { ~x,  a,  b }));
+            REQUIRE(requireClauseEqual(s.getClause(clauses[1]), {  x, ~a }));
+            REQUIRE(requireClauseEqual(s.getClause(clauses[2]), {  x, ~b }));
+
+            // Test whether we get the expected additional clause
+            REQUIRE(requireClauseEqual(s.getClause(clauses[3]), { x, a, b, mkLit(2) }));
+        }
+    }
+
+    // Test whether the extension variable was added to the solver
+    REQUIRE(s.nVars() == ser.originalNumVars + 1);
+
+    // Test whether the extension variable definition was stored in the extension definition map
+    REQUIRE(ser.isCurrentExtVar(var(x)));
+
+    // Check whether the buffer has been cleared
+    REQUIRE(ser.extDefBufferSize() == 0);
+}
 }

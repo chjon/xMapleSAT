@@ -132,7 +132,7 @@ struct ExtDef {
     Lit a, b;
     
     // Clauses to learn in addition to the three defining clauses encoding (x <=> a v b) 
-    std::vector<std::vector<Lit>> additionalClauses;
+    std::vector< std::vector<Lit> > additionalClauses;
 };
 
 /**
