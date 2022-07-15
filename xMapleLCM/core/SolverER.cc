@@ -211,7 +211,7 @@ namespace Minisat {
         // Add extension definition clauses
         for (const ExtDef& def : m_extVarDefBuffer) {
             const Lit x = def.x, a = def.a, b = def.b;
-            assert(var(x) > originalNumVars && var(x) > var(a) && var(x) > var(b));
+            assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
 
             // Save definition (x <=> a v b)
             xdm.insert(x, a, b);
