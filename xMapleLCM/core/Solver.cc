@@ -75,8 +75,8 @@ static DoubleOption  opt_ext_prio       (_cat, "ext-prio","The fraction of maxim
 static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
 static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(2, INT32_MAX));
-static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
+static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
 #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
 static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
 static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
@@ -2472,6 +2472,19 @@ void Solver::relocAll(ClauseAllocator& to)
         ca.reloc(learnts_tier2[i], to);
     for (int i = 0; i < learnts_local.size(); i++)
         ca.reloc(learnts_local[i], to);
+
+    // All extension variable definition clauses
+    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+        std::vector<CRef>& cs = it->second;
+        unsigned int i, j;
+        for (i = j = 0; i < cs.size(); i++) {
+            // Reloc following example of clauses
+            if (ca[cs[i]].mark() != 1){
+                ca.reloc(cs[i], to);
+                cs[j++] = cs[i]; }
+        }
+        cs.erase(cs.begin() + j, cs.end());
+    }
 
     // All original:
     //
