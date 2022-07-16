@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <stdio.h>
 #include "core/Solver.h"
 #include "core/SolverER.h"
+#include "mtl/Sort.h"
 
 // Template specializations for hashing
 namespace std { namespace tr1 {
@@ -261,7 +262,59 @@ namespace Minisat {
         }
     }
 
-    void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& clause) {
+    void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
+        assert(decisionLevel() == 0);
+
+        for (int i = 0; i < ps.size(); i++) {
+            Var v = var(ps[i]);
+            while (v >= solver->nVars()) solver->newVar();
+        }
+
+        if (!solver->ok) return;
+
+        // Check if clause is satisfied and remove false/duplicate literals:
+        sort(ps);
+        Lit p; int i, j;
+
+        if (solver->drup_file){
+            solver->add_oc.clear();
+            for (int i = 0; i < ps.size(); i++) solver->add_oc.push(ps[i]); }
+
+        for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
+            if (value(ps[i]) == l_True || ps[i] == ~p)
+                return;
+            else if (value(ps[i]) != l_False && ps[i] != p)
+                ps[j++] = p = ps[i];
+        ps.shrink(i - j);
+
+        if (solver->drup_file && i != j){
+    #ifdef BIN_DRUP
+            solver->binDRUP('a', ps, solver->drup_file);
+            solver->binDRUP('d', solver->add_oc, solver->drup_file);
+    #else
+            for (int i = 0; i < ps.size(); i++)
+                fprintf(solver->drup_file, "%i ", (var(ps[i]) + 1) * (-2 * sign(ps[i]) + 1));
+            fprintf(solver->drup_file, "0\n");
+
+            fprintf(solver->drup_file, "d ");
+            for (int i = 0; i < solver->add_oc.size(); i++)
+                fprintf(solver->drup_file, "%i ", (var(solver->add_oc[i]) + 1) * (-2 * sign(solver->add_oc[i]) + 1));
+            fprintf(solver->drup_file, "0\n");
+    #endif
+        }
+
+        if (ps.size() == 0)
+            return;
+        else if (ps.size() == 1){
+            solver->uncheckedEnqueue(ps[0]);
+            solver->propagate();
+            return;
+        }else{
+            CRef cr = solver->ca.alloc(ps, false);
+            db.push_back(cr);
+            solver->attachClause(cr);
+        }
+
         // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
         // Do we need to propagate here?
         // BCP works by iterating through the literals on the trail 
@@ -276,19 +329,22 @@ namespace Minisat {
         //    We should backtrack to the appropriate level (max(lvl(a), lvl(b))) if we want to propagate, and
         //    let propagate() handle it for us
 
-        if (clause.size() == 1) {
-            solver->uncheckedEnqueue(ext_lit);
-        } else {
-            // Make sure the first two literals are in the right order for the watchers
-            enforceWatcherInvariant(clause);
+        // if (clause.size() == 1) {
+        //     solver->uncheckedEnqueue(ext_lit);
+        // } else {
+        //     // Make sure the first two literals are in the right order for the watchers
+        //     enforceWatcherInvariant(clause);
 
-            // Add clause to data structures
-            CRef cr = solver->ca.alloc(clause, false); // Allocating clause as if it were an original clause
+        //     // Add clause to data structures
+        //     ClauseAllocator& ca = solver->ca;
+        //     CRef cr = ca.alloc(clause, false); // Allocating clause as if it were an original clause
+        //     int lbd = solver->computeLBD(ca[cr]);
+        //     ca[cr].set_lbd(lbd);
 
-            // Add clause to db
-            db.push_back(cr);
-            solver->attachClause(cr);
-        }
+        //     // Add clause to db
+        //     db.push_back(cr);
+        //     solver->attachClause(cr);
+        // }
     }
 
     void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
