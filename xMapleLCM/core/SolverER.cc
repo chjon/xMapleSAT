@@ -145,7 +145,7 @@ namespace Minisat {
         extTimerStop(ext_sel_overhead);
     }
 
-    void SolverER::enforceWatcherInvariant(vec<Lit>& clause) {
+    void SolverER::enforceWatcherInvariant(vec<Lit>& clause) const {
         assert(clause.size() > 1);
 
         // Swap all unassigned literals to the beginning of the clause
@@ -176,14 +176,15 @@ namespace Minisat {
         } else if (num_unassigned == 1) {
             // Find the first literal assigned at the next-highest level:
             int maxLvl_j = 1;
-            for (j = 1; j < clause.size(); j++)
+            for (j = 2; j < clause.size(); j++)
                 if (level(var(clause[j])) > level(var(clause[maxLvl_j])))
                     maxLvl_j = j;
 
             // Swap-in this literal at index 1:
-            Lit tmp          = clause[1];
-            clause[1]        = clause[maxLvl_j];
-            clause[maxLvl_j] = tmp;
+            Lit tmp          = clause[maxLvl_j];
+            clause[maxLvl_j] = clause[1];
+            clause[1]        = tmp;
+            // solver->cancelUntil(level(var(tmp)));
         }
     }
 
@@ -263,7 +264,7 @@ namespace Minisat {
     }
 
     void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
-        assert(decisionLevel() == 0);
+        assert(solver->decisionLevel() == 0);
 
         for (int i = 0; i < ps.size(); i++) {
             Var v = var(ps[i]);
@@ -315,6 +316,8 @@ namespace Minisat {
             solver->attachClause(cr);
         }
 
+        //////////////////////////////////////////////////////////////////////////////////
+
         // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
         // Do we need to propagate here?
         // BCP works by iterating through the literals on the trail 
@@ -329,15 +332,15 @@ namespace Minisat {
         //    We should backtrack to the appropriate level (max(lvl(a), lvl(b))) if we want to propagate, and
         //    let propagate() handle it for us
 
-        // if (clause.size() == 1) {
+        // if (ps.size() == 1) {
         //     solver->uncheckedEnqueue(ext_lit);
         // } else {
         //     // Make sure the first two literals are in the right order for the watchers
-        //     enforceWatcherInvariant(clause);
+        //     enforceWatcherInvariant(ps);
 
         //     // Add clause to data structures
         //     ClauseAllocator& ca = solver->ca;
-        //     CRef cr = ca.alloc(clause, false); // Allocating clause as if it were an original clause
+        //     CRef cr = ca.alloc(ps, false); // Allocating clause as if it were an original clause
         //     int lbd = solver->computeLBD(ca[cr]);
         //     ca[cr].set_lbd(lbd);
 

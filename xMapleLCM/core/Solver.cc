@@ -1258,6 +1258,30 @@ inline Solver::ConflictData Solver::FindConflictLevel(CRef cind)
 	return data;
 }
 
+void Solver::checkTrailInvariant() {
+    // Periodically check candidate invariant - do all literals appear before their respective implied literals?
+    // i.e., if a implies b by unit propagation under some partial assignment, does a always
+    // appear on the trail before b?
+
+    bool* tmp_seen = new bool[nVars()];
+    // Initially, nothing is seen
+    for (int i = 0; i < nVars(); i++)
+        tmp_seen[i] = false;
+
+    // Check reason vars
+    for (int i = 0; i < trail.size(); i++) {
+        Var v = var(trail[i]);
+        tmp_seen[v] = true;
+
+        if (reason(v) != CRef_Undef) {
+            Clause& c = ca[reason(v)];
+            for (int j = 0; j < c.size(); j++) {
+                assert(tmp_seen[var(c[j])]);
+            }
+        }
+    }
+    delete[] tmp_seen;
+}
 
 /*_________________________________________________________________________________________________
 |
@@ -2022,6 +2046,15 @@ lbool Solver::search(int& nof_conflicts)
                 collectFirstUIP(confl);
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
+
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+            //    because extension variables may be unassigned.
+            // FIXME: breaks when we substitute the first literal with an extension literal which already has a value
+            // TODO: Investigate whether this ever produces duplicate clauses
+            // checkTrailInvariant();
+            bool is_asserting = ser->substitute(learnt_clause, ser->user_extSubPredicate);
+
             // check chrono backtrack condition
             if ((confl_to_chrono < 0 || static_cast<uint64_t>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
             {
@@ -2033,11 +2066,6 @@ lbool Solver::search(int& nof_conflicts)
 				++non_chrono_backtrack;
 				cancelUntil(backtrack_level);
 			}
-
-            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
-            //    because extension variables may be unassigned.
-            ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
             lbd--;
             if (VSIDS){
@@ -2079,11 +2107,12 @@ lbool Solver::search(int& nof_conflicts)
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
 
-                uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
+                if (is_asserting) uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
 #ifdef PRINT_OUT
                 std::cout << "new " << ca[cr] << "\n";
                 std::cout << "ci " << learnt_clause[0] << " l " << backtrack_level << "\n";
 #endif                
+                // checkTrailInvariant();
             }
             if (drup_file){
 #ifdef BIN_DRUP

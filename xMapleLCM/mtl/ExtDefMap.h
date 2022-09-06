@@ -154,7 +154,7 @@ public:
         lp_map.clear();
     }
 
-    void substitute(vec<L>& clause) const {
+    void substitute(vec<L>& clause, vec<L>& extLits) const {
         // Get indices of all basis literals (in increasing order)
         vec<int> defLitIndex;
         vec<bool> validIndex; // True if corresponding literal is in clause
@@ -168,8 +168,9 @@ public:
         if (defLitIndex.size() <= 1) return;
 
         // Check each pair of basis literals for a corresponding extension variable
+        // FIXME: starting from 1 is a workaround to avoid the first literal being assigned
         int numReplaced = 0;
-        for (int i = 0; i < defLitIndex.size(); i++) {
+        for (int i = 1; i < defLitIndex.size(); i++) {
             if (!validIndex[defLitIndex[i]]) continue;
             for (int j = i + 1; j < defLitIndex.size(); j++) {
                 if (!validIndex[defLitIndex[i]]) continue;
@@ -182,6 +183,7 @@ public:
                 clause[defLitIndex[i]] = it->second;
                 validIndex[defLitIndex[j]] = false;
                 numReplaced++;
+                extLits.push(it->second);
                 break;
             }
         }
