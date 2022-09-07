@@ -243,44 +243,17 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 
 bool SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
     extTimerStart();
-    bool is_asserting = true;
     if (p(clause)) {
         vec<Lit> extLits;
         xdm.substitute(clause, extLits);
 
-        if (extLits.size() > 0) { // Do additional work only if we actually substituted
-            // Count the number of extension literals with each value
-            int num_undef = 0, num_false = 0, num_true = 0;
-            for (int i = 0; i < extLits.size(); i++) {
-                if      (value(extLits[i]) == l_False) ++num_false;
-                else if (value(extLits[i]) == l_Undef) ++num_undef;
-                else ++num_true;
-            }
-
-            if (num_false == extLits.size()) {
-                // Loose check for whether clause is still asserting
-                for (int i = 0; i < extLits.size(); i++) {
-                    if (level(var(extLits[i])) >= level(var(clause[0]))) {
-                        is_asserting = false;
-                        break;
-                    }
-                }
-            } else if (num_undef == 0) {
-                // Check whether clause is still asserting
-                // TODO: is it even possible for this assignment to be true? clause[0] is the asserting literal
-                for (int i = 0; i < extLits.size(); i++) {
-                    if (value(extLits[i]) == l_True && level(var(extLits[i])) <= level(var(clause[0]))) {
-                        is_asserting = false;
-                        break;
-                    }
-                }
-            } else { // At least one unassigned literal
-                is_asserting = false;
-            }
-        }
+        // assert(value(clause[0]) == l_Undef);
+        // for (int i = 1; i < extLits.size(); i++) {
+        //     assert(value(extLits[i]) == l_False);
+        // }
     }
     extTimerStop(ext_sub_overhead);
-    return is_asserting;
+    return true;
 }
 
 // EXTENDED RESOLUTION - statistics

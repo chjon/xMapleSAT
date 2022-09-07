@@ -170,7 +170,7 @@ public:
         // Check each pair of basis literals for a corresponding extension variable
         // FIXME: starting from 1 is a workaround to avoid the first literal being assigned
         int numReplaced = 0;
-        for (int i = 1; i < defLitIndex.size(); i++) {
+        for (int i = 0; i < defLitIndex.size(); i++) {
             if (!validIndex[defLitIndex[i]]) continue;
             for (int j = i + 1; j < defLitIndex.size(); j++) {
                 if (!validIndex[defLitIndex[i]]) continue;
