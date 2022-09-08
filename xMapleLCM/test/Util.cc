@@ -6,13 +6,13 @@ namespace Minisat {
 
 std::tr1::unordered_set<Lit> mkLitSet(const std::initializer_list<int>& elements) {
     std::tr1::unordered_set<Lit> s;
-    for (const auto element : elements) s.insert(mkLit(element));
+    for (const auto element : elements) s.insert(mkLit(element < 0 ? -element : element, element < 0));
     return s;
 }
 
 void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements) {
     v.clear();
-    for (const auto element : elements) v.push(mkLit(element));
+    for (const auto element : elements) v.push(mkLit(element < 0 ? -element : element, element < 0));
 }
 
 static void printVec(Minisat::vec<Lit>& v) {

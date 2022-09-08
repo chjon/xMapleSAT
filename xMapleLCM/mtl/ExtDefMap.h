@@ -60,8 +60,9 @@ private:
     }
     
 public:
-    inline typename PLMap::iterator find(L a, L b) { return pl_map.find(mkLitPair(a, b)); }
-    inline typename PLMap::iterator end() { return pl_map.end(); }
+    inline typename LPMap::const_iterator find(L x) const { return lp_map.find(x); }
+    inline typename PLMap::const_iterator find(L a, L b) const { return pl_map.find(mkLitPair(a, b)); }
+    // inline typename PLMap::iterator end() { return pl_map.end(); }
 
     // Return the number of stored extension variable definitions
     inline unsigned int size() const { return pl_map.size(); }
@@ -154,6 +155,46 @@ public:
         lp_map.clear();
     }
 
+    void absorb(vec<L>& clause) const {
+        std::tr1::unordered_map<L, int> basis; // Map basis literals to the index of their extension lits
+        vec<bool> validIndex;                  // True if corresponding literal is in clause
+    
+        // Find all the literals in the definitions of extension literals in the clause
+        for (int i = 0; i < clause.size(); i++) {
+            validIndex.push(true);
+
+            // Check if variable is an extension variable
+            auto it = lp_map.find(clause[i]);
+            if (it == lp_map.end()) {
+                it = lp_map.find(~clause[i]);
+                if (it == lp_map.end()) continue;
+            }
+
+            const std::pair<L, L> ab = it->second;
+            basis.insert(std::make_pair(ab.first , i));
+            basis.insert(std::make_pair(ab.second, i));
+        }
+
+        // Mark redundant literals
+        if (basis.size() > 0) {
+            for (int i = 0; i < clause.size(); i++) {
+                // Delete both a and b if the clause contains x
+                if (basis.find(clause[i]) != basis.end()) validIndex[i] = false;
+
+                // Delete -x if the clause contains -a or -b
+                const auto it = basis.find(~clause[i]);
+                if (it != basis.end() && sign(clause[it->second])) validIndex[it->second] = false;
+            }
+
+            int i, j;
+            for (i = 0, j = 0; i < clause.size(); i++) {
+                clause[j] = clause[i];
+                j += validIndex[i];
+            }
+            clause.shrink(clause.size() - j);
+        }
+    }
+
     void substitute(vec<L>& clause, vec<L>& extLits) const {
         // Get indices of all basis literals (in increasing order)
         vec<int> defLitIndex;
@@ -168,7 +209,6 @@ public:
         if (defLitIndex.size() <= 1) return;
 
         // Check each pair of basis literals for a corresponding extension variable
-        // FIXME: starting from 1 is a workaround to avoid the first literal being assigned
         int numReplaced = 0;
         for (int i = 0; i < defLitIndex.size(); i++) {
             if (!validIndex[defLitIndex[i]]) continue;

@@ -2047,6 +2047,14 @@ lbool Solver::search(int& nof_conflicts)
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
 
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+            //    because extension variables may be unassigned.
+            // FIXME: breaks when we substitute the first literal with an extension literal which already has a value
+            // TODO: Investigate whether this ever produces duplicate clauses
+            // checkTrailInvariant();
+            bool is_asserting = ser->substitute(learnt_clause, ser->user_extSubPredicate);
+
             // check chrono backtrack condition
             if ((confl_to_chrono < 0 || static_cast<uint64_t>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
             {
@@ -2058,14 +2066,6 @@ lbool Solver::search(int& nof_conflicts)
 				++non_chrono_backtrack;
 				cancelUntil(backtrack_level);
 			}
-
-            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
-            //    because extension variables may be unassigned.
-            // FIXME: breaks when we substitute the first literal with an extension literal which already has a value
-            // TODO: Investigate whether this ever produces duplicate clauses
-            // checkTrailInvariant();
-            bool is_asserting = ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
             lbd--;
             if (VSIDS){
