@@ -266,12 +266,8 @@ namespace Minisat {
     void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
         assert(solver->decisionLevel() == 0);
 
-        for (int i = 0; i < ps.size(); i++) {
-            Var v = var(ps[i]);
-            while (v >= solver->nVars()) solver->newVar();
-        }
 
-        if (!solver->ok) return;
+        assert(solver->ok);
 
         // Check if clause is satisfied and remove false/duplicate literals:
         sort(ps);
@@ -314,7 +310,7 @@ namespace Minisat {
             CRef cr = solver->ca.alloc(ps, false);
             db.push_back(cr);
             solver->attachClause(cr);
-        }
+        // }
 
         //////////////////////////////////////////////////////////////////////////////////
 
@@ -336,7 +332,7 @@ namespace Minisat {
         //     solver->uncheckedEnqueue(ext_lit);
         // } else {
         //     // Make sure the first two literals are in the right order for the watchers
-        //     enforceWatcherInvariant(ps);
+            enforceWatcherInvariant(ps);
 
         //     // Add clause to data structures
         //     ClauseAllocator& ca = solver->ca;
@@ -347,7 +343,12 @@ namespace Minisat {
         //     // Add clause to db
         //     db.push_back(cr);
         //     solver->attachClause(cr);
-        // }
+
+            // Check whether the clause needs to be propagated
+            if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
+                solver->uncheckedEnqueue(ps[0], level(var(ps[1])), cr);
+            }
+        }
     }
 
     void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {

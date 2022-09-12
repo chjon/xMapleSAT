@@ -612,6 +612,18 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             }
         }
 
+        WHEN("substituting into a clause containing an extension variable AND its corresponding extension definition") {
+            setLitVec(clause, {0, 100, 200, 300, 301, 302});
+            xdm.substitute(clause, extLits);
+
+            THEN("the extension definition should not be substituted into the clause") {
+                setLitVec(expect1, {0, 100, 200, 300, 301, 302});
+                setLitVec(expect2, {0});
+                REQUIRE(requireVecEqual(clause , expect1));
+                REQUIRE(requireVecEqual(extLits, expect2));
+            }
+        }
+
         WHEN("substituting into a clause containing a corresponding extension definition (reverse order)") {
             setLitVec(clause, {200, 100, 300, 301, 302});
             xdm.substitute(clause, extLits);

@@ -177,7 +177,7 @@ public:
 
         // Mark redundant literals
         if (basis.size() > 0) {
-            for (int i = 0; i < clause.size(); i++) {
+            for (int i = 1; i < clause.size(); i++) {
                 // Delete both a and b if the clause contains x
                 if (basis.find(clause[i]) != basis.end()) validIndex[i] = false;
 
@@ -197,10 +197,12 @@ public:
 
     void substitute(vec<L>& clause, vec<L>& extLits) const {
         // Get indices of all basis literals (in increasing order)
+        std::tr1::unordered_set<L> lits;
         vec<int> defLitIndex;
         vec<bool> validIndex; // True if corresponding literal is in clause
         for (int i = 0; i < clause.size(); i++) {
             validIndex.push(true);
+            lits.push(clause[i]);
             // Check if any extension variables are defined over this literal
             if (rc_map.find(clause[i]) != rc_map.end()) {
                 defLitIndex.push(i);
@@ -218,6 +220,10 @@ public:
                 // Check whether any extension variables are defined over this literal pair
                 typename PLMap::const_iterator it = pl_map.find(mkLitPair(clause[defLitIndex[i]], clause[defLitIndex[j]]));
                 if (it == pl_map.end()) continue;
+
+                // Check whether the extension literal is already present in the clause
+                auto lits_it = lits.find(it->second);
+                if (lits_it == lits.end()) continue;
 
                 // Replace the first literal with the extension literal and mark the second literal as invalid
                 clause[defLitIndex[i]] = it->second;

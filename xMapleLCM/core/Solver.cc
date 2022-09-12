@@ -2363,6 +2363,15 @@ lbool Solver::solve_()
 #ifdef ANTI_EXPLORATION
             canceled.clear();
 #endif
+            // Instead of clearing, set vectors to 0
+            for (int i = 0; i < nVars(); i++) {
+                picked.push(0);
+                conflicted.push(0);
+                almost_conflicted.push(0);
+    #ifdef ANTI_EXPLORATION
+                canceled.push(0);
+    #endif
+            }
         }
     }
 

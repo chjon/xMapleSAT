@@ -245,42 +245,10 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 
 bool SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
     extTimerStart();
-
-    xdm.absorb(clause);
-
+    // xdm.absorb(clause);
     if (p(clause)) {
         vec<Lit> extLits;
-
-        // printf("\npre-clause: ("); for (int i = 0; i < clause.size(); i++) printf("%s%d ", sign(clause[i]) ? "-" : "", var(clause[i])); printf(")\n");
         xdm.substitute(clause, extLits);
-
-        // assert(value(clause[0]) == l_Undef);
-        // for (int i = 1; i < extLits.size(); i++) {
-        //     assert(value(extLits[i]) == l_False);
-        // }
-
-        // if (extLits.size() > 0) {
-        //     std::tr1::unordered_set<Var> basis;
-        //     printf("ext vars: ");
-        //     for (int i = 0; i < clause.size(); i++) {
-        //         if (isExtVar(var(clause[i]))) {
-        //             const auto it = xdm.find(mkLit(var(clause[i])));
-        //             const std::pair<Lit, Lit> ab = it->second;
-        //             Lit a = ab.first, b = ab.second;
-        //             basis.insert(var(ab.first));
-        //             basis.insert(var(ab.second));
-        //             printf("%d = %s%d %s%d, ", var(clause[i]), sign(a) ? "-" : "", var(a), sign(b) ? "-" : "", var(b));
-        //         }
-        //     }
-        //     printf("\npost-clause: ("); for (int i = 0; i < clause.size(); i++) printf("%s%d ", sign(clause[i]) ? "-" : "", var(clause[i])); printf(")\n");
-        //     for (int i = 0; i < clause.size(); i++) {
-        //         Var v = var(clause[i]);
-        //         if (!isExtVar(v)) {
-        //             assert(basis.find(v) == basis.end());
-        //         }
-        //     }
-        // }
-
     }
     extTimerStop(ext_sub_overhead);
     return true;
