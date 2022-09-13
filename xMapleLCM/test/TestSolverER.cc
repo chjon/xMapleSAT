@@ -6,130 +6,221 @@
 
 namespace Minisat {
 
-TEST_CASE("Enforce watcher invariants", "[SolverER]") {
-    SolverER ser(nullptr);
-    ser.set_value(100, l_False, 0);
-    ser.set_value(200, l_False, 1);
-    ser.set_value(300, l_False, 2);
-    ser.set_value(400, l_False, 2);
+SCENARIO("Enforce watcher invariants", "[SolverER]") {
+    GIVEN("Variable assignments") {
+        vec<Lit> clause, prefix;
+        SolverER ser(nullptr);
+        ser.set_value(100, l_False, 0);
+        ser.set_value(200, l_False, 1);
+        ser.set_value(300, l_False, 2);
+        ser.set_value(400, l_False, 2);
 
-    vec<Lit> clause, prefix, expect;
+        WHEN("reordering a clause with multiple unassigned variables (packed together)") {
+            setLitVec(clause, {100, 200, 101, 102, 103});
+            ser.enforceWatcherInvariant(clause);
 
-    // Multiple unassigned variables: unassigned literals should be moved to the front
-    setLitVec(clause, {100, 200, 101, 102, 103});
-    setLitVec(prefix, {101, 102, 103});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+            THEN("unassigned literals should be moved to the front") {
+                setLitVec(prefix, {101, 102, 103});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
 
-    setLitVec(clause, {101, 100, 102, 103, 200});
-    setLitVec(prefix, {101, 102, 103});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+        WHEN("reordering a clause with multiple unassigned variables (spread apart)") {
+            setLitVec(clause, {101, 100, 102, 103, 200});
+            ser.enforceWatcherInvariant(clause);
 
-    // Single unassigned variable: unassigned literal should be moved to index 1 and highest-level literal should be in index 0
-    setLitVec(clause, {100, 200, 101});
-    setLitVec(prefix, {101, 200});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+            THEN("unassigned literals should be moved to the front") {
+                setLitVec(prefix, {101, 102, 103});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
 
-    // Zero unassigned variables: literal with highest level should be in index 0; literal with second-highest level should be in index 1
-    setLitVec(clause, {100, 200, 300});
-    setLitVec(prefix, {200, 300});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+        WHEN("reordering a clause with a single unassigned variable (highest-level literal before unassigned)") {
+            setLitVec(clause, {100, 200, 101});
+            ser.enforceWatcherInvariant(clause);
 
-    setLitVec(clause, {100, 300, 200});
-    setLitVec(prefix, {200, 300});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+            THEN("the unassigned literal should be moved to index 1 and the highest-level literal should be in index 0") {
+                setLitVec(prefix, {101, 200});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
 
-    setLitVec(clause, {200, 400, 100, 300});
-    setLitVec(prefix, {300, 400});
-    ser.enforceWatcherInvariant(clause);
-    REQUIRE(requireVecPrefix(clause, prefix));
+        WHEN("reordering a clause with a single unassigned variable (highest-level literal after unassigned)") {
+            setLitVec(clause, {100, 101, 200});
+            ser.enforceWatcherInvariant(clause);
+
+            THEN("the unassigned literal should be moved to index 1 and the highest-level literal should be in index 0") {
+                setLitVec(prefix, {101, 200});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
+
+        WHEN("reordering a clause with zero unassigned literals (highest-level before second-highest)") {
+            setLitVec(clause, {100, 200, 300});
+            ser.enforceWatcherInvariant(clause);
+
+            THEN("the literal with highest level should be in index 0 and the literal with the second-highest level should be in index 1") {
+                setLitVec(prefix, {200, 300});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
+
+        WHEN("reordering a clause with zero unassigned literals (highest-level after second-highest)") {
+            setLitVec(clause, {100, 300, 200});
+            ser.enforceWatcherInvariant(clause);
+
+            THEN("the literal with highest level should be in index 0 and the literal with the second-highest level should be in index 1") {
+                setLitVec(prefix, {200, 300});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
+
+        WHEN("reordering a clause with zero unassigned literals (multiple at highest-level)") {
+            setLitVec(clause, {100, 400, 200, 300});
+            ser.enforceWatcherInvariant(clause);
+
+            THEN("the literals with the highest level should be in indices 0 and 1") {
+                setLitVec(prefix, {300, 400});
+                REQUIRE_THAT(clause, vecPrefix(prefix));
+            }
+        }
+    }
 }
 
-TEST_CASE("Introducing extension variables", "[SolverER]") {
-    Lit x, a, b;
+SCENARIO("Introducing extension variables", "[SolverER]") {
+    GIVEN("basis variables") {
+        Solver s;
+        SolverER& ser = *(s.ser);
+        std::tr1::unordered_map<Var, std::vector<CRef> > db;
+        std::vector< std::vector<Lit> > additional;
+        vec<Lit> clause, expect;
+
+        // Set up variables for testing
+        ser.originalNumVars = 10;
+        for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
+
+        WHEN("introducing a new definition") {
+            Lit x = mkLit(10), a = mkLit(0), b = mkLit(1);
+            additional.push_back(std::vector<Lit>({x, a, b, mkLit(2)}));
+            ser.addToExtDefBuffer(ExtDef{ x, a, b, additional });
+            ser.introduceExtVars(db);
+
+            THEN("clauses should be added to the database and the buffer should be cleared") {
+                auto it = db.find(10);
+                REQUIRE(it != db.end());
+                if (it != db.end()) {
+                    // Test whether we get the expected clauses
+                    std::vector<CRef>& clauses = it->second;
+                    REQUIRE(clauses.size() == 4);
+                    clause2Vec(clause, s.ca[clauses[0]]); setVec(expect, { ~x,  a,  b           }); CHECK_THAT(clause, vecEqualUnordered(expect));
+                    clause2Vec(clause, s.ca[clauses[1]]); setVec(expect, {  x, ~a               }); CHECK_THAT(clause, vecEqualUnordered(expect));
+                    clause2Vec(clause, s.ca[clauses[2]]); setVec(expect, {  x,     ~b           }); CHECK_THAT(clause, vecEqualUnordered(expect));
+                    clause2Vec(clause, s.ca[clauses[3]]); setVec(expect, {  x,  a,  b, mkLit(2) }); CHECK_THAT(clause, vecEqualUnordered(expect));
+                }
+
+                // Test whether the extension variable was added to the solver
+                REQUIRE(s.nVars() == ser.originalNumVars + 1);
+
+                // Test whether the extension variable definition was stored in the extension definition map
+                REQUIRE(ser.isCurrentExtVar(var(x)));
+
+                // Check whether the buffer was cleared
+                REQUIRE(ser.extDefBufferSize() == 0);
+            }
+        }
+    }
+}
+
+SCENARIO("Testing for valid definition pairs", "[SolverER]") {
     Solver s;
     SolverER& ser = *(s.ser);
     std::tr1::unordered_map<Var, std::vector<CRef> > db;
-    std::vector< std::vector<Lit> > additional;
 
     // Set up variables for testing
     ser.originalNumVars = 10;
     for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
 
-    // Test whether definition clauses are defined correctly
-    x = mkLit(10), a = mkLit(0), b = mkLit(1);
-    additional.clear(); additional.push_back(std::vector<Lit>({x, a, b, mkLit(2)}));
-    ser.addToExtDefBuffer(ExtDef{ x, a, b, additional });
-    ser.introduceExtVars(db);
+    GIVEN("no pre-existing pairs") {
+        std::tr1::unordered_set< std::pair<Lit, Lit> > generatedPairs;
 
-    // Test whether clauses were added to the database
-    std::tr1::unordered_map<Var, std::vector<CRef> >::iterator it = db.find(10);
-    REQUIRE(it != db.end());
+        WHEN("the input pair is two of the same variable") {
+            Lit a = mkLit(1);
 
-    if (it != db.end()) {
-        // Test whether we get the expected number of clauses
-        std::vector<CRef>& clauses = it->second;
-        REQUIRE(clauses.size() == 4);
+            THEN("the pair is not valid") {
+                CHECK_FALSE(ser.isValidDefPair( a,  a, generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair( a, ~a, generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(~a,  a, generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(~a, ~a, generatedPairs));
+            }
+        }
 
-        if (clauses.size() == 4) {
-            // Test whether we get the expected definition clauses
-            REQUIRE(requireClauseEqual(s.getClause(clauses[0]), { ~x,  a,  b }));
-            REQUIRE(requireClauseEqual(s.getClause(clauses[1]), {  x, ~a }));
-            REQUIRE(requireClauseEqual(s.getClause(clauses[2]), {  x, ~b }));
+        WHEN("the input pair consists of different variables") {
+            Lit a = mkLit(1, false), b = mkLit(2, false);
 
-            // Test whether we get the expected additional clause
-            REQUIRE(requireClauseEqual(s.getClause(clauses[3]), { x, a, b, mkLit(2) }));
+            THEN("the pair is valid") {
+                CHECK(ser.isValidDefPair( a,  b, generatedPairs));
+                CHECK(ser.isValidDefPair(~a,  b, generatedPairs));
+                CHECK(ser.isValidDefPair(~a, ~b, generatedPairs));
+                CHECK(ser.isValidDefPair( a, ~b, generatedPairs));
+            }
+        }
+
+        WHEN("checking input pairs with different assignment levels") {
+            ser.set_value(1, l_True, 0); ser.set_value(2, l_False, 0);
+            ser.set_value(3, l_True, 1); ser.set_value(4, l_False, 1);
+
+            THEN("pairs containing a literal set at level 0 should be rejected") {
+                CHECK_FALSE(ser.isValidDefPair(mkLit(1), mkLit(2), generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(mkLit(1), mkLit(3), generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(mkLit(1), mkLit(4), generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(mkLit(3), mkLit(2), generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(mkLit(4), mkLit(2), generatedPairs));
+                CHECK      (ser.isValidDefPair(mkLit(3), mkLit(4), generatedPairs));
+            }
         }
     }
 
-    // Test whether the extension variable was added to the solver
-    REQUIRE(s.nVars() == ser.originalNumVars + 1);
+    GIVEN("some pre-existing pairs") {
+        std::tr1::unordered_set< std::pair<Lit, Lit> > generatedPairs;
+        generatedPairs.insert(mkLitPair(mkLit(1), mkLit(2)));
+        generatedPairs.insert(mkLitPair(mkLit(3), mkLit(4)));
+        generatedPairs.insert(mkLitPair(mkLit(1), mkLit(4)));
 
-    // Test whether the extension variable definition was stored in the extension definition map
-    REQUIRE(ser.isCurrentExtVar(var(x)));
+        WHEN("the input pair has no overlap with existing pairs") {
+            Lit a = mkLit(5), b = mkLit(6);
+            
+            THEN("the pair should be accepted") {
+                CHECK(ser.isValidDefPair(a, b, generatedPairs));
+                CHECK(ser.isValidDefPair(b, a, generatedPairs));
+            }
+        }
 
-    // Check whether the buffer has been cleared
-    REQUIRE(ser.extDefBufferSize() == 0);
-}
+        WHEN("the input pair has single overlap with existing pairs") {
+            Lit a = mkLit(1), b = mkLit(6);
+            
+            THEN("the pair should be accepted") {
+                CHECK(ser.isValidDefPair(a, b, generatedPairs));
+                CHECK(ser.isValidDefPair(b, a, generatedPairs));
+            }
+        }
 
-TEST_CASE("Testing for valid definition pairs", "[SolverER]") {
-    Solver s;
-    SolverER& ser = *(s.ser);
-    std::tr1::unordered_map<Var, std::vector<CRef> > db;
-    std::tr1::unordered_set< std::pair<Lit, Lit> > generatedPairs;
+        WHEN("the input pair has double overlap with existing pairs") {
+            Lit a = mkLit(1), b = mkLit(3);
+            
+            THEN("the pair should be accepted") {
+                CHECK(ser.isValidDefPair(a, b, generatedPairs));
+                CHECK(ser.isValidDefPair(b, a, generatedPairs));
+            }
+        }
 
-    // Set up variables for testing
-    ser.originalNumVars = 10;
-    for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
-
-    // Ensure literal pair consists of different variables
-    Lit a = mkLit(1), b = mkLit(2);
-    REQUIRE_FALSE(ser.isValidDefPair(mkLit(1, false), mkLit(1, true), generatedPairs));
-    REQUIRE(ser.isValidDefPair(a, b, generatedPairs));
-    REQUIRE(ser.isValidDefPair(b, a, generatedPairs));
-    
-    // Ensure literals in pair are not set at level 0
-    ser.set_value(1, l_True, 0); ser.set_value(2, l_True, 0);
-    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
-    ser.set_value(1, l_True, 0); ser.set_value(2, l_True, 1);
-    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
-    ser.set_value(1, l_True, 1); ser.set_value(2, l_True, 0);
-    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
-    ser.set_value(1, l_True, 1); ser.set_value(2, l_True, 1);
-    REQUIRE      (ser.isValidDefPair(a, b, generatedPairs));
-
-    // Ensure literal pair has not already been added
-    generatedPairs.insert(mkLitPair(a, b));
-    REQUIRE_FALSE(ser.isValidDefPair(a, b, generatedPairs));
-    REQUIRE_FALSE(ser.isValidDefPair(b, a, generatedPairs));
-    generatedPairs.clear();
-    
-    ser.addToExtDefBuffer(ExtDef{ mkLit(10), a, b, std::vector< std::vector<Lit> >() });
-    ser.introduceExtVars(db);
-    REQUIRE_FALSE(ser.isValidDefPair(b, a, generatedPairs));
+        WHEN("the input pair has already been added") {
+            Lit a = mkLit(1), b = mkLit(2);
+            
+            THEN("the pair should be rejected") {
+                CHECK_FALSE(ser.isValidDefPair(a, b, generatedPairs));
+                CHECK_FALSE(ser.isValidDefPair(b, a, generatedPairs));
+            }
+        }
+    }
 }
 }

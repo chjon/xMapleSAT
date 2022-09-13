@@ -584,9 +584,9 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
 
             THEN("the clause should be unchanged") {
                 setLitVec(expect1, {301, 302, 303, 304, 305});
-                setLitVec(expect2, {}); extLits.clear();
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                setLitVec(expect2, {});
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -597,8 +597,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the clause should be unchanged") {
                 setLitVec(expect1, {101, 300, 301, 302});
                 setLitVec(expect2, {});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -609,8 +609,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the extension definition should be substituted into the clause") {
                 setLitVec(expect1, {0, 300, 301, 302});
                 setLitVec(expect2, {0});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -621,8 +621,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the extension definition should not be substituted into the clause") {
                 setLitVec(expect1, {0, 100, 200, 300, 301, 302});
                 setLitVec(expect2, {});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -633,8 +633,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the extension definition should be substituted into the clause") {
                 setLitVec(expect1, {0, 300, 301, 302});
                 setLitVec(expect2, {0});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -645,8 +645,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the extension definitions should be substituted into the clause") {
                 setLitVec(expect1, {0, 300, 3, 301, 302, 303});
                 setLitVec(expect2, {0, 3});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -657,8 +657,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("only the extension definitions without corresponding extension variables present should be substituted into the clause") {
                 setLitVec(expect1, {0, 100, 300, 3, 301, 302, 200, 303});
                 setLitVec(expect2, {3});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
 
@@ -669,8 +669,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the leftmost extension definition should be substituted") {
                 setLitVec(expect1, {4, 204});
                 setLitVec(expect2, {4});
-                REQUIRE(requireVecEqual(clause , expect1));
-                REQUIRE(requireVecEqual(extLits, expect2));
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
     }
@@ -691,7 +691,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the clause should be unchanged") {
                 setLitVec(expect, {301, 302, 303, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
         
@@ -701,7 +701,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the clause should be unchanged") {
                 setLitVec(expect, {301, 302, 303, 0, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -711,7 +711,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the clause should be unchanged") {
                 setLitVec(expect, {101, 302, 303, 0, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -721,7 +721,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant basis literal should be removed") {
                 setLitVec(expect, {301, 302, 303, 0, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -731,7 +731,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the first literal should not be removed") {
                 setLitVec(expect, {100, 302, 303, 0, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -741,7 +741,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant literals should be removed") {
                 setLitVec(expect, {301, 0, 302, 303, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -751,7 +751,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant literals should be removed") {
                 setLitVec(expect, {301, 0, 302, 3, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -761,7 +761,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant extension literal should be removed") {
                 setLitVec(expect, {-100, 302, 303, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -771,7 +771,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant extension literal should be removed") {
                 setLitVec(expect, {-100, 302, 303, -201, 305});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
 
@@ -781,7 +781,7 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
 
             THEN("the redundant literals should be removed") {
                 setLitVec(expect, {-100, 302, -201, 305, -102});
-                REQUIRE(requireVecEqual(clause, expect));
+                REQUIRE_THAT(clause, vecEqual(expect));
             }
         }
     }

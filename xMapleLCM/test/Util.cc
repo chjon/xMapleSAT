@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <sstream>
+#include <tr1/unordered_map>
 #include "catch.hpp"
 #include "Util.h"
 
@@ -15,66 +17,87 @@ void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements) {
     for (const auto element : elements) v.push(mkLit(element < 0 ? -element : element, element < 0));
 }
 
-static void printVec(Minisat::vec<Lit>& v) {
-    printf("[");
-    if (v.size()) printf("%s%d", sign(v[0]) ? "-" : "", var(v[0]));
-    for (int i = 1; i < v.size(); i++) printf(", %s%d", sign(v[i]) ? "-" : "", var(v[i]));
-    printf("]");
+template <typename T> void setVec(vec<T>& v, const std::initializer_list<T>& elements) {
+    v.clear();
+    for (const auto element : elements) v.push(element);
+}
+template void setVec(vec<Lit>&, const std::initializer_list<Lit>&);
+
+void clause2Vec(vec<Lit>& v, const Clause& c) {
+    v.clear();
+    for (int i = 0; i < c.size(); i++) v.push(c[i]);
 }
 
-bool requireVecEqual(Minisat::vec<Lit>& actual, Minisat::vec<Lit>& expect) {
-    unsigned int numDifferences = 0;
-    if (actual.size() == expect.size()) {
-        for (int i = 0; i < actual.size(); i++) {
-            if (actual[i] != expect[i])
-                numDifferences++;
-        }
-        if (numDifferences == 0) return true;
-    }
+///////////////////////////
+// Vector prefix matcher //
+///////////////////////////
 
-    printf("Actual: "); printVec(actual); printf("\n");
-    printf("Expect: "); printVec(expect); printf("\n");
+VecPrefix vecPrefix(const Minisat::vec<Lit>& prefix) { return VecPrefix(prefix); }
 
-    REQUIRE(actual.size() == expect.size());
-    REQUIRE(numDifferences == 0);
-    
-    return false;
-}
-
-bool requireVecPrefix(Minisat::vec<Lit>& actual, Minisat::vec<Lit>& prefix) {
-    unsigned int numDifferences = 0;
-    if (actual.size() >= prefix.size()) {
-        for (int i = 0; i < prefix.size(); i++) {
-            if (actual[i] != prefix[i])
-                numDifferences++;
-        }
-        if (numDifferences == 0) return true;
-    }
-
-    printf("Actual: "); printVec(actual); printf("\n");
-    printf("Prefix: "); printVec(prefix); printf("\n");
-
-    REQUIRE(actual.size() >= prefix.size());
-    REQUIRE(numDifferences == 0);
-    
-    return false;
-}
-
-bool requireClauseEqual(const Clause& actual, const std::initializer_list<Lit>& elements) {
-    // Ensure clause sizes are equal
-    const unsigned int sz = static_cast<unsigned int>(actual.size());
-    REQUIRE(sz == elements.size());
-    if (sz != elements.size()) return false;
-
-    // Ensure clauses contain the same elements
-    unsigned int i = 0, numDiffs = 0;
-    for (Lit l : elements) {
-        if (actual[i++] != l) numDiffs++;
-    }
-    REQUIRE(numDiffs == 0);
-    if (numDiffs != 0) return false;
-
+bool VecPrefix::match(const Minisat::vec<Lit>& actual) const {
+    if (actual.size() < m_prefix.size()) return false;
+    for (int i = 0; i < m_prefix.size(); i++)
+        if (actual[i] != m_prefix[i])
+            return false;
     return true;
+}
+
+std::string VecPrefix::describe() const {
+    std::ostringstream ss;
+    ss << "has prefix " << m_prefix;
+    return ss.str();
+}
+
+/////////////////////////////
+// Vector equality matcher //
+/////////////////////////////
+
+VecEqual vecEqual(const Minisat::vec<Lit>& expect) { return VecEqual(expect); }
+
+bool VecEqual::match(const Minisat::vec<Lit>& actual) const {
+    if (actual.size() != m_expect.size()) return false;
+    for (int i = 0; i < actual.size(); i++)
+        if (actual[i] != m_expect[i])
+            return false;
+    return true;
+}
+
+std::string VecEqual::describe() const {
+    std::ostringstream ss;
+    ss << "is equal to " << m_expect;
+    return ss.str();
+}
+
+///////////////////////////////////////
+// Vector unordered equality matcher //
+///////////////////////////////////////
+
+VecEqualUnordered vecEqualUnordered(const Minisat::vec<Lit>& expect) { return VecEqualUnordered(expect); }
+
+bool VecEqualUnordered::match(const Minisat::vec<Lit>& actual) const {
+    std::tr1::unordered_map<Lit, int> count;
+    if (actual.size() != m_expect.size()) return false;
+    for (int i = 0; i < m_expect.size(); i++) {
+        auto it = count.find(m_expect[i]);
+        if (it == count.end()) count.insert(std::make_pair(m_expect[i], 1));
+        else it->second++;
+    }
+
+    for (int i = 0; i < actual.size(); i++) {
+        auto it = count.find(actual[i]);
+        if (it == count.end()) return false;
+        else it->second--;
+    }
+
+    for (auto i = count.begin(); i != count.end(); i++)
+        if (i->second != 0) return false;
+    return true;
+}
+
+std::string VecEqualUnordered::describe() const {
+    std::ostringstream ss;
+    ss << "is equal to a permutation of " << m_expect;
+    return ss.str();
 }
 
 }

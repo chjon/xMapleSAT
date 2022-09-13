@@ -266,10 +266,10 @@ namespace Minisat {
     void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
         assert(solver->decisionLevel() == 0);
 
-
         assert(solver->ok);
 
         // Check if clause is satisfied and remove false/duplicate literals:
+        // TODO: make this optional depending on when we add the ext def clause
         sort(ps);
         Lit p; int i, j;
 
@@ -332,7 +332,7 @@ namespace Minisat {
         //     solver->uncheckedEnqueue(ext_lit);
         // } else {
         //     // Make sure the first two literals are in the right order for the watchers
-            enforceWatcherInvariant(ps);
+        //    enforceWatcherInvariant(ps);
 
         //     // Add clause to data structures
         //     ClauseAllocator& ca = solver->ca;

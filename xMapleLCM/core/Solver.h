@@ -62,6 +62,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <algorithm>
 // duplicate learnts version
 
+// Making internal data structures visible for testing
+#ifdef TESTING
+#define protected public
+#endif
 
 // Don't change the actual numbers.
 #define LOCAL 0
@@ -249,11 +253,6 @@ public:
     vec<uint32_t> almost_conflicted;
 #ifdef ANTI_EXPLORATION
     vec<uint32_t> canceled;
-#endif
-
-    // Getting clauses for testing
-#ifdef TESTING
-    const Clause& getClause(CRef cr) const;
 #endif
 
 protected:
@@ -643,10 +642,6 @@ inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ ve
 
 
 //=================================================================================================
-#ifdef TESTING
-inline const Clause& Solver::getClause(CRef cr) const { assert(cr < ca.size()); return ca[cr]; }
-#endif
-
 
 }
 
