@@ -223,4 +223,77 @@ SCENARIO("Testing for valid definition pairs", "[SolverER]") {
         }
     }
 }
+
+SCENARIO("Choosing extension variables to delete", "[SolverER]") {
+
+    GIVEN("Extension variables") {
+        using DeletionPredicate = std::function<bool(Var)>;
+        Solver s;
+        SolverER& ser = *(s.ser);
+        std::vector< std::vector<Lit> > additional;
+        std::tr1::unordered_set<Lit> varsToDelete;
+        vec<Lit> actual, expect;
+
+        // Set up variables for testing
+        ser.originalNumVars = 10;
+        for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
+
+        ser.addToExtDefBuffer(ExtDef{ mkLit(10), mkLit(1), mkLit(2), additional });
+        ser.addToExtDefBuffer(ExtDef{ mkLit(11), mkLit(3), mkLit(4), additional });
+        ser.addToExtDefBuffer(ExtDef{ mkLit(12), mkLit(5), mkLit(6), additional });
+        ser.addToExtDefBuffer(ExtDef{ mkLit(13), mkLit(1), mkLit(4), additional });
+        ser.introduceExtVars(s.extDefs);
+
+        WHEN("there are no restrictions") {
+            DeletionPredicate deletionPredicate = [](Var v){ return true; };
+            ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
+
+            THEN("all extension variables are chosen for deletion") {
+                setVec(actual, varsToDelete);
+                setLitVec(expect, {10, 11, 12, 13});
+                REQUIRE_THAT(actual, vecEqualUnordered(expect));
+            }
+        }
+
+        WHEN("some extension variables are basis literals") {
+            DeletionPredicate deletionPredicate = [](Var v){ return true; };
+
+            ser.addToExtDefBuffer(ExtDef{ mkLit(14), mkLit( 3), mkLit(10), additional });
+            ser.addToExtDefBuffer(ExtDef{ mkLit(15), mkLit(11), mkLit(12), additional });
+            ser.introduceExtVars(s.extDefs);
+            ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
+
+            THEN("only non-basis literal extension variables are chosen for deletion") {
+                setVec(actual, varsToDelete);
+                setLitVec(expect, {13, 14, 15});
+                REQUIRE_THAT(actual, vecEqualUnordered(expect));
+            }
+        }
+
+        WHEN("the deletion predicate rejects every variable") {
+            DeletionPredicate deletionPredicate = [](Var v){ return false; };
+            ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
+
+            THEN("no extension variables are chosen for deletion") {
+                setVec(actual, varsToDelete);
+                setLitVec(expect, {});
+                REQUIRE_THAT(actual, vecEqualUnordered(expect));
+            }
+        }
+
+        WHEN("the deletion predicate rejects some variables") {
+            DeletionPredicate deletionPredicate = [](Var v){ return v % 2 == 0; };
+            ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
+
+            THEN("none of the rejected variables are selected") {
+                setVec(actual, varsToDelete);
+                setLitVec(expect, {10, 12});
+                REQUIRE_THAT(actual, vecEqualUnordered(expect));
+            }
+        }
+    }
+}
+
+// SolverER::deleteExtVars
+// SCENARIO("Deleting extension variables", "[SolverER]") {}
 }

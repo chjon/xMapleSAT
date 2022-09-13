@@ -106,6 +106,13 @@ public:
     void defineExtVars(ExtDefHeuristic& extDefHeuristic);
 
     // Extension Variable Introduction
+
+    /**
+     * @brief Introduce extension variables into the solver
+     * 
+     * @param ext_def_db The map of extension variables to a list of their corresponding extension definition clauses.
+     * In most cases this should be equal to @code{solver->extDefs}.
+     */
     void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
 
     /**
@@ -147,10 +154,26 @@ public:
      * @return true if the clause is still asserting after substitution
      * @return false otherwise
      */
-    inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& p) const;
+    inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& predicate) const;
 
     // Extension Variable Deletion
-    void deleteExtVars(DeletionPredicate& p);
+
+    /**
+     * @brief Get a set of extension variables to delete
+     * 
+     * @param varsToDelete The output set.
+     * @param deletionPredicate A method for determining whether an extension variable should be removed.
+     * 
+     * @note Assumes that @code{varsToDelete} is initially empty
+     */
+    void getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const;
+
+    /**
+     * @brief Remove extension variables from the solver
+     * 
+     * @param deletionPredicate a method for determining whether an extension variable should be removed.
+     */
+    void deleteExtVars(DeletionPredicate& deletionPredicate);
 
     /////////////////////////////
     // USER-DEFINED HEURISTICS //

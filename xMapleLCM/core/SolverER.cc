@@ -351,11 +351,8 @@ namespace Minisat {
         }
     }
 
-    void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
-        extTimerStart();
-
-        // Iterating through current extension variables
-        std::tr1::unordered_set<Lit> varsToDelete;
+    void SolverER::getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const {
+        // Iterate through current extension variables
         for (auto it = solver->extDefs.begin(); it != solver->extDefs.end(); it++) {
             Var x = it->first;
 
@@ -381,9 +378,16 @@ namespace Minisat {
                 varsToDelete.insert(mkLit(x));
             }
         }
+    }
+
+    void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
+        extTimerStart();
+
+        // Get extension variables to delete
+        std::tr1::unordered_set<Lit> varsToDelete;
+        getExtVarsToDelete(varsToDelete, deletionPredicate);
 
         // Delete clauses containing the extension variable
-
         // 1. TODO: Delete learnt clauses containing the extension variable
         //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay 
 

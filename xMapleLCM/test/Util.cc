@@ -28,6 +28,12 @@ void clause2Vec(vec<Lit>& v, const Clause& c) {
     for (int i = 0; i < c.size(); i++) v.push(c[i]);
 }
 
+template <typename T> void setVec(vec<T>& v, const std::tr1::unordered_set<T>& elements) {
+    v.clear();
+    for (const auto element : elements) v.push(element);
+}
+template void setVec(vec<Lit>&, const std::tr1::unordered_set<Lit>&);
+
 ///////////////////////////
 // Vector prefix matcher //
 ///////////////////////////

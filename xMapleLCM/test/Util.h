@@ -10,16 +10,17 @@
 
 namespace Minisat {
 
+// Utility methods
+std::tr1::unordered_set<Lit> mkLitSet(const std::initializer_list<int>& elements);
+void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements);
+void clause2Vec(vec<Lit>& v, const Clause& c);
+template <typename T> void setVec(vec<T>& v, const std::initializer_list<T>& elements);
+template <typename T> void setVec(vec<T>& v, const std::tr1::unordered_set<T>& c);
+
 // Matchers
 class VecPrefix;
 class VecEqual;
 class VecEqualUnordered;
-
-std::tr1::unordered_set<Lit> mkLitSet(const std::initializer_list<int>& elements);
-void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements);
-void clause2Vec(vec<Lit>& v, const Clause& c);
-
-template <typename T> void setVec(vec<T>& v, const std::initializer_list<T>& elements);
 
 // Vector prefix matcher and builder function
 VecPrefix vecPrefix(const Minisat::vec<Lit>& prefix);
