@@ -575,6 +575,8 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
         xdm.insert(mkLit(1), mkLit(100), mkLit(201));
         xdm.insert(mkLit(2), mkLit(101), mkLit(200));
         xdm.insert(mkLit(3), mkLit(102), mkLit(202));
+        xdm.insert(mkLit(4), mkLit(103), mkLit(203));
+        xdm.insert(mkLit(5), mkLit(103), mkLit(204));
     
         WHEN("substituting into a clause with no basis literals") {
             setLitVec(clause, {301, 302, 303, 304, 305});
@@ -618,7 +620,7 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
 
             THEN("the extension definition should not be substituted into the clause") {
                 setLitVec(expect1, {0, 100, 200, 300, 301, 302});
-                setLitVec(expect2, {0});
+                setLitVec(expect2, {});
                 REQUIRE(requireVecEqual(clause , expect1));
                 REQUIRE(requireVecEqual(extLits, expect2));
             }
@@ -643,6 +645,30 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
             THEN("the extension definitions should be substituted into the clause") {
                 setLitVec(expect1, {0, 300, 3, 301, 302, 303});
                 setLitVec(expect2, {0, 3});
+                REQUIRE(requireVecEqual(clause , expect1));
+                REQUIRE(requireVecEqual(extLits, expect2));
+            }
+        }
+
+        WHEN("substituting into a clause containing extension variables and some of their corresponding extension definitions") {
+            setLitVec(clause, {0, 100, 300, 202, 301, 302, 102, 200, 303});
+            xdm.substitute(clause, extLits);
+
+            THEN("only the extension definitions without corresponding extension variables present should be substituted into the clause") {
+                setLitVec(expect1, {0, 100, 300, 3, 301, 302, 200, 303});
+                setLitVec(expect2, {3});
+                REQUIRE(requireVecEqual(clause , expect1));
+                REQUIRE(requireVecEqual(extLits, expect2));
+            }
+        }
+
+        WHEN("substituting into a clause containing overlapping extension definitions") {
+            setLitVec(clause, {103, 203, 204});
+            xdm.substitute(clause, extLits);
+
+            THEN("the leftmost extension definition should be substituted") {
+                setLitVec(expect1, {4, 204});
+                setLitVec(expect2, {4});
                 REQUIRE(requireVecEqual(clause , expect1));
                 REQUIRE(requireVecEqual(extLits, expect2));
             }
@@ -690,31 +716,41 @@ SCENARIO("Removing redundant literals from clauses", "[ExtDefMap]") {
         }
 
         WHEN("simplifying a clause containing a single positive redundancy") {
-            setLitVec(clause, {100, 302, 303, 0, 305});
+            setLitVec(clause, {301, 100, 302, 303, 0, 305});
             xdm.absorb(clause);
 
             THEN("the redundant basis literal should be removed") {
-                setLitVec(expect, {302, 303, 0, 305});
+                setLitVec(expect, {301, 302, 303, 0, 305});
+                REQUIRE(requireVecEqual(clause, expect));
+            }
+        }
+
+        WHEN("simplifying a clause where the first literal is redundant") {
+            setLitVec(clause, {100, 302, 303, 0, 305});
+            xdm.absorb(clause);
+
+            THEN("the first literal should not be removed") {
+                setLitVec(expect, {100, 302, 303, 0, 305});
                 REQUIRE(requireVecEqual(clause, expect));
             }
         }
 
         WHEN("simplifying a clause containing two positive redundancies for the same extension variable") {
-            setLitVec(clause, {200, 0, 302, 303, 100, 305});
+            setLitVec(clause, {301, 200, 0, 302, 303, 100, 305});
             xdm.absorb(clause);
 
             THEN("the redundant literals should be removed") {
-                setLitVec(expect, {0, 302, 303, 305});
+                setLitVec(expect, {301, 0, 302, 303, 305});
                 REQUIRE(requireVecEqual(clause, expect));
             }
         }
 
         WHEN("simplifying a clause containing positive redundancies for multiple extension variables") {
-            setLitVec(clause, {200, 0, 302, 3, 100, 305, 102});
+            setLitVec(clause, {301, 200, 0, 302, 3, 100, 305, 102});
             xdm.absorb(clause);
 
             THEN("the redundant literals should be removed") {
-                setLitVec(expect, {0, 302, 3, 305});
+                setLitVec(expect, {301, 0, 302, 3, 305});
                 REQUIRE(requireVecEqual(clause, expect));
             }
         }
