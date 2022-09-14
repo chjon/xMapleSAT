@@ -86,19 +86,23 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     // It's possible that we'll never be able to make as many new variables as requested if the definitions
     // already exist and there aren't enough distinct literals in the selected clauses
 
+    const unsigned int MAX_RETRIES = 5;
     Var x = solver->nVars() + extVarDefBuffer.size();
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
-        const int i_a = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
-        const int i_b = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
-        Lit a = litVec[i_a], b = litVec[i_b];
-        std::pair<Lit, Lit> litPair = mkLitPair(a, b);
+        for (unsigned int j = 0; j < MAX_RETRIES; j++) {
+            const int i_a = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
+            const int i_b = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
+            Lit a = litVec[i_a], b = litVec[i_b];
+            std::pair<Lit, Lit> litPair = mkLitPair(a, b);
 
-        if (isValidDefPair(a, b, generatedPairs)) {
-            // Add extension variable
-            generatedPairs.insert(litPair);
-            extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
-            x++;
+            if (isValidDefPair(a, b, generatedPairs)) {
+                // Add extension variable
+                generatedPairs.insert(litPair);
+                extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
+                x++;
+                break;
+            }
         }
     }
 }
