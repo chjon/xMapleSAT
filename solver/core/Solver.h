@@ -26,9 +26,18 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
+#include "core/SolverERTypes.h"
 
+#include <tr1/unordered_map>
+
+// Making internal data structures visible for testing
+#ifdef TESTING
+#define protected public
+#endif
 
 namespace Minisat {
+
+class SolverER;
 
 //=================================================================================================
 // Solver -- the main class:
@@ -136,6 +145,21 @@ public:
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
+
+    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
+    int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
+    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
+    double    ext_prio_act;       // The fraction of maximum activity that should be given to new variables                    (default 0.5)
+    bool      ext_pref_sign;      // Preferred sign for new variables                                                          (default true (negated))
+    int       ext_min_width;      // Minimum clause width to consider when selecting clauses
+    int       ext_max_width;      // Maximum clause width to consider when selecting clauses
+    int       ext_filter_num;     // Maximum number of clauses after the filter step
+    int       ext_sub_min_width;  // Minimum width of clauses to substitute into
+    int       ext_sub_max_width;  // Maximum width of clauses to substitute into
+    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
+    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+    double    ext_act_threshold;  // Activity threshold for deleting clauses
+
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
 
@@ -199,6 +223,8 @@ protected:
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
     vec<CRef>           clauses;          // List of problem clauses.
     vec<CRef>           learnts;          // List of learnt clauses.
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
+
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -219,6 +245,9 @@ protected:
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
+
+    long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
+                                             // This is used to check whether to run the extension variable introduction heuristic after a restart
 
     ClauseAllocator     ca;
 
@@ -315,6 +344,12 @@ protected:
     // Returns a random integer 0 <= x < size. Seed must never be 0.
     static inline int irand(double& seed, int size) {
         return (int)(drand(seed) * size); }
+
+public:
+    SolverER* ser;
+
+private:
+    friend class SolverER;
 };
 
 

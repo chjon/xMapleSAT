@@ -1,7 +1,7 @@
 /*****************************************************************************************[Main.cc]
 Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
 Copyright (c) 2007-2010, Niklas Sorensson
-
+ 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -28,6 +28,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/Dimacs.h"
 #include "core/Solver.h"
+#include "core/SolverER.h"
 
 using namespace Minisat;
 
@@ -38,13 +39,26 @@ void printStats(Solver& solver)
 {
     double cpu_time = cpuTime();
     double mem_used = memUsedPeak();
-    printf("restarts              : %"PRIu64"\n", solver.starts);
-    printf("conflicts             : %-12"PRIu64"   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
-    printf("decisions             : %-12"PRIu64"   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
-    printf("propagations          : %-12"PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
-    printf("conflict literals     : %-12"PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
+    printf("restarts              : %" PRIu64"\n", solver.starts);
+    printf("conflicts             : %-12" PRIu64"   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
+    printf("decisions             : %-12" PRIu64"   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
+    printf("propagations          : %-12" PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
+    printf("conflict literals     : %-12" PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
+    printf("total ext vars        : %-12" PRIu64 "\n", solver.ser->total_ext_vars);
+    printf("deleted ext vars      : %-12" PRIu64 "\n", solver.ser->deleted_ext_vars);
+    printf("max ext vars          : %-12" PRIu64 "\n", solver.ser->max_ext_vars);
+    printf("conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", solver.ser->conflict_extclauses, solver.ser->conflict_extclauses / cpu_time);
+    printf("learnt ext clauses    : %-12" PRIu64 "   (%.0f /sec)\n", solver.ser->learnt_extclauses, solver.ser->learnt_extclauses / cpu_time);
+    printf("decisions on ext vars : %-12" PRIu64 "\n", solver.ser->branchOnExt);
+    // printf("total learnt ext frac : %g\n", solver.ser->extfrac_total);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
+    printf("ER_sel time           : %g s\n", solver.ser->extTimerRead(0));
+    printf("ER_add time           : %g s\n", solver.ser->extTimerRead(1));
+    printf("ER_delC time          : %g s\n", solver.ser->extTimerRead(2));
+    printf("ER_delV time          : %g s\n", solver.ser->extTimerRead(3));
+    printf("ER_sub time           : %g s\n", solver.ser->extTimerRead(4));
+    printf("ER_stat time          : %g s\n", solver.ser->extTimerRead(5));
 }
 
 
@@ -74,7 +88,7 @@ int main(int argc, char** argv)
         setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input may be either in plain or gzipped DIMACS.\n");
         // printf("This is MiniSat 2.0 beta\n");
         
-#if defined(__linux__) && defined(_FPU_EXTENDED) && defined(_FPU_DOUBLE) && defined(_FPU_GETCW)
+#if defined(__linux__)
         fpu_control_t oldcw, newcw;
         _FPU_GETCW(oldcw); newcw = (oldcw & ~_FPU_EXTENDED) | _FPU_DOUBLE; _FPU_SETCW(newcw);
         printf("WARNING: for repeatability, setting FPU to use double precision\n");
@@ -142,12 +156,12 @@ int main(int argc, char** argv)
         if (S.verbosity > 0){
             printf("|  Parse time:           %12.2f s                                       |\n", parsed_time - initial_time);
             printf("|                                                                             |\n"); }
- 
+
         // Change to signal-handlers that will only notify the solver and allow it to terminate
         // voluntarily:
         signal(SIGINT, SIGINT_interrupt);
         signal(SIGXCPU,SIGINT_interrupt);
-       
+
         if (!S.simplify()){
             if (res != NULL) fprintf(res, "UNSAT\n"), fclose(res);
             if (S.verbosity > 0){
@@ -155,7 +169,7 @@ int main(int argc, char** argv)
                 printf("Solved by unit propagation\n");
                 printStats(S);
                 printf("\n"); }
-            printf("UNSATISFIABLE\n");
+            printf("s UNSATISFIABLE\n");
             exit(20);
         }
         
@@ -163,8 +177,22 @@ int main(int argc, char** argv)
         lbool ret = S.solveLimited(dummy);
         if (S.verbosity > 0){
             printStats(S);
+            if (ret == l_True) {
+                in = (argc == 1) ? gzdopen(0, "rb") : gzopen(argv[1], "rb");
+                check_solution_DIMACS(in, S);
+                gzclose(in);
+            }
             printf("\n"); }
-        printf(ret == l_True ? "SATISFIABLE\n" : ret == l_False ? "UNSATISFIABLE\n" : "INDETERMINATE\n");
+        printf(ret == l_True ? "s SATISFIABLE\n" : ret == l_False ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
+        if (ret == l_True){
+            printf("v ");
+            for (int i = 0; i < S.nVars(); i++)
+                if (S.model[i] != l_Undef)
+                    printf("%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
+            printf(" 0\n");
+        }
+
+
         if (res != NULL){
             if (ret == l_True){
                 fprintf(res, "SAT\n");
@@ -186,7 +214,7 @@ int main(int argc, char** argv)
 #endif
     } catch (OutOfMemoryException&){
         printf("===============================================================================\n");
-        printf("INDETERMINATE\n");
+        printf("UNKNOWN\n");
         exit(0);
     }
 }

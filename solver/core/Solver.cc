@@ -22,6 +22,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "mtl/Sort.h"
 #include "core/Solver.h"
+#include "core/SolverER.h"
 
 using namespace Minisat;
 
@@ -54,7 +55,24 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
-
+static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+static DoubleOption  opt_ext_prio       (_cat, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
+static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
+static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
+static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
+static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
+#endif
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -86,6 +104,30 @@ Solver::Solver() :
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
+
+// EXTENDED RESOLUTION parameters
+  , ext_freq         (opt_ext_freq)
+  , ext_window       (opt_ext_wndw)
+  , ext_max_intro    (opt_ext_num)
+  , ext_prio_act     (opt_ext_prio)
+  , ext_pref_sign    (opt_ext_sign)
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+  , ext_min_width    (opt_ext_min_width)
+  , ext_max_width    (opt_ext_max_width)
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+  , ext_filter_num   (opt_ext_filter_num)
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
+  , ext_sub_min_width (opt_ext_sub_min_width)
+  , ext_sub_max_width (opt_ext_sub_max_width)
+#endif
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+  , ext_min_lbd      (opt_ext_min_lbd)
+  , ext_max_lbd      (opt_ext_max_lbd)
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+  , ext_act_threshold(opt_ext_act_thresh)
+#endif
 
     // Parameters (the rest):
     //
@@ -122,16 +164,21 @@ Solver::Solver() :
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
+  , prevExtensionConflict(0)
+
     // Resource constraints:
     //
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
-{}
+
+  , ser (nullptr)
+{ ser = new SolverER(this); }
 
 
 Solver::~Solver()
 {
+    delete ser;
 }
 
 
@@ -767,6 +814,21 @@ lbool Solver::search(int nof_conflicts)
     vec<Lit>    learnt_clause;
     starts++;
 
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+    // Generate extension variable definitions
+    // Only try generating more extension variables if there aren't any buffered already
+    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
+        prevExtensionConflict = conflicts;
+        ser->selectClauses(ser->user_extSelHeuristic);
+        ser->defineExtVars(ser->user_extDefHeuristic);
+    }
+#endif
+
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
+    // Add extension variables
+    ser->introduceExtVars(extDefs);
+#endif
+
     for (;;){
         CRef confl = propagate();
 
@@ -798,6 +860,14 @@ lbool Solver::search(int nof_conflicts)
             learnt_clause.clear();
             analyze(confl, learnt_clause, backtrack_level);
 
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
+            //    because extension variables may be unassigned.
+            // FIXME: breaks when we substitute the first literal with an extension literal which already has a value
+            // TODO: Investigate whether this ever produces duplicate clauses
+            // checkTrailInvariant();
+            bool is_asserting = ser->substitute(learnt_clause, ser->user_extSubPredicate);
+
             cancelUntil(backtrack_level);
 
 #if BRANCHING_HEURISTIC == CHB
@@ -816,7 +886,7 @@ lbool Solver::search(int nof_conflicts)
 #else
                 claBumpActivity(ca[cr]);
 #endif
-                uncheckedEnqueue(learnt_clause[0], cr);
+                if (is_asserting) uncheckedEnqueue(learnt_clause[0], cr);
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -854,6 +924,7 @@ lbool Solver::search(int nof_conflicts)
 
             if (learnts.size()-nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
+                // ser->deleteExtVars(ser->user_extDelPredicate);
                 reduceDB();
 #if RAPID_DELETION
                 max_learnts += 500;
@@ -884,6 +955,9 @@ lbool Solver::search(int nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+
+                if (ser->isExtVar(var(next)))
+                    ser->branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
@@ -969,6 +1043,7 @@ lbool Solver::solve_()
     }
 
     // Search:
+    ser->originalNumVars = nVars();
     int curr_restarts = 0;
     while (status == l_Undef){
         double rest_base = luby_restart ? luby(restart_inc, curr_restarts) : pow(restart_inc, curr_restarts);
