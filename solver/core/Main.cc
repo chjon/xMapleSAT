@@ -43,22 +43,8 @@ void printStats(Solver& solver)
     printf("decisions             : %-12"PRIu64"   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
     printf("propagations          : %-12"PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
     printf("conflict literals     : %-12"PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
-    printf("total ext vars        : %-12"PRIu64"\n", solver.total_ext_vars);
-    printf("deleted ext vars      : %-12"PRIu64"\n", solver.deleted_ext_vars);
-    printf("max ext vars          : %-12"PRIu64"\n", solver.max_ext_vars);
-    printf("conflict ext clauses  : %-12"PRIu64"   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
-    printf("learnt ext clauses    : %-12"PRIu64"   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
-    printf("total lbd of learnts  : %-12"PRIu64"   (%.0f /conf)\n", solver.lbd_total, solver.lbd_total / (float)solver.conflicts);
-    printf("decisions on ext vars : %-12"PRIu64"\n", solver.branchOnExt);
-    printf("total learnt ext frac : %g\n", solver.extfrac_total);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
-    printf("ER_sel time           : %g s\n", solver.extTimerRead(0));
-    printf("ER_add time           : %g s\n", solver.extTimerRead(1));
-    printf("ER_delC time          : %g s\n", solver.extTimerRead(2));
-    printf("ER_delV time          : %g s\n", solver.extTimerRead(3));
-    printf("ER_sub time           : %g s\n", solver.extTimerRead(4));
-    printf("ER_stat time          : %g s\n", solver.extTimerRead(5));
 }
 
 
@@ -95,9 +81,9 @@ int main(int argc, char** argv)
 #endif
         // Extra options:
         //
-        IntOption    verb    ("MAIN", "verb",    "Verbosity level (0=silent, 1=some, 2=more).", 1, IntRange(0, 2));
-        IntOption    cpu_lim ("MAIN", "cpu-lim", "Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
-        IntOption    mem_lim ("MAIN", "mem-lim", "Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
+        IntOption    verb   ("MAIN", "verb",   "Verbosity level (0=silent, 1=some, 2=more).", 1, IntRange(0, 2));
+        IntOption    cpu_lim("MAIN", "cpu-lim","Limit on CPU time allowed in seconds.\n", INT32_MAX, IntRange(0, INT32_MAX));
+        IntOption    mem_lim("MAIN", "mem-lim","Limit on memory usage in megabytes.\n", INT32_MAX, IntRange(0, INT32_MAX));
         
         parseOptions(argc, argv, true);
 
@@ -105,6 +91,7 @@ int main(int argc, char** argv)
         double initial_time = cpuTime();
 
         S.verbosity = verb;
+        
         solver = &S;
         // Use signal handlers that forcibly quit until the solver will be able to respond to
         // interrupts:
