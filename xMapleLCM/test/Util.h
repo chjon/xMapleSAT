@@ -5,6 +5,7 @@
 
 #include <initializer_list>
 #include <tr1/unordered_set>
+#include <core/Solver.h>
 #include <core/SolverTypes.h>
 #include <mtl/Vec.h>
 
@@ -21,6 +22,7 @@ template <typename T> void setVec(vec<T>& v, const std::tr1::unordered_set<T>& c
 class VecPrefix;
 class VecEqual;
 class VecEqualUnordered;
+class ExtDefUnique;
 
 // Vector prefix matcher and builder function
 VecPrefix vecPrefix(const Minisat::vec<Lit>& prefix);
@@ -53,6 +55,14 @@ public:
     virtual std::string describe() const override;
 private:
     const Minisat::vec<Lit>& m_expect;
+};
+
+// ExtDef uniqueness matcher and builder function
+ExtDefUnique extDefUnique();
+class ExtDefUnique : public Catch::MatcherBase<const std::vector<ExtDef>> {
+public:
+    virtual bool match(const std::vector<ExtDef>&) const override;
+    virtual std::string describe() const override;
 };
 
 }

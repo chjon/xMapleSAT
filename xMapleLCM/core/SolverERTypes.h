@@ -2,6 +2,7 @@
 #define Minisat_SolverERTypes_h
 
 #include <functional>
+#include <tr1/unordered_set>
 #include <utility>
 #include <vector>
 #include <core/SolverTypes.h>
@@ -94,7 +95,10 @@
 
 namespace Minisat {
 
-inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
+using LitPair = std::pair<Lit, Lit>;
+using LitSet  = std::tr1::unordered_set<Lit>;
+
+inline LitPair mkLitPair(Lit a, Lit b) {
     return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
 }
 
@@ -133,6 +137,21 @@ struct ExtDef {
     
     // Clauses to learn in addition to the three defining clauses encoding (x <=> a v b) 
     std::vector< std::vector<Lit> > additionalClauses;
+
+    friend std::ostream &operator<<(std::ostream &os, const ExtDef& def) { 
+        os << "{" << def.x << "=" << def.a << "v" << def.b;
+        if (def.additionalClauses.size()) {
+            os << ":[";
+            for (const std::vector<Lit>& clause : def.additionalClauses) {
+                os << "[";
+                if (clause.size()) os << clause[0];
+                for (Lit l : clause) os << "," << l; 
+                os << "]";
+            }
+            os << "]";
+        }
+        return os << "}";
+    }
 };
 
 /**

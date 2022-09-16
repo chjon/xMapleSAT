@@ -56,7 +56,7 @@ public:
     inline bool isCurrentExtVar(Var x) const;
 
     // Determine whether a pair of literals can be used as the basis literals for a new extension variable
-    inline bool isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set< std::pair<Lit, Lit> >& generatedPairs) const;
+    inline bool isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set<LitPair>& generatedPairs) const;
 
 #ifdef TESTING
     inline void set_value(Var x, lbool v, int l);
@@ -166,7 +166,7 @@ public:
      * 
      * @note Assumes that @code{varsToDelete} is initially empty
      */
-    void getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const;
+    void getExtVarsToDelete(LitSet& varsToDelete, DeletionPredicate& deletionPredicate) const;
 
     /**
      * @brief Remove extension variables from the solver
@@ -246,6 +246,13 @@ protected:
     std::map< Var, std::pair<lbool, int> > test_value;
 #endif
 
+private:
+    /////////////////////////////////////////
+    // HELPERS FOR USER-DEFINED HEURISTICS //
+    /////////////////////////////////////////
+    void quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_map<LitPair, int>& subexpr_count, int l, int r, int k);
+    std::tr1::unordered_map<LitPair, int> countSubexprs(std::vector<LitSet>& sets);
+    std::vector<LitPair> getFreqSubexprs(std::tr1::unordered_map<LitPair, int>& subexpr_counts, unsigned int numSubexprs);
 };
 
 #ifdef TESTING

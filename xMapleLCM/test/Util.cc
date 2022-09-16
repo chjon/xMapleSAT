@@ -3,6 +3,7 @@
 #include <tr1/unordered_map>
 #include "catch.hpp"
 #include "Util.h"
+#include <core/SolverER.h>
 
 namespace Minisat {
 
@@ -103,6 +104,30 @@ bool VecEqualUnordered::match(const Minisat::vec<Lit>& actual) const {
 std::string VecEqualUnordered::describe() const {
     std::ostringstream ss;
     ss << "is equal to a permutation of " << m_expect;
+    return ss.str();
+}
+
+///////////////////////////////
+// ExtDef uniqueness matcher //
+///////////////////////////////
+
+ExtDefUnique extDefUnique() { return ExtDefUnique(); }
+
+bool ExtDefUnique::match(const std::vector<ExtDef>& v) const {
+    std::tr1::unordered_set<Lit> seenVar;
+    std::tr1::unordered_set< std::pair<Lit, Lit> > seenDef;
+    for (ExtDef def : v) {
+        std::pair<Lit, Lit> p = (def.a < def.b) ? std::make_pair(def.a, def.b) : std::make_pair(def.b, def.a);
+        if (seenVar.find(def.x) != seenVar.end()) return false;
+        if (seenDef.find(p) != seenDef.end()) return false;
+        seenVar.insert(def.x); seenDef.insert(p);
+    }
+    return true;
+}
+
+std::string ExtDefUnique::describe() const {
+    std::ostringstream ss;
+    ss << "only contains unique definitions";
     return ss.str();
 }
 
