@@ -52,6 +52,7 @@ unsigned char* Solver::buf_ptr = drup_buf;
 //=================================================================================================
 // Options:
 
+
 static const char* _cat = "CORE";
 
 static DoubleOption  opt_step_size         (_cat, "step-size",   "Initial step size",                             0.40,     DoubleRange(0, false, 1, false));
@@ -1968,7 +1969,7 @@ lbool Solver::search(int& nof_conflicts)
 
 #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
     // Add extension variables
-    ser->introduceExtVars(extDefs);
+    ser->introduceExtVars(ser->extDefs);
 #endif
 
     for (;;){
@@ -2464,17 +2465,7 @@ void Solver::relocAll(ClauseAllocator& to)
         ca.reloc(learnts_local[i], to);
 
     // All extension variable definition clauses
-    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
-        std::vector<CRef>& cs = it->second;
-        unsigned int i, j;
-        for (i = j = 0; i < cs.size(); i++) {
-            // Reloc following example of clauses
-            if (ca[cs[i]].mark() != 1){
-                ca.reloc(cs[i], to);
-                cs[j++] = cs[i]; }
-        }
-        cs.erase(cs.begin() + j, cs.end());
-    }
+    ser->relocAll(to);
 
     // All original:
     //

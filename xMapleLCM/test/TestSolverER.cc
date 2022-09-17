@@ -242,7 +242,7 @@ SCENARIO("Choosing extension variables to delete", "[SolverER]") {
         ser.addToExtDefBuffer(ExtDef{ mkLit(11), mkLit(3), mkLit(4), additional });
         ser.addToExtDefBuffer(ExtDef{ mkLit(12), mkLit(5), mkLit(6), additional });
         ser.addToExtDefBuffer(ExtDef{ mkLit(13), mkLit(1), mkLit(4), additional });
-        ser.introduceExtVars(s.extDefs);
+        ser.introduceExtVars(ser.extDefs);
 
         WHEN("there are no restrictions") {
             DeletionPredicate deletionPredicate = [](Var v){ return true; };
@@ -260,7 +260,7 @@ SCENARIO("Choosing extension variables to delete", "[SolverER]") {
 
             ser.addToExtDefBuffer(ExtDef{ mkLit(14), mkLit( 3), mkLit(10), additional });
             ser.addToExtDefBuffer(ExtDef{ mkLit(15), mkLit(11), mkLit(12), additional });
-            ser.introduceExtVars(s.extDefs);
+            ser.introduceExtVars(ser.extDefs);
             ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
 
             THEN("only non-basis literal extension variables are chosen for deletion") {

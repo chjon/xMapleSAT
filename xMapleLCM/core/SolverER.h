@@ -48,6 +48,7 @@ public:
 
     int originalNumVars; // The number of variables in the original formula
                          // This value is used to quickly check whether a variable is an extension variable
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
 
     // Determine whether a variable is an extension variable
     inline bool isExtVar(Var x) const;
@@ -116,7 +117,7 @@ public:
      * @brief Introduce extension variables into the solver
      * 
      * @param ext_def_db The map of extension variables to a list of their corresponding extension definition clauses.
-     * In most cases this should be equal to @code{solver->extDefs}.
+     * In most cases this should be equal to @code{extDefs}.
      */
     void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
 
@@ -179,6 +180,13 @@ public:
      * @param deletionPredicate a method for determining whether an extension variable should be removed.
      */
     void deleteExtVars(DeletionPredicate& deletionPredicate);
+    
+    /**
+     * @brief Relocate CRefs to new ClauseAllocator
+     * 
+     * @param to The ClauseAllocator into which to reloc 
+     */
+    void relocAll(ClauseAllocator& to);
 
     /////////////////////////////
     // USER-DEFINED HEURISTICS //

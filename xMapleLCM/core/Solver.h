@@ -287,7 +287,6 @@ protected:
     vec<CRef>           learnts_core,     // List of learnt clauses.
     learnts_tier2,
     learnts_local;
-    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
 
     double              cla_inc;          // Amount to bump next clause with.
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.

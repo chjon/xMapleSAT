@@ -397,7 +397,7 @@ namespace Minisat {
 
     void SolverER::getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const {
         // Iterate through current extension variables
-        for (auto it = solver->extDefs.begin(); it != solver->extDefs.end(); it++) {
+        for (auto it = extDefs.begin(); it != extDefs.end(); it++) {
             Var x = it->first;
 
             // Find all extension variables that are not basis literals
@@ -437,11 +437,11 @@ namespace Minisat {
 
         // 2. Delete extension variable definition clauses
         for (Lit x : varsToDelete) {
-            for (CRef cr : solver->extDefs.find(var(x))->second) {
+            for (CRef cr : extDefs.find(var(x))->second) {
                 // TODO: also remove CRef from buffers (e.g. from incremental clause filtering)
                 solver->removeClause(cr);
             }
-            solver->extDefs.erase(var(x));
+            extDefs.erase(var(x));
         }
 
         // 3. Remove extension variable from definition map to prevent future clause substitution
@@ -450,5 +450,19 @@ namespace Minisat {
         // Update stats
         deleted_ext_vars += varsToDelete.size();
         extTimerStop(ext_delV_overhead);
+    }
+
+    void SolverER::relocAll(ClauseAllocator& to) {
+        for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+            std::vector<CRef>& cs = it->second;
+            unsigned int i, j;
+            for (i = j = 0; i < cs.size(); i++) {
+                // Reloc following example of clauses
+                if (solver->ca[cs[i]].mark() != 1){
+                    solver->ca.reloc(cs[i], to);
+                    cs[j++] = cs[i]; }
+            }
+            cs.erase(cs.begin() + j, cs.end());
+        }
     }
 }
