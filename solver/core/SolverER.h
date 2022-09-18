@@ -48,6 +48,7 @@ public:
 
     int originalNumVars; // The number of variables in the original formula
                          // This value is used to quickly check whether a variable is an extension variable
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
 
     // Determine whether a variable is an extension variable
     inline bool isExtVar(Var x) const;
@@ -104,6 +105,11 @@ public:
      * @param extDefHeuristic a method for generating extension variable definitions given a list of selected clauses
      */
     void defineExtVars(ExtDefHeuristic& extDefHeuristic);
+
+    /**
+     * @brief Checks whether to generate definitions and then calls @code{selectClauses} and @code{defineExtVars}.
+     */
+    inline void generateDefinitions();
 
     // Extension Variable Introduction
 
@@ -175,6 +181,13 @@ public:
      */
     void deleteExtVars(DeletionPredicate& deletionPredicate);
 
+    /**
+     * @brief Relocate CRefs to new ClauseAllocator
+     * 
+     * @param to The ClauseAllocator into which to reloc 
+     */
+    void relocAll(ClauseAllocator& to);
+
     /////////////////////////////
     // USER-DEFINED HEURISTICS //
     /////////////////////////////
@@ -214,6 +227,24 @@ public:
     double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
 protected:
+    long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
+
+    /////////////////////////////
+    // Command-line parameters //
+    /////////////////////////////
+    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
+    int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
+    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
+    double    ext_prio_act;       // The fraction of maximum activity that should be given to new variables                    (default 0.5)
+    bool      ext_pref_sign;      // Preferred sign for new variables                                                          (default true (negated))
+    int       ext_min_width;      // Minimum clause width to consider when selecting clauses
+    int       ext_max_width;      // Maximum clause width to consider when selecting clauses
+    int       ext_filter_num;     // Maximum number of clauses after the filter step
+    int       ext_sub_min_width;  // Minimum width of clauses to substitute into
+    int       ext_sub_max_width;  // Maximum width of clauses to substitute into
+    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
+    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
+    double    ext_act_threshold;  // Activity threshold for deleting clauses
 
     // // Update stats
     // void updateExtFracStat(vec<Lit>& clause) {
@@ -355,6 +386,14 @@ inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set
     // Ensure literal pair has not already been added
     if (xdm.containsPair(a, b)) return false;
     return generatedPairs.find(mkLitPair(a, b)) == generatedPairs.end();
+}
+
+inline void SolverER::generateDefinitions() {
+    if (solver->conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
+        prevExtensionConflict = solver->conflicts;
+        selectClauses(user_extSelHeuristic);
+        defineExtVars(user_extDefHeuristic);
+    }
 }
 
 }
