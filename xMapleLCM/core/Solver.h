@@ -513,8 +513,6 @@ public:
 
     SolverER* ser;
 
-    void checkTrailInvariant();
-
 private:
     friend class SolverER;
 };
