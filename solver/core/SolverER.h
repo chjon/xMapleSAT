@@ -157,7 +157,7 @@ public:
      * 
      * @param clause The vector of literals in which to substitute
      * @param predicate The condition with which to check the clause
-     * @return true if the clause is still asserting after substitution
+     * @return true if a variable was substituted into the clase
      * @return false otherwise
      */
     inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& predicate) const;
@@ -305,14 +305,16 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
 bool SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
+    bool subbed = false;
     extTimerStart();
     // xdm.absorb(clause);
     if (p(clause)) {
         vec<Lit> extLits;
         xdm.substitute(clause, extLits);
+        subbed = extLits.size() > 0;
     }
     extTimerStop(ext_sub_overhead);
-    return true;
+    return subbed;
 }
 
 // EXTENDED RESOLUTION - statistics
