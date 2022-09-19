@@ -41,6 +41,26 @@ static inline void initOverhead(struct rusage& overhead, int s, int us) {
 }
 
 namespace Minisat {
+    static const char* _ext = "EXT";
+    static IntOption    opt_ext_freq       (_ext, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_wndw       (_ext, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_num        (_ext, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+    static DoubleOption opt_ext_prio       (_ext, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
+    static BoolOption   opt_ext_sign       (_ext, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
+    static IntOption    opt_ext_min_width  (_ext, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_max_width  (_ext, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_sub_min_width  (_ext, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
+    static IntOption    opt_ext_sub_max_width  (_ext, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
+    #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    static IntOption    opt_ext_min_lbd    (_ext, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_max_lbd    (_ext, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
+    #endif
+    #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
+    #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
+    #endif
+
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
         , deleted_ext_vars   (0)
@@ -49,7 +69,30 @@ namespace Minisat {
         , learnt_extclauses  (0)
         , lbd_total          (0)
         , branchOnExt        (0)
-
+        
+// Command-line parameters
+        , ext_freq         (opt_ext_freq)
+        , ext_window       (opt_ext_wndw)
+        , ext_max_intro    (opt_ext_num)
+        , ext_prio_act     (opt_ext_prio)
+        , ext_pref_sign    (opt_ext_sign)
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+        , ext_min_width    (opt_ext_min_width)
+        , ext_max_width    (opt_ext_max_width)
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+        , ext_filter_num   (opt_ext_filter_num)
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
+        , ext_sub_min_width (opt_ext_sub_min_width)
+        , ext_sub_max_width (opt_ext_sub_max_width)
+#endif
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        , ext_min_lbd      (opt_ext_min_lbd)
+        , ext_max_lbd      (opt_ext_max_lbd)
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+        , ext_act_threshold(opt_ext_act_thresh)
+#endif
         , solver(s)
     {
         using namespace std::placeholders;
