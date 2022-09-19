@@ -414,6 +414,11 @@ namespace Minisat {
     }
 
     void SolverER::relocAll(ClauseAllocator& to) {
+        // Reloc CRefs stored in buffers
+        for (unsigned int i = 0; i < m_filteredClauses.size(); i++) solver->ca.reloc(m_filteredClauses[i], to);
+        for (unsigned int i = 0; i < m_selectedClauses.size(); i++) solver->ca.reloc(m_selectedClauses[i], to);
+
+        // Reloc extension definition clauses
         for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
             std::vector<CRef>& cs = it->second;
             unsigned int i, j;
