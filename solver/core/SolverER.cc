@@ -383,7 +383,7 @@ namespace Minisat {
                         }
 
                         // Propagate literal
-                        solver->uncheckedEnqueue(~clause[i], level(var(a)), cr);
+                        solver->uncheckedEnqueue(~clause[i], cr);
                         break;
                     }
                 }
