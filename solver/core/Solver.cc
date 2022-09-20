@@ -739,8 +739,10 @@ bool Solver::simplify()
 
     // Remove satisfied clauses:
     removeSatisfied(learnts);
-    if (remove_satisfied)        // Can be turned off.
+    if (remove_satisfied) {        // Can be turned off.
         removeSatisfied(clauses);
+        ser->removeSatisfied();
+    }
     checkGarbage();
     rebuildOrderHeap();
 
@@ -818,6 +820,8 @@ lbool Solver::search(int nof_conflicts)
             ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
             cancelUntil(backtrack_level);
+
+            ser->enforceLearntClauseInvariant(learnt_clause);
 
 #if BRANCHING_HEURISTIC == CHB
             action = trail.size();

@@ -356,6 +356,43 @@ namespace Minisat {
         }
     }
 
+    void SolverER::enforceLearntClauseInvariant(const vec<Lit>& clause) {
+        // ensure that at exactly one variable is unassigned, and all other vars are false
+        assert(value(clause[0]) == l_Undef);
+        for (int i = 1; i < clause.size(); i++) {
+            // Rarely, extension variables are undefined - propagate from their definitions
+            if (value(clause[i]) == l_Undef) {
+                Var x = var(clause[i]);
+                assert(xdm.containsExt(mkLit(x)));
+                auto ab = xdm.find(mkLit(x))->second;
+                Lit a = ab.first, b = ab.second;
+                assert(value(a) == l_False);
+                assert(value(b) == l_False);
+
+                // Find the asserting definition clause
+                for (CRef cr : extDefs.find(x)->second) {
+                    Clause& c = solver->ca[cr];
+                    if (c.size() == 3) { // Searching for (-x a b)
+                        // Ensure clause is asserting
+                        for (int j = 0; j < c.size(); j++) {
+                            if (value(c[j]) == l_Undef) {
+                                assert(var(c[j]) == x);
+                            } else {
+                                assert(value(c[j]) == l_False);
+                            };
+                        }
+
+                        // Propagate literal
+                        solver->uncheckedEnqueue(~clause[i], level(var(a)), cr);
+                        break;
+                    }
+                }
+            }
+
+            assert(value(clause[i]) == l_False);
+        }
+    }
+
     void SolverER::getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const {
         // Iterate through current extension variables
         for (auto it = extDefs.begin(); it != extDefs.end(); it++) {
@@ -399,7 +436,7 @@ namespace Minisat {
         // 2. Delete extension variable definition clauses
         for (Lit x : varsToDelete) {
             for (CRef cr : extDefs.find(var(x))->second) {
-                // TODO: also remove CRef from buffers (e.g. from incremental clause filtering)
+                remove_incremental(cr);
                 solver->removeClause(cr);
             }
             extDefs.erase(var(x));
@@ -407,6 +444,7 @@ namespace Minisat {
 
         // 3. Remove extension variable from definition map to prevent future clause substitution
         xdm.erase(varsToDelete); 
+        remove_flush();
 
         // Update stats
         deleted_ext_vars += varsToDelete.size();
@@ -430,5 +468,24 @@ namespace Minisat {
             }
             cs.erase(cs.begin() + j, cs.end());
         }
+    }
+    
+    void SolverER::removeSatisfied() {
+        for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+            std::vector<CRef>& cs = it->second;
+            unsigned int i, j;
+            for (i = j = 0; i < cs.size(); i++) {
+                Clause& c = solver->ca[cs[i]];
+                if (solver->satisfied(c)) {
+                    remove_incremental(cs[i]);
+                    solver->removeClause(cs[i]);
+                } else {
+                    cs[j++] = cs[i];
+                }
+            }
+            cs.erase(cs.begin() + j, cs.end());
+        }
+
+        remove_flush();
     }
 }

@@ -162,6 +162,15 @@ public:
      */
     inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& predicate) const;
 
+    /**
+     * @brief Enforce the invariant that learnt clauses are asserting after backtracking. Rarely, after variable
+     * substitution and backtracking, some extension variables are undefined even though their definitions are
+     * falsified.
+     * 
+     * @param clause The learnt clause to check
+     */
+    void enforceLearntClauseInvariant(const vec<Lit>& clause);
+
     // Extension Variable Deletion
 
     /**
@@ -181,12 +190,20 @@ public:
      */
     void deleteExtVars(DeletionPredicate& deletionPredicate);
 
+    ///////////////////////
+    // Solver.h helpers //
+    ///////////////////////
+    // Since SolverER has its own data structures, we implement these methods here for readability in the main solver code
+
     /**
      * @brief Relocate CRefs to new ClauseAllocator
      * 
      * @param to The ClauseAllocator into which to reloc 
      */
     void relocAll(ClauseAllocator& to);
+
+    // TODO: verify safety
+    void removeSatisfied();
 
     /////////////////////////////
     // USER-DEFINED HEURISTICS //
@@ -271,7 +288,16 @@ protected:
     std::vector<CRef> m_filteredClauses;
     std::vector<CRef> m_selectedClauses;
     std::vector<ExtDef> m_extVarDefBuffer;
+
+    // Keep track of clauses which have been removed so that they can be removed from the buffers above
+    std::tr1::unordered_set<CRef> m_deletedClauses;
     vec<Lit> tmp;
+
+    /////////////////////////////////
+    // HELPERS FOR CLAUSE DELETION //
+    /////////////////////////////////
+    inline void remove_incremental(CRef cr);
+    inline void remove_flush();
 
 #ifdef TESTING
     std::map< Var, std::pair<lbool, int> > test_value;
@@ -396,6 +422,33 @@ inline void SolverER::generateDefinitions() {
         selectClauses(user_extSelHeuristic);
         defineExtVars(user_extDefHeuristic);
     }
+}
+
+inline void SolverER::remove_incremental(CRef cr) {
+    m_deletedClauses.insert(cr);
+}
+
+inline void SolverER::remove_flush() {
+    unsigned int i, j;
+
+    // Remove CRefs from buffer of filtered clauses
+    for (i = j = 0; i < m_filteredClauses.size(); i++) {
+        if (m_deletedClauses.find(m_filteredClauses[i]) == m_deletedClauses.end()) {
+            m_filteredClauses[j++] = m_filteredClauses[i];
+        }
+    }
+    m_filteredClauses.erase(m_filteredClauses.begin() + j, m_filteredClauses.end());
+
+    // Remove CRefs from buffer of selected clauses
+    for (i = j = 0; i < m_selectedClauses.size(); i++) {
+        if (m_deletedClauses.find(m_selectedClauses[i]) == m_deletedClauses.end()) {
+            m_selectedClauses[j++] = m_selectedClauses[i];
+        }
+    }
+    m_selectedClauses.erase(m_selectedClauses.begin() + j, m_selectedClauses.end());
+
+    // Clear deletion buffer
+    m_deletedClauses.clear();
 }
 
 }

@@ -1771,8 +1771,10 @@ bool Solver::simplify()
     removeSatisfied(learnts_core); // Should clean core first.
     safeRemoveSatisfied(learnts_tier2, TIER2);
     safeRemoveSatisfied(learnts_local, LOCAL);
-    if (remove_satisfied)        // Can be turned off.
+    if (remove_satisfied) {        // Can be turned off.
         removeSatisfied(clauses);
+        ser->removeSatisfied();
+    }
     checkGarbage();
     rebuildOrderHeap();
 
@@ -1990,6 +1992,8 @@ lbool Solver::search(int& nof_conflicts)
 				++non_chrono_backtrack;
 				cancelUntil(backtrack_level);
 			}
+
+            ser->enforceLearntClauseInvariant(learnt_clause);
 
             lbd--;
             if (VSIDS){
