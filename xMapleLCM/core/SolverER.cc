@@ -370,10 +370,6 @@ namespace Minisat {
                     CRef confl = solver->propagate();
                     assert(confl == CRef_Undef);
                 }
-
-                for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
-                    assert(value(extLits[i]) == l_False);
-                }
             }
         }
 
