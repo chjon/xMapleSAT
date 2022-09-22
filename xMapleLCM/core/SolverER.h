@@ -141,15 +141,6 @@ public:
      */
     void prioritize(const std::vector<ExtDef>& defs);
 
-    /**
-     * @brief Ensures the first two literals are in the right order for the watchers
-     * 
-     * @param clause a vector of multiple literals
-     * 
-     * @note @code{clause} must have length > 1. Unary clauses should be propagated directly and not learnt
-     */
-    void enforceWatcherInvariant(vec<Lit>& clause) const;
-
     // Extension Variable Substitution
 
     /**
@@ -160,16 +151,7 @@ public:
      * @return true if a variable was substituted into the clase
      * @return false otherwise
      */
-    inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& predicate) const;
-
-    /**
-     * @brief Enforce the invariant that learnt clauses are asserting after backtracking. Rarely, after variable
-     * substitution and backtracking, some extension variables are undefined even though their definitions are
-     * falsified.
-     * 
-     * @param clause The learnt clause to check
-     */
-    void enforceLearntClauseInvariant(const vec<Lit>& clause);
+    void substitute(vec<Lit>& clause, SubstitutionPredicate& predicate);
 
     // Extension Variable Deletion
 
@@ -329,19 +311,6 @@ int   SolverER::level(Var x) const { return solver->level(x); }
 lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
-
-bool SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
-    bool subbed = false;
-    extTimerStart();
-    // xdm.absorb(clause);
-    if (p(clause)) {
-        vec<Lit> extLits;
-        xdm.substitute(clause, extLits);
-        subbed = extLits.size() > 0;
-    }
-    extTimerStop(ext_sub_overhead);
-    return subbed;
-}
 
 // EXTENDED RESOLUTION - statistics
 inline void SolverER::extTimerStart() const {

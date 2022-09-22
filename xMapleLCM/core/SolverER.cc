@@ -190,49 +190,6 @@ namespace Minisat {
         extTimerStop(ext_sel_overhead);
     }
 
-    void SolverER::enforceWatcherInvariant(vec<Lit>& clause) const {
-        assert(clause.size() > 1);
-
-        // Swap all unassigned literals to the beginning of the clause
-        int i, j;
-        for (i = j = 0; i < clause.size(); i++) {
-            if (value(clause[i]) == l_Undef) {
-                Lit tmp = clause[i]; clause[i] = clause[j]; clause[j] = tmp;
-                j++;
-            }
-        }
-
-        const int num_unassigned = j;
-        if (num_unassigned == 0) {
-            // Move the two literals with the highest levels to the first two indices (O(n) partial selection sort)
-            for (i = 0; i < 2; i++) {
-                int maxLvl_j = i;
-                for (j = i; j < clause.size(); j++) {
-                    if (level(var(clause[j])) > level(var(clause[maxLvl_j]))) {
-                        maxLvl_j = j;
-                    }
-                }
-                Lit tmp = clause[i]; clause[i] = clause[maxLvl_j]; clause[maxLvl_j] = tmp;
-            }
-
-            // Swap the first two literals so that the highest level is in index 1 and the second-highest level is in index 0
-            Lit tmp = clause[0]; clause[0] = clause[1]; clause[1] = tmp;
-
-        } else if (num_unassigned == 1) {
-            // Find the first literal assigned at the next-highest level:
-            int maxLvl_j = 1;
-            for (j = 2; j < clause.size(); j++)
-                if (level(var(clause[j])) > level(var(clause[maxLvl_j])))
-                    maxLvl_j = j;
-
-            // Swap-in this literal at index 1:
-            Lit tmp          = clause[maxLvl_j];
-            clause[maxLvl_j] = clause[1];
-            clause[1]        = tmp;
-            // solver->cancelUntil(level(var(tmp)));
-        }
-    }
-
     void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic) {
         extTimerStart();
 
@@ -375,8 +332,6 @@ namespace Minisat {
         // if (ps.size() == 1) {
         //     solver->uncheckedEnqueue(ext_lit);
         // } else {
-        //     // Make sure the first two literals are in the right order for the watchers
-        //    enforceWatcherInvariant(ps);
 
         //     // Add clause to data structures
         //     ClauseAllocator& ca = solver->ca;
@@ -390,46 +345,39 @@ namespace Minisat {
 
             // Check whether the clause needs to be propagated
             if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
+                printf("propagation while adding extDefClause!\n");
                 solver->uncheckedEnqueue(ps[0], level(var(ps[1])), cr);
             }
         }
     }
 
-    void SolverER::enforceLearntClauseInvariant(const vec<Lit>& clause) {
-        // ensure that at exactly one variable is unassigned, and all other vars are false
-        assert(value(clause[0]) == l_Undef);
-        for (int i = 1; i < clause.size(); i++) {
-            // Rarely, extension variables are undefined - propagate from their definitions
-            if (value(clause[i]) == l_Undef) {
-                Var x = var(clause[i]);
-                assert(xdm.containsExt(mkLit(x)));
-                auto ab = xdm.find(mkLit(x))->second;
-                Lit a = ab.first, b = ab.second;
-                assert(value(a) == l_False);
-                assert(value(b) == l_False);
+    void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
+        extTimerStart();
+        // xdm.absorb(clause);
+        if (p(clause)) {
+            vec<Lit> extLits;
+            xdm.substitute(clause, extLits);
 
-                // Find the asserting definition clause
-                for (CRef cr : extDefs.find(x)->second) {
-                    Clause& c = solver->ca[cr];
-                    if (c.size() == 3) { // Searching for (-x a b)
-                        // Ensure clause is asserting
-                        for (int j = 0; j < c.size(); j++) {
-                            if (value(c[j]) == l_Undef) {
-                                assert(var(c[j]) == x);
-                            } else {
-                                assert(value(c[j]) == l_False);
-                            };
-                        }
+            // Ensure variables are assigned so the clause is still asserting
+            // Rarely, extension variables are undefined, so we need to propagate from their definitions
+            if (extLits.size()) {
+                bool needProp = false;
+                for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
+                    needProp |= (value(extLits[i]) == l_Undef);
+                }
 
-                        // Propagate literal
-                        solver->uncheckedEnqueue(~clause[i], level(var(a)), cr);
-                        break;
-                    }
+                if (needProp) {
+                    CRef confl = solver->propagate();
+                    assert(confl == CRef_Undef);
+                }
+
+                for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
+                    assert(value(extLits[i]) == l_False);
                 }
             }
-
-            assert(value(clause[i]) == l_False);
         }
+
+        extTimerStop(ext_sub_overhead);
     }
 
     void SolverER::getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const {

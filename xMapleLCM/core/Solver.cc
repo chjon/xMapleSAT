@@ -1977,10 +1977,6 @@ lbool Solver::search(int& nof_conflicts)
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
 
-            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-            // TODO: Investigate whether this ever produces duplicate clauses
-            ser->substitute(learnt_clause, ser->user_extSubPredicate);
-
             // check chrono backtrack condition
             if ((confl_to_chrono < 0 || static_cast<uint64_t>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
             {
@@ -1993,7 +1989,10 @@ lbool Solver::search(int& nof_conflicts)
 				cancelUntil(backtrack_level);
 			}
 
-            ser->enforceLearntClauseInvariant(learnt_clause);
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            // This must be called after backtracking because extension variables might need to be propagated
+            // TODO: Investigate whether this ever produces duplicate clauses
+            ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
             lbd--;
             if (VSIDS){
