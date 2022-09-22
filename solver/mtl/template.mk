@@ -69,7 +69,7 @@ lib$(LIB)_release.a:	$(filter-out */Main.or, $(RCOBJS))
 
 ## Build rule
 %.o %.op %.od %.or:	%.cc
-	@echo Compiling: $(subst $(MROOT)/,,$@) $(CFLAGS)
+	@echo Compiling: $(subst $(MROOT)/,,$@)
 	@$(CXX) $(CFLAGS) -c -o $@ $<
 
 ## Linking rules (standard/profile/debug/release)
