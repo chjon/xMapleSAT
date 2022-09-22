@@ -815,13 +815,12 @@ lbool Solver::search(int nof_conflicts)
             learnt_clause.clear();
             analyze(confl, learnt_clause, backtrack_level);
 
-            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-            // TODO: Investigate whether this ever produces duplicate clauses
-            ser->substitute(learnt_clause, ser->user_extSubPredicate);
-
             cancelUntil(backtrack_level);
 
-            ser->enforceLearntClauseInvariant(learnt_clause);
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables
+            // This must be called after backtracking because extension variables might need to be propagated
+            // TODO: Investigate whether this ever produces duplicate clauses
+            ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
 #if BRANCHING_HEURISTIC == CHB
             action = trail.size();

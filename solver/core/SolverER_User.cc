@@ -6,22 +6,13 @@
 namespace Minisat {
 
 bool SolverER::user_extFilPredicate_width(CRef cr) {
-    const Clause& clause = solver->ca[cr];
-    // for (int i = 0; i < clause.size(); i++)
-    //     assert(var(clause[i]) >= 0);
-
-    const int sz = clause.size();
-    return solver->ext_min_width <= sz && sz <= solver->ext_max_width;
+    const int sz = solver->ca[cr].size();
+    return ext_min_width <= sz && sz <= ext_max_width;
 }
 
 bool SolverER::user_extFilPredicate_lbd(CRef cr) {
-    const Clause& clause = solver->ca[cr];
-    // for (int i = 0; i < clause.size(); i++)
-    //     assert(var(clause[i]) >= 0);
-
-    const int lbd = solver->lbd(clause);
-
-    return solver->ext_min_lbd <= lbd && lbd <= solver->ext_max_lbd;
+    const int lbd = solver->lbd(solver->ca[cr]);
+    return ext_min_lbd <= lbd && lbd <= ext_max_lbd;
 }
 
 void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
@@ -280,11 +271,11 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
     const int clause_width = clause.size();
-    if (clause_width < solver->ext_sub_min_width) return false;
+    if (clause_width < ext_sub_min_width) return false;
 #endif
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
-    const int clause_lbd = computeLBD(clause);
+    const int clause_lbd = clause.lbd();
     if (clause_lbd < ext_min_lbd || clause_lbd > ext_max_lbd) return false;
 #endif
 
@@ -294,7 +285,7 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 bool SolverER::user_extDelPredicate_none(Var x) { return false; }
 bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
-    return solver->activity[x] < solver->ext_act_threshold;
+    return solver->activity[x] < ext_act_threshold;
 }
 
 }

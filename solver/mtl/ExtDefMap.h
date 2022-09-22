@@ -217,7 +217,7 @@ public:
         for (int i = 0; i < defLitIndex.size(); i++) {
             if (!validIndex[defLitIndex[i]]) continue;
             for (int j = i + 1; j < defLitIndex.size(); j++) {
-                if (!validIndex[defLitIndex[i]]) continue;
+                if (!validIndex[defLitIndex[j]]) continue;
 
                 // Check whether any extension variables are defined over this literal pair
                 typename PLMap::const_iterator it = pl_map.find(mkLitPair(clause[defLitIndex[i]], clause[defLitIndex[j]]));

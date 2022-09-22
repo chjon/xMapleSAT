@@ -105,7 +105,7 @@ public:
      * @param extDefHeuristic a method for generating extension variable definitions given a list of selected clauses
      */
     void defineExtVars(ExtDefHeuristic& extDefHeuristic);
-
+    
     /**
      * @brief Checks whether to generate definitions and then calls @code{selectClauses} and @code{defineExtVars}.
      */
@@ -117,7 +117,7 @@ public:
      * @brief Introduce extension variables into the solver
      * 
      * @param ext_def_db The map of extension variables to a list of their corresponding extension definition clauses.
-     * In most cases this should be equal to @code{solver->extDefs}.
+     * In most cases this should be equal to @code{extDefs}.
      */
     void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
 
@@ -141,15 +141,6 @@ public:
      */
     void prioritize(const std::vector<ExtDef>& defs);
 
-    /**
-     * @brief Ensures the first two literals are in the right order for the watchers
-     * 
-     * @param clause a vector of multiple literals
-     * 
-     * @note @code{clause} must have length > 1. Unary clauses should be propagated directly and not learnt
-     */
-    void enforceWatcherInvariant(vec<Lit>& clause) const;
-
     // Extension Variable Substitution
 
     /**
@@ -160,16 +151,7 @@ public:
      * @return true if a variable was substituted into the clase
      * @return false otherwise
      */
-    inline bool substitute(vec<Lit>& clause, SubstitutionPredicate& predicate) const;
-
-    /**
-     * @brief Enforce the invariant that learnt clauses are asserting after backtracking. Rarely, after variable
-     * substitution and backtracking, some extension variables are undefined even though their definitions are
-     * falsified.
-     * 
-     * @param clause The learnt clause to check
-     */
-    void enforceLearntClauseInvariant(const vec<Lit>& clause);
+    void substitute(vec<Lit>& clause, SubstitutionPredicate& predicate);
 
     // Extension Variable Deletion
 
@@ -189,7 +171,7 @@ public:
      * @param deletionPredicate a method for determining whether an extension variable should be removed.
      */
     void deleteExtVars(DeletionPredicate& deletionPredicate);
-
+    
     ///////////////////////
     // Solver.h helpers //
     ///////////////////////
@@ -329,19 +311,6 @@ int   SolverER::level(Var x) const { return solver->level(x); }
 lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
-
-bool SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) const {
-    bool subbed = false;
-    extTimerStart();
-    // xdm.absorb(clause);
-    if (p(clause)) {
-        vec<Lit> extLits;
-        xdm.substitute(clause, extLits);
-        subbed = extLits.size() > 0;
-    }
-    extTimerStop(ext_sub_overhead);
-    return subbed;
-}
 
 // EXTENDED RESOLUTION - statistics
 inline void SolverER::extTimerStart() const {
