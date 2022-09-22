@@ -673,6 +673,18 @@ SCENARIO("Substituting into clauses", "[ExtDefMap]") {
                 REQUIRE_THAT(extLits, vecEqual(expect2));
             }
         }
+
+        WHEN("substituting into a clause containing both overlapping and non-overlapping extension definitions") {
+            setLitVec(clause, {202, 100, 101, 200, 102});
+            xdm.substitute(clause, extLits);
+
+            THEN("the extension definitions should be substituted, with only the leftmost definition substituted for overlapping definitions") {
+                setLitVec(expect1, {3, 0, 101});
+                setLitVec(expect2, {3, 0});
+                REQUIRE_THAT(clause , vecEqual(expect1));
+                REQUIRE_THAT(extLits, vecEqual(expect2));
+            }
+        }
     }
 }
 
