@@ -426,10 +426,11 @@ namespace Minisat {
                 for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
                     if (value(extLits[i]) == l_Undef) {
                         int i_undef, i_max;
-                        CRef asserting_cr = findAssertingClause(i_undef, i_max, extLits[i]);
-                        assert(asserting_cr != CRef_Undef);
-                        enforceWatcherInvariant(asserting_cr, i_undef, i_max);
-                        solver->uncheckedEnqueue(c[0], level(var(c[1])), asserting_cr);
+                        CRef cr = findAssertingClause(i_undef, i_max, extLits[i]);
+                        assert(cr != CRef_Undef);
+                        enforceWatcherInvariant(cr, i_undef, i_max);
+                        Clause& c = solver->ca[cr];
+                        solver->uncheckedEnqueue(c[0], level(var(c[1])), cr);
                     }
                 }
             }
