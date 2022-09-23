@@ -275,6 +275,39 @@ protected:
     std::tr1::unordered_set<CRef> m_deletedClauses;
     vec<Lit> tmp;
 
+    //////////////////////////////
+    // HELPERS FOR SUBSTITUTION //
+    //////////////////////////////
+
+    /**
+     * @brief Find the asserting definition clause for an extension variable
+     * 
+     * @param i_undef Return value - the index of the undefined literal in the clause
+     * @param i_max Return value - the index of the literal in the clause with the highest decision level
+     * @param x The unassigned extension literal
+     * @return The CRef for the asserting clause
+     * 
+     * @note pre-condition: the clause must be asserting at the current decision level
+     */
+    CRef findAssertingClause(int& i_undef, int& i_max, Lit x);
+
+    /**
+     * @brief Propagate a literal from an asserting clause, ensuring that watcher invariants are satisfied
+     * 
+     * @param asserting_cr The CRef of the asserting clause
+     * @param i_undef The index of the undefined literal in the clause
+     * @param i_max The index of the literal in the clause with the highest decision level
+     */
+    void assertClause(CRef asserting_cr, int i_undef, int i_max);
+
+    /**
+     * @brief Delete the watcher for a given literal-clause pair
+     * 
+     * @param p The literal in the clause with a pre-existing watcher
+     * @param cr The ID of the clause whose watcher should be deleted
+     */
+    void deleteWatcher(Lit p, CRef cr);
+
     /////////////////////////////////
     // HELPERS FOR CLAUSE DELETION //
     /////////////////////////////////

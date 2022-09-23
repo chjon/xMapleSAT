@@ -351,6 +351,68 @@ namespace Minisat {
         }
     }
 
+    CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x) {
+        // Find definition clause which asserts ~x
+        int max_lvl;
+        for (CRef cr : extDefs.find(var(x))->second) {
+            Clause& c = solver->ca[cr];
+            i_undef = i_max = max_lvl = -1;
+            for (int k = 0; k < c.size(); k++) {
+                if (value(c[k]) == l_Undef) {
+                    if (c[k] != ~x) goto NEXT_CLAUSE;
+                    i_undef = k;
+                } else if (value(c[k]) == l_True) {
+                    goto NEXT_CLAUSE;
+                } else if (level(var(c[k])) > max_lvl) {
+                    max_lvl = level(var(c[k]));
+                    i_max = k;
+                }
+            }
+
+            assert(i_undef != -1);
+            return cr;
+            NEXT_CLAUSE:;
+        }
+
+        // bug: the solver should never reach here if the extension definition clauses are present
+        return CRef_Undef;
+    }
+
+    void SolverER::assertClause(CRef asserting_cr, int i_undef, int i_max) {
+        // Move unassigned literal to c[0]
+        Clause& c = solver->ca[asserting_cr];
+        Lit x = c[i_undef], max = c[i_max];
+        if (c.size() == 2) { // Don't need to touch watchers for binary clauses
+            if (value(c[0]) == l_False) std::swap(c[0], c[1]);
+        } else {
+            if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
+
+            if (i_max > 1) {
+                deleteWatcher(c[1], asserting_cr);
+                std::swap(c[1], c[i_max]);
+                solver->watches[~c[1]].push(Solver::Watcher(asserting_cr, x));
+            }
+
+            if (i_undef > 1) {
+                deleteWatcher(c[0], asserting_cr);
+                std::swap(c[0], c[i_undef]);
+                solver->watches[~c[0]].push(Solver::Watcher(asserting_cr, max));
+            }
+        }
+
+        // Propagate asserting literal
+        solver->uncheckedEnqueue(c[0], level(var(c[1])), asserting_cr);
+    }
+
+    void SolverER::deleteWatcher(Lit p, CRef cr) {
+        vec<Solver::Watcher>& ws = solver->watches[p];
+        Solver::Watcher *i, *j, *end;
+        for (i = (Solver::Watcher*)ws, end = i + ws.size(); i != end && i->cref != cr; i++);
+        assert(i != end && i->cref == cr); j = i++;
+        while(i != end) *(j++) = *(i++);
+        ws.shrink(1);
+    }
+
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
         // xdm.absorb(clause);
@@ -361,14 +423,13 @@ namespace Minisat {
             // Ensure variables are assigned so the clause is still asserting
             // Rarely, extension variables are undefined, so we need to propagate from their definitions
             if (extLits.size()) {
-                bool needProp = false;
                 for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
-                    needProp |= (value(extLits[i]) == l_Undef);
-                }
-
-                if (needProp) {
-                    CRef confl = solver->propagate();
-                    assert(confl == CRef_Undef);
+                    if (value(extLits[i]) == l_Undef) {
+                        int i_undef, i_max;
+                        CRef asserting_cr = findAssertingClause(i_undef, i_max, extLits[i]);
+                        assert(asserting_cr != CRef_Undef);
+                        assertClause(asserting_cr, i_undef, i_max);
+                    }
                 }
             }
         }
