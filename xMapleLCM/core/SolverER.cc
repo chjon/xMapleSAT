@@ -378,13 +378,16 @@ namespace Minisat {
         return CRef_Undef;
     }
 
-    void SolverER::assertClause(CRef asserting_cr, int i_undef, int i_max) {
+    void SolverER::enforceWatcherInvariant(CRef asserting_cr, int i_undef, int i_max) {
         // Move unassigned literal to c[0]
         Clause& c = solver->ca[asserting_cr];
         Lit x = c[i_undef], max = c[i_max];
-        if (c.size() == 2) { // Don't need to touch watchers for binary clauses
+        if (c.size() == 2) {
+            // Don't need to touch watchers for binary clauses
             if (value(c[0]) == l_False) std::swap(c[0], c[1]);
         } else {
+            // Swap unassigned literal to index 0 and highest-level literal to index 1,
+            // replacing watchers as necessary
             if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
 
             if (i_max > 1) {
@@ -399,9 +402,6 @@ namespace Minisat {
                 solver->watches[~c[0]].push(Solver::Watcher(asserting_cr, max));
             }
         }
-
-        // Propagate asserting literal
-        solver->uncheckedEnqueue(c[0], level(var(c[1])), asserting_cr);
     }
 
     void SolverER::deleteWatcher(Lit p, CRef cr) {
@@ -428,7 +428,8 @@ namespace Minisat {
                         int i_undef, i_max;
                         CRef asserting_cr = findAssertingClause(i_undef, i_max, extLits[i]);
                         assert(asserting_cr != CRef_Undef);
-                        assertClause(asserting_cr, i_undef, i_max);
+                        enforceWatcherInvariant(asserting_cr, i_undef, i_max);
+                        solver->uncheckedEnqueue(c[0], level(var(c[1])), asserting_cr);
                     }
                 }
             }
