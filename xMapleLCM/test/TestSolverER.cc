@@ -213,6 +213,157 @@ SCENARIO("Choosing extension variables to delete", "[SolverER]") {
     }
 }
 
+static void setVariables(SolverER& ser, int i_undef, int i_max, int numVars) {
+    ser.test_value.clear();
+    for (int i = 0; i < numVars; i++)
+        if (i != i_undef && i != i_max)
+            ser.set_value(i, l_False, i);
+    ser.set_value(i_max, l_False, numVars);
+}
+
+SCENARIO("Find asserting extension definition clause", "[SolverER]") {
+    GIVEN("Variables") {
+        Solver s;
+        SolverER& ser = *(s.ser);
+        std::tr1::unordered_set<Lit> varsToDelete;
+        vec<Lit> ps, actual, expect;
+        int i_undef = -1, i_max = -1;
+        CRef cr;
+
+        // Set up variables for testing
+        ser.originalNumVars = 10;
+        for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
+
+        AND_GIVEN("a typical extension variable definition") {
+            std::vector<CRef> cs;
+            Lit a = mkLit(1), b = mkLit(2), x = mkLit(3);
+            setVec(ps, {~x, a, b}); cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+            setVec(ps, { x,~a   }); cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+            setVec(ps, { x,   ~b}); cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+
+            WHEN("the basis literals are falsified") {
+                ser.set_value(var(a), l_False, 0);
+                ser.set_value(var(b), l_False, 1);
+
+                cr = ser.findAssertingClause(i_undef, i_max, x, cs);
+                REQUIRE(cr == cs[0]);
+                CHECK(i_undef == 0 );
+                CHECK(i_max   == 2 );
+            }
+
+            WHEN("the basis literals are satisfied") {
+                ser.set_value(var(a), l_True, 0);
+                ser.set_value(var(b), l_True, 1);
+
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                REQUIRE((cr == cs[1] || cr == cs[2]));
+                CHECK(i_undef == 0 );
+                CHECK(i_max   == 1 );
+            }
+        }
+
+        AND_GIVEN("any set of clauses containing exactly one asserting clause") {
+            std::vector<CRef> cs;
+
+            // Non-asserting clauses
+            ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i, i % 2 == 0)); 
+            cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+            ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i, true)); 
+            cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+
+            // Asserting clause
+            int asserting_cr = cs.size();
+            ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i, false)); 
+            cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+
+            // Non-asserting clauses
+            ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i, i % 2 == 1)); 
+            cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+            ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i, i % 3 == 0)); 
+            cs.push_back(s.ca.alloc(ps)); s.attachClause(cs[cs.size() - 1]);
+
+            WHEN("the asserting literal is at the beginning") {
+                int expect_i_undef = 0, expect_i_max = 4;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+
+            WHEN("the asserting literal is at the end") {
+                int expect_i_undef = ser.originalNumVars - 1, expect_i_max = 4;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+
+            WHEN("the highest-level literal is at the beginning") {
+                int expect_i_undef = 4, expect_i_max = 0;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+
+            WHEN("the highest-level literal is at the end") {
+                int expect_i_undef = 4, expect_i_max = ser.originalNumVars - 1;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+
+            WHEN("the asserting literal occurs before the highest-level literal") {
+                int expect_i_undef = 3, expect_i_max = 5;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+
+            WHEN("the asserting literal occurs after the highest-level literal") {
+                int expect_i_undef = 5, expect_i_max = 3;
+                setVariables(ser, expect_i_undef, expect_i_max, ser.originalNumVars);
+                Lit x = s.ca[cs[asserting_cr]][expect_i_undef];
+                cr = ser.findAssertingClause(i_undef, i_max, ~x, cs);
+                
+                THEN("the correct clause and indices are found") {
+                    REQUIRE(cr == cs[asserting_cr]);
+                    CHECK(i_undef == expect_i_undef);
+                    CHECK(i_max   == expect_i_max);
+                }
+            }
+        }
+    }
+}
+
 // SolverER::deleteExtVars
 // SCENARIO("Deleting extension variables", "[SolverER]") {}
 }
