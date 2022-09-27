@@ -379,13 +379,10 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
         ps.clear(); for (int i = 0; i < ser.originalNumVars; i++) ps.push(mkLit(i)); 
         CRef cr = s.ca.alloc(ps); s.attachClause(cr);
         Clause& c = s.ca[cr];
-        Lit c0 = c[0], c1 = c[1];
 
         // Ensure watchers are set up correctly
-        REQUIRE(s.watches[ c[0]].size() == 0);
-        REQUIRE(s.watches[ c[1]].size() == 0);
-        REQUIRE(s.watches[~c[0]].size() == 1);
-        REQUIRE(s.watches[~c[1]].size() == 1);
+        clause2Vec(actual, c);
+        REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
 
         WHEN("the asserting literal is at index 0 and the highest-level literal is at index 1") {
             int i_undef = 0, i_max = 1;
@@ -396,14 +393,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(0), mkLit(1), mkLit(2), mkLit(3), mkLit(4)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -416,14 +406,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(1), mkLit(0), mkLit(2), mkLit(3), mkLit(4)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -436,16 +419,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(0), mkLit(4), mkLit(2), mkLit(3), mkLit(1)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[ c1  ].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-                CHECK(s.watches[~c1  ].size() == 0);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -458,16 +432,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(4), mkLit(1), mkLit(2), mkLit(3), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[ c0  ].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-                CHECK(s.watches[~c0  ].size() == 0);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1])));
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0])));
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -480,16 +445,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(4), mkLit(0), mkLit(2), mkLit(3), mkLit(1)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[ c1  ].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-                CHECK(s.watches[~c1  ].size() == 0);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -502,16 +458,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(1), mkLit(4), mkLit(2), mkLit(3), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[ c0  ].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-                CHECK(s.watches[~c0  ].size() == 0);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches, cr));
             }
         }
 
@@ -524,18 +471,7 @@ SCENARIO("Enforce watcher invariant", "[SolverER]") {
                 setVec(expect, {mkLit(4), mkLit(3), mkLit(2), mkLit(1), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-
-                CHECK(s.watches[ c[0]].size() == 0);
-                CHECK(s.watches[ c[1]].size() == 0);
-                CHECK(s.watches[ c0  ].size() == 0);
-                CHECK(s.watches[ c1  ].size() == 0);
-                CHECK(s.watches[~c[0]].size() == 1);
-                CHECK(s.watches[~c[1]].size() == 1);
-                CHECK(s.watches[~c0  ].size() == 0);
-                CHECK(s.watches[~c1  ].size() == 0);
-
-                CHECK(find(s.watches[~c[0]], Solver::Watcher(cr, c[1]))); 
-                CHECK(find(s.watches[~c[1]], Solver::Watcher(cr, c[0]))); 
+                REQUIRE_THAT(actual, watchersCorrect(s.watches,cr));
             }
         }
     }
