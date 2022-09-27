@@ -275,7 +275,7 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 #endif
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
-    const int clause_lbd = clause.lbd();
+    const int clause_lbd = solver->computeLBD(clause);
     if (clause_lbd < ext_min_lbd || clause_lbd > ext_max_lbd) return false;
 #endif
 
