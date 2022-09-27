@@ -131,4 +131,43 @@ std::string ExtDefUnique::describe() const {
     return ss.str();
 }
 
+/////////////////////////////////
+// Watcher correctness matcher //
+/////////////////////////////////
+
+WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr) { return WatchersCorrect(ws, cr); }
+
+bool WatchersCorrect::match(const Minisat::vec<Lit>& c) const {
+    m_failure = 0;
+
+    if (m_ws[ c[0]].size() != 0) m_failure |= FailureCase::EXPECT_ZERO_WATCH0  ;
+    if (m_ws[ c[1]].size() != 0) m_failure |= FailureCase::EXPECT_ZERO_WATCH1  ;
+    if (m_ws[~c[0]].size() != 1) m_failure |= FailureCase::EXPECT_SINGLE_WATCH0;
+    if (m_ws[~c[1]].size() != 1) m_failure |= FailureCase::EXPECT_SINGLE_WATCH0;
+
+    for (int i = 2; i < c.size(); i++) {
+        if (m_ws[ c[i]].size() != 0) m_failure |= FailureCase::EXPECT_ZERO_OTHER;
+        if (m_ws[~c[i]].size() != 0) m_failure |= FailureCase::EXPECT_ZERO_OTHER;
+    }
+
+    if (!find(m_ws[~c[0]], Solver::Watcher(m_cr, c[1]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH0;
+    if (!find(m_ws[~c[1]], Solver::Watcher(m_cr, c[0]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH1;
+
+    return m_failure == 0;
+}
+
+std::string WatchersCorrect::describe() const {
+    std::ostringstream ss;
+
+    if (m_failure & EXPECT_ZERO_WATCH0  ) ss << "has 0 watchers for c[0]; ";
+    if (m_failure & EXPECT_ZERO_WATCH1  ) ss << "has 0 watchers for c[1]; ";
+    if (m_failure & EXPECT_SINGLE_WATCH0) ss << "has 1 watcher for ~c[0]; ";
+    if (m_failure & EXPECT_SINGLE_WATCH1) ss << "has 1 watcher for ~c[1]; ";
+    if (m_failure & EXPECT_ZERO_OTHER   ) ss << "has no watchers for literals other than c[0] and c[1]; ";
+    if (m_failure & EXPECT_FOUND_WATCH0 ) ss << "~c[0] watches c[1]; ";
+    if (m_failure & EXPECT_FOUND_WATCH0 ) ss << "~c[1] watches c[0]; ";
+    
+    return ss.str();
+}
+
 }
