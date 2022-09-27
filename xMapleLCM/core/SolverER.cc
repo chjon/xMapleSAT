@@ -393,13 +393,13 @@ namespace Minisat {
             if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
 
             if (i_max > 1) {
-                remove(ws[~c1], Solver::Watcher(cr, c0));
+                remove(ws[~c[1]], Solver::Watcher(cr, c0));
                 std::swap(c[1], c[i_max]);
                 ws[~max].push(Solver::Watcher(cr, x));
             }
 
             if (i_undef > 1) {
-                remove(ws[~c0], Solver::Watcher(cr, c1));
+                remove(ws[~c[0]], Solver::Watcher(cr, c1));
                 std::swap(c[0], c[i_undef]);
                 ws[~x].push(Solver::Watcher(cr, max));
             }
