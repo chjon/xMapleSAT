@@ -32,9 +32,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include <stdio.h>
+#include <mtl/Alg.h>
+#include <mtl/Sort.h>
 #include "core/Solver.h"
 #include "core/SolverER.h"
-#include "mtl/Sort.h"
 
 // Template specializations for hashing
 namespace std { namespace tr1 {
@@ -303,11 +304,9 @@ namespace Minisat {
 
         if (ps.size() == 0)
             return;
-        else if (ps.size() == 1){
+        else if (ps.size() == 1)
             solver->uncheckedEnqueue(ps[0]);
-            solver->propagate();
-            return;
-        }else{
+        else {
             CRef cr = solver->ca.alloc(ps, false);
             db.push_back(cr);
             solver->attachClause(cr);
@@ -351,10 +350,10 @@ namespace Minisat {
         }
     }
 
-    CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x) {
+    CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
         // Find definition clause which asserts ~x
         int max_lvl;
-        for (CRef cr : extDefs.find(var(x))->second) {
+        for (CRef cr : cs) {
             Clause& c = solver->ca[cr];
             i_undef = i_max = max_lvl = -1;
             for (int k = 0; k < c.size(); k++) {
@@ -375,12 +374,13 @@ namespace Minisat {
         }
 
         // bug: the solver should never reach here if the extension definition clauses are present
+        assert(false);
         return CRef_Undef;
     }
 
-    void SolverER::enforceWatcherInvariant(CRef asserting_cr, int i_undef, int i_max) {
+    void SolverER::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
         // Move unassigned literal to c[0]
-        Clause& c = solver->ca[asserting_cr];
+        Clause& c = solver->ca[cr];
         Lit x = c[i_undef], max = c[i_max];
         if (c.size() == 2) {
             // Don't need to touch watchers for binary clauses
@@ -388,29 +388,22 @@ namespace Minisat {
         } else {
             // Swap unassigned literal to index 0 and highest-level literal to index 1,
             // replacing watchers as necessary
+            OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws = solver->watches;
+            Lit c0 = c[0], c1 = c[1];
             if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
 
             if (i_max > 1) {
-                deleteWatcher(c[1], asserting_cr);
+                remove(ws[~c1], Solver::Watcher(cr, c0));
                 std::swap(c[1], c[i_max]);
-                solver->watches[~c[1]].push(Solver::Watcher(asserting_cr, x));
+                ws[~max].push(Solver::Watcher(cr, x));
             }
 
             if (i_undef > 1) {
-                deleteWatcher(c[0], asserting_cr);
+                remove(ws[~c0], Solver::Watcher(cr, c1));
                 std::swap(c[0], c[i_undef]);
-                solver->watches[~c[0]].push(Solver::Watcher(asserting_cr, max));
+                ws[~x].push(Solver::Watcher(cr, max));
             }
         }
-    }
-
-    void SolverER::deleteWatcher(Lit p, CRef cr) {
-        vec<Solver::Watcher>& ws = solver->watches[p];
-        Solver::Watcher *i, *j, *end;
-        for (i = (Solver::Watcher*)ws, end = i + ws.size(); i != end && i->cref != cr; i++);
-        assert(i != end && i->cref == cr); j = i++;
-        while(i != end) *(j++) = *(i++);
-        ws.shrink(1);
     }
 
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
@@ -423,10 +416,11 @@ namespace Minisat {
             // Ensure variables are assigned so the clause is still asserting
             // Rarely, extension variables are undefined, so we need to propagate from their definitions
             if (extLits.size()) {
-                for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
-                    if (value(extLits[i]) == l_Undef) {
+                for (int i = (extLits[0] == clause[0]) ? 1 : 0; i < extLits.size(); i++) {
+                    Lit x = extLits[i];
+                    if (value(x) == l_Undef) {
                         int i_undef, i_max;
-                        CRef cr = findAssertingClause(i_undef, i_max, extLits[i]);
+                        CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
                         enforceWatcherInvariant(cr, i_undef, i_max);
                         Clause& c = solver->ca[cr];
