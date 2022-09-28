@@ -23,6 +23,7 @@ class VecPrefix;
 class VecEqual;
 class VecEqualUnordered;
 class ExtDefUnique;
+class WatchersCorrect;
 
 // Vector prefix matcher and builder function
 VecPrefix vecPrefix(const Minisat::vec<Lit>& prefix);
@@ -63,6 +64,29 @@ class ExtDefUnique : public Catch::MatcherBase<const std::vector<ExtDef>> {
 public:
     virtual bool match(const std::vector<ExtDef>&) const override;
     virtual std::string describe() const override;
+};
+
+// Watcher correctness matcher
+WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr);
+class WatchersCorrect : public Catch::MatcherBase<Minisat::vec<Lit>> {
+public:
+    WatchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr) : m_ws(ws), m_cr(cr) {}
+    virtual bool match(const Minisat::vec<Lit>&) const override;
+    virtual std::string describe() const override;
+private:
+    enum FailureCase : int {
+        EXPECT_ZERO_WATCH0   = 1 << 0,
+        EXPECT_ZERO_WATCH1   = 1 << 1,
+        EXPECT_SINGLE_WATCH0 = 1 << 2,
+        EXPECT_SINGLE_WATCH1 = 1 << 3,
+        EXPECT_FOUND_WATCH0  = 1 << 4,
+        EXPECT_FOUND_WATCH1  = 1 << 6,
+        EXPECT_ZERO_OTHER    = 1 << 7,
+    };
+
+    Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& m_ws;
+    const CRef m_cr;
+    mutable int m_failure = 0;
 };
 
 }

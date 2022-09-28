@@ -35,6 +35,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <core/SolverTypes.h>
 #include <core/SolverERTypes.h>
 
+// Making some internal methods visible for testing
+#ifdef TESTING
+#define protected public
+#endif
+
 namespace Minisat {
 
 class SolverER {
@@ -285,28 +290,21 @@ protected:
      * @param i_undef Return value - the index of the undefined literal in the clause
      * @param i_max Return value - the index of the literal in the clause with the highest decision level
      * @param x The unassigned extension literal
+     * @param cs The list of potential asserting clauses - usually the list of definition clauses
      * @return The CRef for the asserting clause
      * 
      * @note pre-condition: the clause must be asserting at the current decision level
      */
-    CRef findAssertingClause(int& i_undef, int& i_max, Lit x);
+    CRef findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs);
 
     /**
      * @brief Move undefined literal to index 0, ensuring that watcher invariants are satisfied
      * 
-     * @param asserting_cr The CRef of the asserting clause
+     * @param cr The CRef of the asserting clause
      * @param i_undef The index of the undefined literal in the clause
      * @param i_max The index of the literal in the clause with the highest decision level
      */
-    void enforceWatcherInvariant(CRef asserting_cr, int i_undef, int i_max);
-
-    /**
-     * @brief Delete the watcher for a given literal-clause pair
-     * 
-     * @param p The literal in the clause with a pre-existing watcher
-     * @param cr The ID of the clause whose watcher should be deleted
-     */
-    void deleteWatcher(Lit p, CRef cr);
+    void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
 
     /////////////////////////////////
     // HELPERS FOR CLAUSE DELETION //
