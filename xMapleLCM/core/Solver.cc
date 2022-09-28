@@ -1991,8 +1991,8 @@ lbool Solver::search(int& nof_conflicts)
 
             // EXTENDED RESOLUTION - substitute disjunctions with extension variables
             // This must be called after backtracking because extension variables might need to be propagated
-            // TODO: Investigate whether this ever produces duplicate clauses
-            ser->substitute(learnt_clause, ser->user_extSubPredicate);
+            Lit asserting_lit = learnt_clause[0]; CRef asserting_cr = CRef_Undef;
+            ser->substitute(learnt_clause, asserting_lit, asserting_cr, ser->user_extSubPredicate);
 
             lbd--;
             if (VSIDS){
@@ -2034,7 +2034,8 @@ lbool Solver::search(int& nof_conflicts)
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
 
-                uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
+                if (asserting_cr == CRef_Undef) asserting_cr = cr;
+                uncheckedEnqueue(asserting_lit, backtrack_level, asserting_cr);
 #ifdef PRINT_OUT
                 std::cout << "new " << ca[cr] << "\n";
                 std::cout << "ci " << learnt_clause[0] << " l " << backtrack_level << "\n";
