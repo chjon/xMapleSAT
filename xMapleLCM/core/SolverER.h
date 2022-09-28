@@ -150,15 +150,12 @@ public:
 
     /**
      * @brief Check whether the given clause meets some condition and substitute extension variables into a clause.
-     * Occasionally, with lazy propagation and non-chronological backtracking, substituted variables need to be propagated
-     * first, and the asserting literal might come from a definition clause.
+     * Propagates substituted variables if they are unassigned.
      * 
      * @param clause The vector of literals in which to substitute
-     * @param asserting_lit Return value - the literal which is asserting after substitution
-     * @param asserting_cr Return value - the clause which is asserting after substitution
      * @param predicate The condition with which to check the clause
      */
-    void substitute(vec<Lit>& clause, Lit& asserting_lit, CRef& asserting_cr, SubstitutionPredicate& p);
+    void substitute(vec<Lit>& clause, SubstitutionPredicate& p);
 
     // Extension Variable Deletion
 

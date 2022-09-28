@@ -406,19 +406,18 @@ namespace Minisat {
         }
     }
 
-    void SolverER::substitute(vec<Lit>& clause, Lit& asserting_lit, CRef& asserting_cr, SubstitutionPredicate& p) {
+    void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
-        int i_undef, i_max;
         if (p(clause)) {
             vec<Lit> extLits;
             xdm.substitute(clause, extLits);
-            asserting_lit = clause[0];
 
             // Ensure variables are assigned so the clause is still asserting
             // Some extension variables are undefined after substitution, so we need to propagate from their definitions
             if (extLits.size()) {
                 for (int i = (extLits[0] == clause[0]) ? 1 : 0; i < extLits.size(); i++) {
                     Lit x = extLits[i];
+                    int i_undef, i_max;
                     if (value(x) == l_Undef) {
                         CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
@@ -426,14 +425,6 @@ namespace Minisat {
                         Clause& c = solver->ca[cr];
                         solver->uncheckedEnqueue(c[0], level(var(c[1])), cr);
                     }
-                }
-
-                // Rarely, if this clause isn't asserting after substitution, a definition clause must be
-                if (value(clause[0]) != l_Undef) {
-                    Lit x = clause[0];
-                    auto ab = xdm.find(x)->second;
-                    asserting_lit = (value(ab.first) == l_Undef ? ab.first : ab.second);
-                    asserting_cr = findAssertingClause(i_undef, i_max, asserting_lit, extDefs.find(var(x))->second);
                 }
             }
         }
