@@ -344,7 +344,6 @@ namespace Minisat {
 
             // Check whether the clause needs to be propagated
             if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
-                printf("propagation while adding extDefClause!\n");
                 solver->uncheckedEnqueue(ps[0], level(var(ps[1])), cr);
             }
         }
@@ -417,8 +416,8 @@ namespace Minisat {
             if (extLits.size()) {
                 for (int i = (extLits[0] == clause[0]) ? 1 : 0; i < extLits.size(); i++) {
                     Lit x = extLits[i];
-                    int i_undef, i_max;
                     if (value(x) == l_Undef) {
+                        int i_undef, i_max;
                         CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
                         enforceWatcherInvariant(cr, i_undef, i_max);
