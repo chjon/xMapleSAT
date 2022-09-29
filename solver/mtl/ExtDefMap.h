@@ -58,7 +58,11 @@ private:
     static inline P mkLitPair(L a, L b) {
         return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
-    
+
+    // Vectors used for substitution -- allocated here to avoid repeated memory allocation
+    vec<int> defLitIndex; // The indices of all the basis literals in a clause
+    vec<bool> validIndex; // Flag for whether a literal belongs to the final clause
+
 public:
     inline typename LPMap::const_iterator find(L x) const { return lp_map.find(x); }
     inline typename PLMap::const_iterator find(L a, L b) const { return pl_map.find(mkLitPair(a, b)); }
@@ -157,8 +161,8 @@ public:
 
     void absorb(vec<L>& clause) const {
         std::tr1::unordered_map<L, int> basis; // Map basis literals to the index of their extension lits
-        vec<bool> validIndex;                  // True if corresponding literal is in clause
-    
+        validIndex.clear();
+
         // Find all the literals in the definitions of extension literals in the clause
         for (int i = 0; i < clause.size(); i++) {
             validIndex.push(true);
@@ -200,8 +204,8 @@ public:
     void substitute(vec<L>& clause, vec<L>& extLits) const {
         // Get indices of all basis literals (in increasing order)
         LSet lits;
-        vec<int> defLitIndex;
-        vec<bool> validIndex; // True if corresponding literal is in clause
+        defLitIndex.clear();
+        validIndex.clear();
         for (int i = 0; i < clause.size(); i++) {
             validIndex.push(true);
             lits.insert(clause[i]);

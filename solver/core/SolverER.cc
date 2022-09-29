@@ -265,11 +265,9 @@ namespace Minisat {
 
         if (ps.size() == 0)
             return;
-        else if (ps.size() == 1){
+        else if (ps.size() == 1)
             solver->uncheckedEnqueue(ps[0]);
-            solver->propagate();
-            return;
-        }else{
+        else {
             CRef cr = solver->ca.alloc(ps, false);
             db.push_back(cr);
             solver->attachClause(cr);
@@ -370,19 +368,18 @@ namespace Minisat {
 
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
-        // xdm.absorb(clause);
         if (p(clause)) {
-            vec<Lit> extLits;
+            vec<Lit>& extLits = tmp; extLits.clear();
             xdm.substitute(clause, extLits);
 
             // Ensure variables are assigned so the clause is still asserting
-            // Rarely, extension variables are undefined, so we need to propagate from their definitions
+            // Some extension variables are undefined after substitution, so we need to propagate from their definitions
             if (extLits.size()) {
-                for (int i = (extLits[0] == clause[0]); i < extLits.size(); i++) {
+                for (int i = (extLits[0] == clause[0]) ? 1 : 0; i < extLits.size(); i++) {
                     Lit x = extLits[i];
-                    if (value(extLits[i]) == l_Undef) {
+                    if (value(x) == l_Undef) {
                         int i_undef, i_max;
-                        CRef cr = findAssertingClause(i_undef, i_max, extLits[i], extDefs.find(var(x))->second);
+                        CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
                         enforceWatcherInvariant(cr, i_undef, i_max);
                         Clause& c = solver->ca[cr];

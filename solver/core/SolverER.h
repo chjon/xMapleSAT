@@ -149,14 +149,13 @@ public:
     // Extension Variable Substitution
 
     /**
-     * @brief Check whether the given clause meets some condition and substitute extension variables into a clause
+     * @brief Check whether the given clause meets some condition and substitute extension variables into a clause.
+     * Propagates substituted variables if they are unassigned.
      * 
      * @param clause The vector of literals in which to substitute
      * @param predicate The condition with which to check the clause
-     * @return true if a variable was substituted into the clase
-     * @return false otherwise
      */
-    void substitute(vec<Lit>& clause, SubstitutionPredicate& predicate);
+    void substitute(vec<Lit>& clause, SubstitutionPredicate& p);
 
     // Extension Variable Deletion
 
