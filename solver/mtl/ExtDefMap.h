@@ -60,8 +60,8 @@ private:
     }
 
     // Vectors used for substitution -- allocated here to avoid repeated memory allocation
-    vec<int> defLitIndex; // The indices of all the basis literals in a clause
-    vec<bool> validIndex; // Flag for whether a literal belongs to the final clause
+    mutable vec<int> defLitIndex; // The indices of all the basis literals in a clause
+    mutable vec<bool> validIndex; // Flag for whether a literal belongs to the final clause
 
 public:
     inline typename LPMap::const_iterator find(L x) const { return lp_map.find(x); }
