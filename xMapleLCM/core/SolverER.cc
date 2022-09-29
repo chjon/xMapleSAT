@@ -409,7 +409,7 @@ namespace Minisat {
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
         if (p(clause)) {
-            vec<Lit> extLits;
+            vec<Lit>& extLits = tmp; extLits.clear();
             xdm.substitute(clause, extLits);
 
             // Ensure variables are assigned so the clause is still asserting
