@@ -7,12 +7,9 @@ Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
 Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
 Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
 
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
+Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search 
 
-MapleLCMDistChronoBT, based on Maple_LCM_Dist -- Copyright (c), Alexander Nadel, Vadim Ryvchin: "Chronological Backtracking" in SAT-2018, pp. 111-121.
-
-MapleLCMDistChronoBT-DL, based on MapleLCMDistChronoBT -- Copyright (c), Stepan Kochemazov, Oleg Zaikin, Victor Kondratiev, Alexander Semenov: The solver was augmented with heuristic that moves duplicate learnt clauses into the core/tier2 tiers depending on a number of parameters.
- 
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -50,17 +47,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 #include "core/SolverERTypes.h"
-
-// duplicate learnts version
-#include <tr1/unordered_map>
-#include <chrono>
-#include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <set>
-#include <map>
-#include <algorithm>
-// duplicate learnts version
 
 // Making internal data structures visible for testing
 #ifdef TESTING
@@ -203,36 +189,18 @@ public:
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
-
     double    learntsize_factor;  // The intitial limit for learnt clauses is a factor of the original clauses.                (default 1 / 3)
     double    learntsize_inc;     // The limit for learnt clauses is multiplied with this factor each restart.                 (default 1.1)
 
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
 
-
-    // duplicate learnts version
     uint64_t       VSIDS_props_limit;
-    uint32_t       min_number_of_learnts_copies;    
-    uint32_t       dupl_db_init_size;
-    uint32_t       max_lbd_dup;
-    std::chrono::microseconds duptime;
-    // duplicate learnts version
 
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
-    uint64_t chrono_backtrack, non_chrono_backtrack;
-
-
-    // duplicate learnts version
-    uint64_t duplicates_added_conflicts;
-    uint64_t duplicates_added_tier2;
-    uint64_t duplicates_added_minimization;    
-    uint64_t dupl_db_size;
-    
-    // duplicate learnts version
 
     vec<uint32_t> picked;
     vec<uint32_t> conflicted;
@@ -268,17 +236,6 @@ protected:
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
         VarOrderLt(const vec<double>&  act) : activity(act) { }
     };
-    
-    struct ConflictData
-	{
-		ConflictData() :
-			nHighestLevel(-1),
-			bOnlyOneLitFromHighest(false)
-		{}
-
-		int nHighestLevel;
-		bool bOnlyOneLitFromHighest;
-	};
 
     // Solver state:
     //
@@ -287,7 +244,6 @@ protected:
     vec<CRef>           learnts_core,     // List of learnt clauses.
     learnts_tier2,
     learnts_local;
-
     double              cla_inc;          // Amount to bump next clause with.
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.
     activity_VSIDS,activity_distance;
@@ -318,14 +274,6 @@ protected:
     next_L_reduce;
 
     ClauseAllocator     ca;
-    
-    // duplicate learnts version    
-    std::map<int32_t,std::map<uint32_t,std::unordered_map<uint64_t,uint32_t>>>  ht;
-    uint32_t     reduceduplicates         ();         // Reduce the duplicates DB
-    // duplicate learnts version
-
-    int 				confl_to_chrono;
-    int 				chrono;
 
     // Temporaries (to reduce allocation overhead). Each variable is prefixed by the method in which it is
     // used, exept 'seen' wich is used in several places.
@@ -354,7 +302,7 @@ protected:
     void     insertVarOrder   (Var x);                                                 // Insert a variable in the decision order priority queue.
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     newDecisionLevel ();                                                      // Begins a new decision level.
-    void     uncheckedEnqueue (Lit p, int level = 0, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
+    void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
     CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
@@ -387,18 +335,11 @@ protected:
 
     void     relocAll         (ClauseAllocator& to);
 
-// duplicate learnts version
-    int     is_duplicate     (std::vector<uint32_t>&c); //returns TRUE if a clause is duplicate
-// duplicate learnts version
-
     // Misc:
     //
     int      decisionLevel    ()      const; // Gives the current decisionlevel.
     uint32_t abstractLevel    (Var x) const; // Used to represent an abstraction of sets of decision levels.
     CRef     reason           (Var x) const;
-    
-    ConflictData FindConflictLevel(CRef cind);
-    
 public:
     int      level            (Var x) const;
 protected:
@@ -556,7 +497,7 @@ inline void Solver::checkGarbage(double gf){
         garbageCollect(); }
 
 // NOTE: enqueue does not set the ok flag! (only public methods do)
-inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, decisionLevel(), from), true); }
+inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, from), true); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
@@ -617,12 +558,12 @@ inline void     Solver::toDimacs     (const char* file, Lit p){ vec<Lit> as; as.
 inline void     Solver::toDimacs     (const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
 inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
 
+
 //=================================================================================================
 // Debug etc:
 
 
 //=================================================================================================
-
 }
 
 #endif

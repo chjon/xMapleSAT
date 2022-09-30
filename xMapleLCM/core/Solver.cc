@@ -9,10 +9,7 @@ Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective lear
 
 Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
 
-MapleLCMDistChronoBT, based on Maple_LCM_Dist -- Copyright (c), Alexander Nadel, Vadim Ryvchin: "Chronological Backtracking" in SAT-2018, pp. 111-121.
-
-MapleLCMDistChronoBT-DL, based on MapleLCMDistChronoBT -- Copyright (c), Stepan Kochemazov, Oleg Zaikin, Victor Kondratiev, Alexander Semenov: The solver was augmented with heuristic that moves duplicate learnt clauses into the core/tier2 tiers depending on a number of parameters.
-
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -30,7 +27,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include <math.h>
-#include <algorithm>
 #include <signal.h>
 #include <unistd.h>
 
@@ -40,14 +36,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
-//#define PRINT_OUT
-
 #ifdef BIN_DRUP
 int Solver::buf_len = 0;
 unsigned char Solver::drup_buf[2 * 1024 * 1024];
 unsigned char* Solver::buf_ptr = drup_buf;
 #endif
-
 
 //=================================================================================================
 // Options:
@@ -68,16 +61,7 @@ static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the 
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
-static IntOption     opt_chrono            (_cat, "chrono",  "Controls if to perform chrono backtrack", 100, IntRange(-1, INT32_MAX));
-static IntOption     opt_conf_to_chrono    (_cat, "confl-to-chrono",  "Controls number of conflicts to perform chrono backtrack", 4000, IntRange(-1, INT32_MAX));
-
-static IntOption     opt_max_lbd_dup       ("DUP-LEARNTS", "lbd-limit",  "specifies the maximum lbd of learnts to be screened for duplicates.", 12, IntRange(0, INT32_MAX));
-static IntOption     opt_min_dupl_app      ("DUP-LEARNTS", "min-dup-app",  "specifies the minimum number of learnts to be included into db.", 3, IntRange(2, INT32_MAX));
-static IntOption     opt_dupl_db_init_size ("DUP-LEARNTS", "dupdb-init",  "specifies the initial maximal duplicates DB size.", 500000, IntRange(1, INT32_MAX));
-
-static IntOption     opt_VSIDS_props_limit ("DUP-LEARNTS", "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
-
-//VSIDS_props_limit
+static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -116,15 +100,10 @@ Solver::Solver() :
   , learntsize_adjust_inc         (1.5)
 
   , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
-  , min_number_of_learnts_copies(opt_min_dupl_app)  
-  , dupl_db_init_size(opt_dupl_db_init_size)
-  , max_lbd_dup(opt_max_lbd_dup)
-
   // Statistics: (formerly in 'SolverStats')
   //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
-  , chrono_backtrack(0), non_chrono_backtrack(0)
 
   , ok                 (true)
   , cla_inc            (1)
@@ -140,13 +119,11 @@ Solver::Solver() :
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
-  , core_lbd_cut       (2)
+  , core_lbd_cut       (3)
   , global_lbd_sum     (0)
   , lbd_queue          (50)
   , next_T2_reduce     (10000)
   , next_L_reduce      (15000)
-  , confl_to_chrono    (opt_conf_to_chrono)
-  , chrono			   (opt_chrono)
   
   , counter            (0)
 
@@ -703,47 +680,6 @@ bool Solver::simplifyLearnt_core()
 
 }
 
-
-int Solver::is_duplicate(std::vector<uint32_t>&c){
-   auto time_point_0 = std::chrono::high_resolution_clock::now();
-    dupl_db_size++;
-    int res = 0;    
-    
-    int sz = c.size();
-    std::vector<uint32_t> tmp(c);    
-    sort(tmp.begin(),tmp.end());
-    
-    uint64_t hash = 0;    
-    
-    for (int i =0; i<sz; i++) {
-        hash ^= tmp[i] + 0x9e3779b9 + (hash << 6) + (hash>> 2);     
-    }    
-    
-    int32_t head = tmp[0];
-    auto it0 = ht.find(head);
-    if (it0 != ht.end()){
-        auto it1=ht[head].find(sz);
-        if (it1 != ht[head].end()){
-            auto it2 = ht[head][sz].find(hash);
-            if (it2 != ht[head][sz].end()){
-                it2->second++;
-                res = it2->second;            
-            }
-            else{
-                ht[head][sz][hash]=1;
-            }
-        }
-        else{            
-            ht[head][sz][hash]=1;
-        }
-    }else{        
-        ht[head][sz][hash]=1;
-    } 
-    auto time_point_1 = std::chrono::high_resolution_clock::now();
-    duptime += std::chrono::duration_cast<std::chrono::microseconds>(time_point_1-time_point_0);    
-    return res;
-}
-
 bool Solver::simplifyLearnt_tier2()
 {
     // int beforeSize, afterSize;
@@ -847,39 +783,22 @@ bool Solver::simplifyLearnt_tier2()
 //#endif
                 }
                 else{
-                    
+                    attachClause(cr);
+                    learnts_tier2[cj++] = learnts_tier2[ci];
 
                     nblevels = computeLBD(c);
                     if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
-                     //duplicate learnts 
-                    int id = 0;                    
-                    
-                    std::vector<uint32_t> tmp;
-                    for (int i = 0; i < c.size(); i++)                           
-                        tmp.push_back(c[i].x);
-                    id = is_duplicate(tmp);
-                     
-                                        
-                    //duplicate learnts 
 
-                    if (static_cast<unsigned int>(id) < min_number_of_learnts_copies+2){
-                        attachClause(cr);
-                        learnts_tier2[cj++] = learnts_tier2[ci];                    
-                        if (static_cast<unsigned int>(id) == min_number_of_learnts_copies+1){                            
-                            duplicates_added_minimization++;                                  
-                        }
-                        if ((c.lbd() <= core_lbd_cut)||(static_cast<unsigned int>(id) == min_number_of_learnts_copies+1)){
-                        //if (id == min_number_of_learnts_copies+1){
-                            cj--;
-                            learnts_core.push(cr);
-                            c.mark(CORE);
-                        }
-
-                        c.setSimplified(true);
+                    if (c.lbd() <= core_lbd_cut){
+                        cj--;
+                        learnts_core.push(cr);
+                        c.mark(CORE);
                     }
+
+                    c.setSimplified(true);
                 }
             }
         }
@@ -1074,59 +993,36 @@ bool Solver::satisfied(const Clause& c) const {
 
 // Revert to the state at given level (keeping all assignment at 'level' but not beyond).
 //
-void Solver::cancelUntil(int bLevel) {
-	
-    if (decisionLevel() > bLevel){
-#ifdef PRINT_OUT
-		std::cout << "bt " << bLevel << "\n";
-#endif				
-		add_tmp.clear();
-        for (int c = trail.size()-1; c >= trail_lim[bLevel]; c--)
-        {
+void Solver::cancelUntil(int level) {
+    if (decisionLevel() > level){
+        for (int c = trail.size()-1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
 
-			if (level(x) <= bLevel)
-			{
-				add_tmp.push(trail[c]);
-			}
-			else
-			{
-				 if (!VSIDS){
-					uint32_t age = conflicts - picked[x];
-					if (age > 0){
-						double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
-						double old_activity = activity_CHB[x];
-						activity_CHB[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
-						if (order_heap_CHB.inHeap(x)){
-							if (activity_CHB[x] > old_activity)
-								order_heap_CHB.decrease(x);
-							else
-								order_heap_CHB.increase(x);
-						}
-					}
+            if (!VSIDS){
+                uint32_t age = conflicts - picked[x];
+                if (age > 0){
+                    double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
+                    double old_activity = activity_CHB[x];
+                    activity_CHB[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
+                    if (order_heap_CHB.inHeap(x)){
+                        if (activity_CHB[x] > old_activity)
+                            order_heap_CHB.decrease(x);
+                        else
+                            order_heap_CHB.increase(x);
+                    }
+                }
 #ifdef ANTI_EXPLORATION
-					canceled[x] = conflicts;
+                canceled[x] = conflicts;
 #endif
-				}
-				
-				assigns [x] = l_Undef;
-#ifdef PRINT_OUT
-				std::cout << "undo " << x << "\n";
-#endif				
-	            if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
-					polarity[x] = sign(trail[c]);
-				insertVarOrder(x);
-			}
-        }
-        qhead = trail_lim[bLevel];
-        trail.shrink(trail.size() - trail_lim[bLevel]);
-        trail_lim.shrink(trail_lim.size() - bLevel);
-        for (int nLitId = add_tmp.size() - 1; nLitId >= 0; --nLitId)
-		{
-			trail.push_(add_tmp[nLitId]);
-		}
-		
-		add_tmp.clear();
+            }
+
+            assigns [x] = l_Undef;
+            if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
+                polarity[x] = sign(trail[c]);
+            insertVarOrder(x); }
+        qhead = trail_lim[level];
+        trail.shrink(trail.size() - trail_lim[level]);
+        trail_lim.shrink(trail_lim.size() - level);
     } }
 
 
@@ -1172,48 +1068,6 @@ Lit Solver::pickBranchLit()
     return mkLit(next, polarity[next]);
 }
 
-inline Solver::ConflictData Solver::FindConflictLevel(CRef cind)
-{
-	ConflictData data;
-	Clause& conflCls = ca[cind];
-	data.nHighestLevel = level(var(conflCls[0]));
-	if (data.nHighestLevel == decisionLevel() && level(var(conflCls[1])) == decisionLevel())
-	{
-		return data;
-	}
-
-	int highestId = 0;
-    data.bOnlyOneLitFromHighest = true;
-	// find the largest decision level in the clause
-	for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
-	{
-		int nLevel = level(var(conflCls[nLitId]));
-		if (nLevel > data.nHighestLevel)
-		{
-			highestId = nLitId;
-			data.nHighestLevel = nLevel;
-			data.bOnlyOneLitFromHighest = true;
-		}
-		else if (nLevel == data.nHighestLevel && data.bOnlyOneLitFromHighest == true)
-		{
-			data.bOnlyOneLitFromHighest = false;
-		}
-	}
-
-	if (highestId != 0)
-	{
-		std::swap(conflCls[0], conflCls[highestId]);
-		if (highestId > 1)
-		{
-			OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = conflCls.size() == 2 ? watches_bin : watches;
-			//ws.smudge(~conflCls[highestId]);
-			remove(ws[~conflCls[highestId]], Watcher(cind, conflCls[1]));
-			ws[~conflCls[0]].push(Watcher(cind, conflCls[1]));
-		}
-	}
-
-	return data;
-}
 
 /*_________________________________________________________________________________________________
 |
@@ -1241,8 +1095,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
     //
     out_learnt.push();      // (leave room for the asserting literal)
     int index   = trail.size() - 1;
-    int nDecisionLevel = level(var(ca[confl][0]));
-    assert(nDecisionLevel == level(var(ca[confl][0])));
 
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
@@ -1286,7 +1138,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
                 }else
                     conflicted[var(q)]++;
                 seen[var(q)] = 1;
-                if (level(var(q)) >= nDecisionLevel){
+                if (level(var(q)) >= decisionLevel()){
                     pathC++;
                 }else
                     out_learnt.push(q);
@@ -1294,11 +1146,8 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
         }
         
         // Select next clause to look at:
-		do {
-			while (!seen[var(trail[index--])]);
-			p  = trail[index+1];
-		} while (level(var(p)) < nDecisionLevel);
-		
+        while (!seen[var(trail[index--])]);
+        p     = trail[index+1];
         confl = reason(var(p));
         seen[var(p)] = 0;
         pathC--;
@@ -1496,7 +1345,7 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
 }
 
 
-void Solver::uncheckedEnqueue(Lit p, int level, CRef from)
+void Solver::uncheckedEnqueue(Lit p, CRef from)
 {
     assert(value(p) == l_Undef);
     Var x = var(p);
@@ -1516,7 +1365,7 @@ void Solver::uncheckedEnqueue(Lit p, int level, CRef from)
     }
 
     assigns[x] = lbool(!sign(p));
-    vardata[x] = mkVarData(from, level);
+    vardata[x] = mkVarData(from, decisionLevel());
     trail.push_(p);
 }
 
@@ -1541,7 +1390,6 @@ CRef Solver::propagate()
 
     while (qhead < trail.size()){
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
-        int currLevel = level(var(p));
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
         num_props++;
@@ -1557,12 +1405,7 @@ CRef Solver::propagate()
                 goto ExitProp;
 #endif
             }else if(value(the_other) == l_Undef)
-            {
-                uncheckedEnqueue(the_other, currLevel, ws_bin[k].cref);
-#ifdef  PRINT_OUT                
-                std::cout << "i " << the_other << " l " << currLevel << "\n";
-#endif                
-			}
+                uncheckedEnqueue(the_other, ws_bin[k].cref);
         }
 
         for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
@@ -1602,42 +1445,7 @@ CRef Solver::propagate()
                 while (i < end)
                     *j++ = *i++;
             }else
-            {
-				if (currLevel == decisionLevel())
-				{
-					uncheckedEnqueue(first, currLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << currLevel << "\n";
-#endif					
-				}
-				else
-				{
-					int nMaxLevel = currLevel;
-					int nMaxInd = 1;
-					// pass over all the literals in the clause and find the one with the biggest level
-					for (int nInd = 2; nInd < c.size(); ++nInd)
-					{
-						int nLevel = level(var(c[nInd]));
-						if (nLevel > nMaxLevel)
-						{
-							nMaxLevel = nLevel;
-							nMaxInd = nInd;
-						}
-					}
-
-					if (nMaxInd != 1)
-					{
-						std::swap(c[1], c[nMaxInd]);
-						*j--; // undo last watch
-						watches[~c[1]].push(w);
-					}
-					
-					uncheckedEnqueue(first, nMaxLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << nMaxLevel << "\n";
-#endif	
-				}
-			}
+                uncheckedEnqueue(first, cr);
 
 NextClause:;
         }
@@ -1804,7 +1612,6 @@ bool Solver::collectFirstUIP(CRef confl){
             //    varBumpActivity(v);
         }
     }
-
     int limit=trail_lim[minLevel-1];
     for(int i=trail.size()-1; i>=limit; i--) {
         Lit p=trail[i]; Var v=var(p);
@@ -1960,15 +1767,9 @@ lbool Solver::search(int& nof_conflicts)
                 if (step_size > min_step_size) step_size -= step_size_dec;
 
             conflicts++; nof_conflicts--;
-            //if (conflicts == 100000 && learnts_core.size() < 100) core_lbd_cut = 5;
-            ConflictData data = FindConflictLevel(confl);
-            if (data.nHighestLevel == 0) return l_False;
-            if (data.bOnlyOneLitFromHighest)
-            {
-				cancelUntil(data.nHighestLevel - 1);
-				continue;
-			}
-			
+            if (conflicts == 100000 && learnts_core.size() < 100) core_lbd_cut = 5;
+            if (decisionLevel() == 0) return l_False;
+
             learnt_clause.clear();
             if(conflicts>50000) DISTANCE=0;
             else DISTANCE=1;
@@ -1976,18 +1777,7 @@ lbool Solver::search(int& nof_conflicts)
                 collectFirstUIP(confl);
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
-
-            // check chrono backtrack condition
-            if ((confl_to_chrono < 0 || static_cast<uint64_t>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
-            {
-				++chrono_backtrack;
-				cancelUntil(data.nHighestLevel -1);
-			}
-			else // default behavior
-			{
-				++non_chrono_backtrack;
-				cancelUntil(backtrack_level);
-			}
+            cancelUntil(backtrack_level);
 
             // EXTENDED RESOLUTION - substitute disjunctions with extension variables
             // This must be called after backtracking because extension variables might need to be propagated
@@ -2005,26 +1795,10 @@ lbool Solver::search(int& nof_conflicts)
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
                 ca[cr].set_lbd(lbd);
-                //duplicate learnts 
-                int  id = 0;
-                if (static_cast<uint32_t>(lbd) <= max_lbd_dup){                        
-                    std::vector<uint32_t> tmp;
-                    for (int i = 0; i < learnt_clause.size(); i++)
-                        tmp.push_back(learnt_clause[i].x);
-                    id = is_duplicate(tmp);             
-                    if (static_cast<unsigned int>(id) == min_number_of_learnts_copies +1){
-                        duplicates_added_conflicts++;                        
-                    }                    
-                    if (static_cast<unsigned int>(id) == min_number_of_learnts_copies){
-                        duplicates_added_tier2++;
-                    }                                        
-                }
-                //duplicate learnts
-
-                if ((lbd <= core_lbd_cut) || (static_cast<unsigned int>(id) == min_number_of_learnts_copies+1)){
+                if (lbd <= core_lbd_cut){
                     learnts_core.push(cr);
                     ca[cr].mark(CORE);
-                }else if ((lbd <= 6)||(static_cast<unsigned int>(id) == min_number_of_learnts_copies)){
+                }else if (lbd <= 6){
                     learnts_tier2.push(cr);
                     ca[cr].mark(TIER2);
                     ca[cr].touched() = conflicts;
@@ -2032,13 +1806,7 @@ lbool Solver::search(int& nof_conflicts)
                     learnts_local.push(cr);
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
-
-                if (value(learnt_clause[0]) != l_Undef) std::cout << "skipping propagation of " << learnt_clause[0] << std::endl;
-                else uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
-#ifdef PRINT_OUT
-                std::cout << "new " << ca[cr] << "\n";
-                std::cout << "ci " << learnt_clause[0] << " l " << backtrack_level << "\n";
-#endif                
+                uncheckedEnqueue(learnt_clause[0], cr);
             }
             if (drup_file){
 #ifdef BIN_DRUP
@@ -2125,10 +1893,7 @@ lbool Solver::search(int& nof_conflicts)
 
             // Increase decision level and enqueue 'next'
             newDecisionLevel();
-            uncheckedEnqueue(next, decisionLevel());
-#ifdef PRINT_OUT            
-            std::cout << "d " << next << " l " << decisionLevel() << "\n";
-#endif            
+            uncheckedEnqueue(next);
         }
     }
 }
@@ -2179,28 +1944,6 @@ static double luby(double y, int x){
 static bool switch_mode = false;
 //static void SIGALRM_switch(int signum) { switch_mode = true; }
 
-uint32_t Solver::reduceduplicates(){
-    uint32_t removed_duplicates = 0;
-    std::vector<std::vector<uint64_t>> tmp;
-    //std::map<int32_t,std::map<uint32_t,std::unordered_map<uint64_t,uint32_t>>>  ht;
-    for (auto & outer_mp: ht){//variables
-        for (auto &inner_mp:outer_mp.second){//sizes
-            for (auto &in_in_mp: inner_mp.second){
-                if (in_in_mp.second >= 2){
-                //min_number_of_learnts_copies
-                    tmp.push_back({static_cast<uint64_t>(outer_mp.first),inner_mp.first,in_in_mp.first,in_in_mp.second});
-                }
-            }                    
-         }
-    }          
-    removed_duplicates = dupl_db_size-tmp.size();  
-    ht.clear();
-    for (size_t i=0;i<tmp.size();i++){
-        ht[tmp[i][0]][tmp[i][1]][tmp[i][2]]=tmp[i][3];
-    }
-    return removed_duplicates;
-}
-
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
@@ -2234,31 +1977,10 @@ lbool Solver::solve_()
         status = search(init);
     VSIDS = false;
 
-    duplicates_added_conflicts = 0;
-    duplicates_added_minimization=0;
-    duplicates_added_tier2 =0;    
-
-    dupl_db_size=0;
-    size_t dupl_db_size_limit = dupl_db_init_size;
-
     // Search:
     int curr_restarts = 0;
     uint64_t curr_props = 0;
-    uint32_t removed_duplicates =0;
     while (status == l_Undef && withinBudget()){
-        if (dupl_db_size >= dupl_db_size_limit){    
-            printf("c Duplicate learnts added (Minimization) %lu\n",duplicates_added_minimization);    
-            printf("c Duplicate learnts added (conflicts) %lu\n",duplicates_added_conflicts);    
-            printf("c Duplicate learnts added (tier2) %lu\n",duplicates_added_tier2);    
-            printf("c Duptime: %li\n",duptime.count());
-            printf("c Number of conflicts: %lu\n",conflicts);
-            printf("c Core size: %i\n",learnts_core.size());
-            
-            removed_duplicates = reduceduplicates();
-            dupl_db_size_limit*=1.1;
-            dupl_db_size -= removed_duplicates;
-            printf("c removed duplicates %i\n",removed_duplicates);
-        }   
         if (propagations - curr_props >  VSIDS_props_limit){
             curr_props = propagations;
             switch_mode = true;
@@ -2281,7 +2003,6 @@ lbool Solver::solve_()
             else{
                printf("c Switched to LRB.\n");
             }
-            //            reduceduplicates();            
             fflush(stdout);
             picked.clear();
             conflicted.clear();
