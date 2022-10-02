@@ -128,7 +128,7 @@ namespace Minisat {
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_none, this, _1);
         #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ALL
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
-        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
         #endif
 

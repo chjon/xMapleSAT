@@ -294,7 +294,7 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 #endif
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
-    const int clause_lbd = clause.lbd();
+    const int clause_lbd = solver->lbd(clause);
     if (clause_lbd < ext_min_lbd || clause_lbd > ext_max_lbd) return false;
 #endif
 
@@ -304,7 +304,13 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 bool SolverER::user_extDelPredicate_none(Var x) { return false; }
 bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
+#if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     return solver->activity[x] < ext_act_threshold;
+#elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    return solver->activity[x] < (solver->activity[order_heap[0]] * ext_act_threshold);
+#else
+    return false;
+#endif
 }
 
 }

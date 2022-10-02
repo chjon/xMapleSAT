@@ -1859,7 +1859,7 @@ lbool Solver::search(int& nof_conflicts)
                 next_T2_reduce = conflicts + 10000;
                 reduceDB_Tier2(); }
             if (conflicts >= next_L_reduce){
-                // ser->deleteExtVars(ser->user_extDelPredicate);
+                ser->deleteExtVars(ser->user_extDelPredicate);
                 next_L_reduce = conflicts + 15000;
                 reduceDB(); }
 

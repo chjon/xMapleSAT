@@ -306,6 +306,15 @@ bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
     // return solver->activity_CHB[x] < ext_act_threshold;
     return solver->activity_VSIDS[x] < ext_act_threshold;
+    #if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+        if (solver->VSIDS) return solver->activity_VSIDS[x] < ext_act_threshold;
+        else return solver->activity_CHB[x] < ext_act_threshold;
+    #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+        if (solver->VSIDS) return solver->activity_VSIDS[x] < (solver->activity_VSIDS[order_heap_VSIDS[0]] * ext_act_threshold);
+        else return solver->activity_CHB[x] < (solver->activity_CHB[order_heap_CHB[0]] * ext_act_threshold);
+    #else
+        return false;
+    #endif
 }
 
 }
