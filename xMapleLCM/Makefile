@@ -89,7 +89,6 @@ ER_ADD_LOCATION_AFTER_RESTART  =1
 ER_ADD_LOCATION_AFTER_CONFLICT =2
 
 define make_er_solver
-	make -C core clean
 	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(2) \
 		-D ER_USER_FILTER_HEURISTIC=$(3) \
@@ -105,27 +104,38 @@ define make_er_solver
 	mv core/glucose_static core/$(1)
 endef
 
+.PHONY: all clean test
+
 all: maplelcm xmaplelcm
 
-maplelcm:
+.prev_%:
+	make -C core clean
+	rm -f .prev_*
+	touch $@
+
+maplelcm: .prev_maplelcm
 	$(call make_er_solver,maplelcm,0,0,0,0,0,0,0,0)
 
 xmaplelcm: xmaplelcm_rnd_rng xmaplelcm_rnd_lbd xmaplelcm_sub_rng xmaplelcm_sub_lbd xmaplelcm_glucoser
 
-xmaplelcm_rnd_rng:
-	$(call make_er_solver,xmaplelcm_rnd_rng,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_NONE),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
+xmaplelcm_rnd_rng: .prev_xmaplelcm_rnd_rng
+	$(call make_er_solver,xmaplelcm_rnd_rng,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplelcm_rnd_lbd:
-	$(call make_er_solver,xmaplelcm_rnd_lbd,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_NONE),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
+xmaplelcm_rnd_lbd: .prev_xmaplelcm_rnd_lbd
+	$(call make_er_solver,xmaplelcm_rnd_lbd,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplelcm_sub_rng:
-	$(call make_er_solver,xmaplelcm_sub_rng,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_NONE),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
+xmaplelcm_sub_rng: .prev_xmaplelcm_sub_rng
+	$(call make_er_solver,xmaplelcm_sub_rng,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplelcm_sub_lbd:
-	$(call make_er_solver,xmaplelcm_sub_lbd,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_NONE),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
+xmaplelcm_sub_lbd: .prev_xmaplelcm_sub_lbd
+	$(call make_er_solver,xmaplelcm_sub_lbd,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplelcm_glucoser:
-	$(call make_er_solver,xmaplelcm_glucoser,$(ER_ADD_HEURISTIC_GLUCOSER),$(ER_FILTER_HEURISTIC_GLUCOSER),$(ER_SELECT_HEURISTIC_GLUCOSER),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_NONE),$(ER_GEN_LOCATION_AFTER_CONFLICT),$(ER_ADD_LOCATION_AFTER_CONFLICT))
+xmaplelcm_glucoser: .prev_xmaplelcm_glucoser
+	$(call make_er_solver,xmaplelcm_glucoser,$(ER_ADD_HEURISTIC_GLUCOSER),$(ER_FILTER_HEURISTIC_GLUCOSER),$(ER_SELECT_HEURISTIC_GLUCOSER),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_CONFLICT),$(ER_ADD_LOCATION_AFTER_CONFLICT))
 
 clean:
 	make -C core clean
+	make -C test clean
+
+test:
+	make CMD_CFLAGS="-D TESTING" -C test

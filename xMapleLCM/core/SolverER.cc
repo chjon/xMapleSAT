@@ -1,5 +1,27 @@
+/*******************************************************************************************[SolverER.cc]
+xMaple*, extended resolution for Minisat-based solvers -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************************************/
+
+#include <stdio.h>
+#include <mtl/Alg.h>
+#include <mtl/Sort.h>
 #include "core/Solver.h"
-#include "mtl/Sort.h"
+#include "core/SolverER.h"
 
 // Template specializations for hashing
 namespace std { namespace tr1 {
@@ -14,236 +36,272 @@ namespace std { namespace tr1 {
     }
 }}
 
+static inline void initOverhead(struct rusage& overhead, int s, int us) {
+    overhead.ru_utime.tv_sec  = s;
+    overhead.ru_utime.tv_usec = us;
+}
+
 namespace Minisat {
+    static const char* _ext = "EXT";
+    static IntOption    opt_ext_freq       (_ext, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_wndw       (_ext, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_num        (_ext, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
+    static DoubleOption opt_ext_prio       (_ext, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
+    static BoolOption   opt_ext_sign       (_ext, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
+    static IntOption    opt_ext_min_width  (_ext, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_max_width  (_ext, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_sub_min_width  (_ext, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
+    static IntOption    opt_ext_sub_max_width  (_ext, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
+    #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+    static IntOption    opt_ext_min_lbd    (_ext, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
+    static IntOption    opt_ext_max_lbd    (_ext, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
+    #endif
+    #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
+    #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
+    #endif
 
-static inline std::pair<Lit, Lit> mkLitPair(Lit a, Lit b) {
-    return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
-}
+    SolverER::SolverER(Solver* s)
+        : total_ext_vars     (0)
+        , deleted_ext_vars   (0)
+        , max_ext_vars       (0)
+        , conflict_extclauses(0)
+        , learnt_extclauses  (0)
+        , lbd_total          (0)
+        , branchOnExt        (0)
 
-static inline void removeLits(std::tr1::unordered_set<Lit>& set, const std::vector<Lit>& toRemove) {
-    for (std::vector<Lit>::const_iterator it = toRemove.begin(); it != toRemove.end(); it++) set.erase(*it);
-}
+        , prevExtensionConflict(0)
 
-inline std::vector<Lit> Solver::er_substitute(vec<Lit>& clause, struct ExtDefMap& extVarDefs) {
-    // Get indices of all literals that appear in an extension definition
-    std::set<Lit> clauseLits;
-    std::vector<int> defLitIndex;
-    std::vector<Lit> substituted;
-    for (int i = 0; i < clause.size(); i++) {
-        clauseLits.insert(clause[i]);
-
-        // Check if any extension variables are defined over this literal
-        if (extVarDefs.contains(clause[i])) defLitIndex.push_back(i);
-    }
-    if (defLitIndex.size() <= 1) return substituted;
-
-    // Check each pair of literals that appear in an extension definition
-    int replaced = 0;
-    for (unsigned int i = 0; i < defLitIndex.size(); i++) {
-        if (clause[defLitIndex[i]] == lit_Undef) continue;
-        for (unsigned int j = i + 1; j < defLitIndex.size(); j++) {
-            if (clause[defLitIndex[j]] == lit_Undef) continue;
-
-            // Check if any extension variables are defined over this literal pair
-            std::tr1::unordered_map<std::pair<Lit, Lit>, Lit>::iterator it = extVarDefs.find(clause[defLitIndex[i]], clause[defLitIndex[j]]);
-            if (it == extVarDefs.end()) continue;
-
-            // Check if the extension variable already occurs in the clause
-            std::set<Lit>::iterator it2 = clauseLits.find(it->second);
-            if (it2 == clauseLits.end()) continue;
-
-            // Replace the first literal with the extension literal and mark the second literal as invalid
-            substituted.push_back(it->second);
-            clause[defLitIndex[i]] = it->second;
-            clause[defLitIndex[j]] = lit_Undef;
-            replaced++;
-            break;
-        }
-    }
-
-    // Generate reduced learnt clause
-    if (replaced > 0) {
-        for (int i = 0, j = 0; i < clause.size(); i++) {
-            if (clause[i] != lit_Undef) clause[j++] = clause[i];
-        }
-        clause.shrink(replaced);
-    }
-    return substituted;
-}
-
-void Solver::substituteExt(vec<Lit>& out_learnt) {
-    extTimerStart();
-    // Ensure we have extension variables
-    if (extVarDefs.size() > 0) {
+        // Command-line parameters
+        , ext_freq         (opt_ext_freq)
+        , ext_window       (opt_ext_wndw)
+        , ext_max_intro    (opt_ext_num)
+        , ext_prio_act     (opt_ext_prio)
+        , ext_pref_sign    (opt_ext_sign)
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+        , ext_min_width    (opt_ext_min_width)
+        , ext_max_width    (opt_ext_max_width)
+#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
+        , ext_filter_num   (opt_ext_filter_num)
+#endif
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-        // Check clause width
-        int clause_width = out_learnt.size();
-        if (clause_width >= ext_sub_min_width &&
-            clause_width <= ext_sub_max_width
-        )
+        , ext_sub_min_width (opt_ext_sub_min_width)
+        , ext_sub_max_width (opt_ext_sub_max_width)
 #endif
-        {
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
-            // Check LBD
-            int clause_lbd = computeLBD(out_learnt);
-            if (clause_lbd >= ext_min_lbd && clause_lbd <= ext_max_lbd)
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+        , ext_min_lbd      (opt_ext_min_lbd)
+        , ext_max_lbd      (opt_ext_max_lbd)
 #endif
-            {
-                // er_substitute returns a list of every extension literal that was substituted into the clause
-                std::vector<Lit> extToPropagate = er_substitute(out_learnt, extVarDefs);
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+        , ext_act_threshold(opt_ext_act_thresh)
+#endif
+        , solver(s)
+    {
+        using namespace std::placeholders;
 
-                // Extension variables might need to be propagated!
-                // Their definition literals could be set without also setting the value of the extension variable
-                // Propagate any extension variables that need to be propagated
-                // This should be safe after backtracking
-                for (unsigned int i = 0; i < extToPropagate.size(); i++) {
-                    if (value(extToPropagate[i]) == l_Undef) {
-                        // Check if any definition clauses are asserting
-                        // We have to iterate through the clauses because we need the CRef for the reason clause when we propagate
-                        std::vector<CRef> defClauses = extDefs.find(var(extToPropagate[i]))->second;
-                        for (unsigned int j = 0; j < defClauses.size(); j++) {
-                            Clause& c = ca[defClauses[j]];
+        // Bind filter heuristic
+        #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
+            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_width, this, _1);
+        #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_lbd, this, _1);
+        #endif
 
-                            // Find the extension variable and count the number of falsified non-extension literals
-                            Lit extLit   = lit_Undef;
-                            Lit falseLit = lit_Undef;
-                            int numFalse = 0;
-                            for (int k = 0; k < c.size(); k++) { // Definition clauses have size either 2 or 3
-                                if (isExtVar(var(c[k]))) {
-                                    extLit = c[k];
-                                } else if (value(c[k]) == l_False) {
-                                    falseLit = c[k];
-                                    numFalse++;
-                                }
-                            }
+        // Bind clause selection heuristic
+        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+            user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_all, this, _1, _2, _3);
+        #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
+            user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_activity, this, _1, _2, _3);
+        #endif
 
-                            // The clause will only be asserting if every literal but one is falsified
-                            // This is an extension definition clause, so extLit should never be lit_Undef
-                            assert(extLit != lit_Undef);
-                            if (value(extLit) == l_Undef && numFalse == c.size() - 1) {
-                                uncheckedEnqueue(extLit, level(var(falseLit)), defClauses[j]);
-                                break;
-                            }
-                        }
-                    }
-                }
+        // Bind extension variable definition heuristic
+        #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
+            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_subexpression, this, _1, _2, _3);
+        #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
+            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_random, this, _1, _2, _3);
+        #endif
 
-                // shiftUnassigned(out_learnt);
+        // Bind clause substitution predicate
+        user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
 
-                // Shift unassigned literal to the beginning of the clause
-                // There should be exactly one unassigned literal
-                int i, j;
-                for (i = j = 0; i < out_learnt.size(); i++) {
-                    if (value(out_learnt[i]) == l_Undef) {
-                        Lit tmp = out_learnt[i];
-                        out_learnt[i] = out_learnt[j];
-                        out_learnt[j] = tmp;
-                        j++;
-                    }
-                }
-                assert(j == 1);
+        // Bind variable deletion predicate
+        #if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_NONE
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_none, this, _1);
+        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
+        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
+        #endif
 
-                // Ensure the highest level is in index 1
-                for (i = 1; i < out_learnt.size(); i++) {
-                    if (level(var(out_learnt[i]) > level(var(out_learnt[1])))) {
-                        Lit tmp = out_learnt[1];
-                        out_learnt[1] = out_learnt[i];
-                        out_learnt[i] = tmp;
-                    }
-                }
-            }
-        }
+        // Initialize overhead measurement
+        initOverhead(ext_sel_overhead , 0, 0);
+        initOverhead(ext_add_overhead , 0, 0);
+        initOverhead(ext_delC_overhead, 0, 0);
+        initOverhead(ext_delV_overhead, 0, 0);
+        initOverhead(ext_sub_overhead , 0, 0);
+        initOverhead(ext_stat_overhead, 0, 0);
     }
 
+    SolverER::~SolverER() {}
 
-    extTimerStop(ext_sub_overhead);
-}
+    void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate) {
+        extTimerStart();
 
-// Prioritize branching on a given set of literals
-inline void Solver::er_prioritize(const std::vector<Var>& toPrioritize) {
-    const double desiredActivityCHB   = activity_CHB  [order_heap_CHB[0]] * ext_prio_act;
-    const double desiredActivityVSIDS = activity_VSIDS[order_heap_VSIDS[0]] * ext_prio_act;
-    for (std::vector<Var>::const_iterator i = toPrioritize.begin(); i != toPrioritize.end(); i++) {
-        Var v = *i;
-        // Prioritize branching on our extension variables
-        activity_CHB  [v] = desiredActivityCHB;
-        activity_VSIDS[v] = desiredActivityVSIDS;
+        for (int i = 0; i < candidates.size(); i++) {
+            CRef candidate = candidates[i];
+            if (filterPredicate(candidate))
+                m_filteredClauses.push_back(candidate);
+        }
+
+        extTimerStop(ext_sel_overhead);
+    }
+
+    void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate) {
+        extTimerStart();
+        
+        if (filterPredicate(candidate))
+            m_filteredClauses.push_back(candidate);
+        
+        extTimerStop(ext_sel_overhead);
+    }
+
+    void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
+        filterBatch(solver->learnts_core , user_extFilPredicate);
+        filterBatch(solver->learnts_tier2, user_extFilPredicate);
+
+        extTimerStart();
+
+        selectionHeuristic(m_selectedClauses, m_filteredClauses, ext_window);
+        m_filteredClauses.clear();
+        
+        extTimerStop(ext_sel_overhead);
+    }
+
+    void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic) {
+        extTimerStart();
+
+        // Generate extension variable definitions
+        extDefHeuristic(m_extVarDefBuffer, m_selectedClauses, ext_max_intro);
+
+        // Update stats and clean up
+        m_selectedClauses.clear();
+        extTimerStop(ext_add_overhead);
+    }
+
+    void SolverER::introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db) {
+        if (m_extVarDefBuffer.size() == 0) return;
+
+        extTimerStart();
+
+        // Add extension variables
+        // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
+        // for the provided literal pairs
+        for (auto i = m_extVarDefBuffer.begin(); i != m_extVarDefBuffer.end(); i++) solver->newVar(ext_pref_sign);
+
+        // Add extension definition clauses
+        for (const ExtDef& def : m_extVarDefBuffer) {
+            const Lit x = def.x, a = def.a, b = def.b;
+            assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
+
+            // Save definition (x <=> a v b)
+            xdm.insert(x, a, b);
+
+            // Create extension clauses and save their IDs
+            std::vector<CRef> defs;
+
+            // Encode (x <=> a v b) as three clauses
+            addExtDefClause(defs, x, {~x,  a,  b});
+            addExtDefClause(defs, x, { x, ~a    });
+            addExtDefClause(defs, x, { x,     ~b});
+
+            // Introduce additional helper clauses
+            for (const std::vector<Lit>& c : def.additionalClauses) addExtDefClause(defs, x, c);
+
+            // Add extension clause IDs to the extension definition database
+            ext_def_db.insert(std::make_pair(var(x), defs));
+        }
+
+        // TODO: Prioritize new variables
+        // er_prioritize(m_extVarDefBuffer);
+
+        // Update stats and clean up
+        total_ext_vars += m_extVarDefBuffer.size();
+        max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
+        m_extVarDefBuffer.clear();
+
+        extTimerStop(ext_add_overhead);
+    }
+
+    void SolverER::prioritize(const std::vector<ExtDef>& defs) {
+        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
+        const double desiredActivityCHB   = solver->activity_CHB  [solver->order_heap_CHB  [0]] * ext_prio_act;
+        const double desiredActivityVSIDS = solver->activity_VSIDS[solver->order_heap_VSIDS[0]] * ext_prio_act;
+        for (const ExtDef& def : defs) {
+            Var v = var(def.x);
+            // Prioritize branching on our extension variables
+            solver->activity_CHB  [v] = desiredActivityCHB;
+            solver->activity_VSIDS[v] = desiredActivityVSIDS;
 
 #if EXTENSION_FORCE_BRANCHING
-        // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
-        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
-        canceled[v] = conflicts;
+            // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
+            solver->canceled[v] = conflicts;
 #endif
-        if (order_heap_CHB  .inHeap(v)) order_heap_CHB  .decrease(v);
-        if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
-    }
-}
-
-void Solver::shiftUnassigned(vec<Lit>& clause) {
-    if (clause.size() == 1) return;
-
-    // Shift all unassigned literals to the beginning of the clause
-    int i, j;
-    for (i = j = 0; i < clause.size(); i++) {
-        if (value(clause[i]) == l_Undef) {
-            Lit tmp = clause[i]; clause[i] = clause[j]; clause[j] = tmp;
-            j++;
-        } else if (value(clause[i]) == l_True) {
-            printf("Clause is satisfied!\n");
+            if (solver->order_heap_CHB  .inHeap(v)) solver->order_heap_CHB  .decrease(v);
+            if (solver->order_heap_VSIDS.inHeap(v)) solver->order_heap_VSIDS.decrease(v);
         }
     }
 
-    const int num_unassigned = j;
-    if (num_unassigned == 0) {
-        // Ensure the highest level is in index 1 and the second-highest level is in index 0
-        for (i = 0; i < clause.size(); i++) {
-            if (level(var(clause[i])) >= level(var(clause[1]))) {
-                Lit tmp = clause[0];
-                clause[0] = clause[1];
-                clause[1] = clause[i];
-                clause[i] = tmp;
-            }
+    void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
+        assert(solver->decisionLevel() == 0);
+
+        assert(solver->ok);
+
+        // Check if clause is satisfied and remove false/duplicate literals:
+        // TODO: make this optional depending on when we add the ext def clause
+        sort(ps);
+        Lit p; int i, j;
+
+        if (solver->drup_file){
+            solver->add_oc.clear();
+            for (int i = 0; i < ps.size(); i++) solver->add_oc.push(ps[i]); }
+
+        for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
+            if (value(ps[i]) == l_True || ps[i] == ~p)
+                return;
+            else if (value(ps[i]) != l_False && ps[i] != p)
+                ps[j++] = p = ps[i];
+        ps.shrink(i - j);
+
+        if (solver->drup_file && i != j){
+    #ifdef BIN_DRUP
+            solver->binDRUP('a', ps, solver->drup_file);
+            solver->binDRUP('d', solver->add_oc, solver->drup_file);
+    #else
+            for (int i = 0; i < ps.size(); i++)
+                fprintf(solver->drup_file, "%i ", (var(ps[i]) + 1) * (-2 * sign(ps[i]) + 1));
+            fprintf(solver->drup_file, "0\n");
+
+            fprintf(solver->drup_file, "d ");
+            for (int i = 0; i < solver->add_oc.size(); i++)
+                fprintf(solver->drup_file, "%i ", (var(solver->add_oc[i]) + 1) * (-2 * sign(solver->add_oc[i]) + 1));
+            fprintf(solver->drup_file, "0\n");
+    #endif
         }
-    } else if (num_unassigned == 1) {
-        // Ensure the first literal has a value
-        Lit tmp = clause[0];
-        clause[0] = clause[1];
-        clause[1] = tmp;
-    }
-}
 
-// Add clause to extension definitions
-// Assumes that the first literal is the new extension variable
-int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
-    // Try just using the default?
-    // addClause_(ext_def_clause);
+        if (ps.size() == 0)
+            return;
+        else if (ps.size() == 1)
+            solver->uncheckedEnqueue(ps[0]);
+        else {
+            CRef cr = solver->ca.alloc(ps, false);
+            db.push_back(cr);
+            solver->attachClause(cr);
+        // }
 
-    if (ext_def_clause.size() == 1) {
-        uncheckedEnqueue(ext_def_clause[0]);
-    } else {
-        // Make sure the first two literals are in the right order for the watchers
-        shiftUnassigned(ext_def_clause);
+        //////////////////////////////////////////////////////////////////////////////////
 
-        // Add clause to data structures
-        CRef cr = ca.alloc(ext_def_clause, true);
-        int lbd = computeLBD(ca[cr]);
-        ca[cr].set_lbd(lbd);
-
-        // Compute some stats
-        int numExtVarsInClause = getNumExtVars(ca[cr]);
-        double extFrac = numExtVarsInClause / (double) ext_def_clause.size();
-        extfrac_total += extFrac;
-
-        // Set initial clause LBD
-        // lbd_total += lbd;
-
-        // Add clause to db
-        // clauses.push(cr);
-        db.push_back(cr);
-
-        attachClause(cr);
-
-        // Do we ever actually need to propagate here?
+        // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
+        // Do we need to propagate here?
         // BCP works by iterating through the literals on the trail 
         //
         // For ER_ADD_LOCATION_AFTER_RESTART:
@@ -256,221 +314,202 @@ int Solver::addExtDefClause(std::vector<CRef>& db, vec<Lit>& ext_def_clause) {
         //    We should backtrack to the appropriate level (max(lvl(a), lvl(b))) if we want to propagate, and
         //    let propagate() handle it for us
 
-#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
-        // Determine whether we need to propagate extension variable
-        if (value(ext_def_clause[0]) == l_Undef) {
-            int max_lvl = 0;
-            bool allFalsified = true;
-            for (int i = 1; i < ext_def_clause.size(); i++) {
-                if (value(ext_def_clause[i]) != l_False) {
-                    allFalsified = false;
+        // if (ps.size() == 1) {
+        //     solver->uncheckedEnqueue(ext_lit);
+        // } else {
+
+        //     // Add clause to data structures
+        //     ClauseAllocator& ca = solver->ca;
+        //     CRef cr = ca.alloc(ps, false); // Allocating clause as if it were an original clause
+        //     int lbd = solver->computeLBD(ca[cr]);
+        //     ca[cr].set_lbd(lbd);
+
+        //     // Add clause to db
+        //     db.push_back(cr);
+        //     solver->attachClause(cr);
+
+            // Check whether the clause needs to be propagated
+            if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
+                solver->uncheckedEnqueue(ps[0], cr);
+            }
+        }
+    }
+
+    CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
+        // Find definition clause which asserts ~x
+        int max_lvl;
+        for (CRef cr : cs) {
+            Clause& c = solver->ca[cr];
+            i_undef = i_max = max_lvl = -1;
+            for (int k = 0; k < c.size(); k++) {
+                if (value(c[k]) == l_Undef) {
+                    if (c[k] != ~x) goto NEXT_CLAUSE;
+                    i_undef = k;
+                } else if (value(c[k]) == l_True) {
+                    goto NEXT_CLAUSE;
+                } else if (level(var(c[k])) > max_lvl) {
+                    max_lvl = level(var(c[k]));
+                    i_max = k;
+                }
+            }
+
+            assert(i_undef != -1);
+            return cr;
+            NEXT_CLAUSE:;
+        }
+
+        // bug: the solver should never reach here if the extension definition clauses are present
+        assert(false);
+        return CRef_Undef;
+    }
+
+    void SolverER::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
+        // Move unassigned literal to c[0]
+        Clause& c = solver->ca[cr];
+        Lit x = c[i_undef], max = c[i_max];
+        if (c.size() == 2) {
+            // Don't need to touch watchers for binary clauses
+            if (value(c[0]) == l_False) std::swap(c[0], c[1]);
+        } else {
+            // Swap unassigned literal to index 0 and highest-level literal to index 1,
+            // replacing watchers as necessary
+            OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws = solver->watches;
+            Lit c0 = c[0], c1 = c[1];
+            if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
+
+            if (i_max > 1) {
+                remove(ws[~c[1]], Solver::Watcher(cr, c0));
+                std::swap(c[1], c[i_max]);
+                ws[~max].push(Solver::Watcher(cr, x));
+            }
+
+            if (i_undef > 1) {
+                remove(ws[~c[0]], Solver::Watcher(cr, c1));
+                std::swap(c[0], c[i_undef]);
+                ws[~x].push(Solver::Watcher(cr, max));
+            }
+        }
+    }
+
+    void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
+        extTimerStart();
+        if (p(clause)) {
+            vec<Lit>& extLits = tmp; extLits.clear();
+            xdm.substitute(clause, extLits);
+
+            // Ensure variables are assigned so the clause is still asserting
+            // Some extension variables are undefined after substitution, so we need to propagate from their definitions
+            if (extLits.size()) {
+                for (int i = (extLits[0] == clause[0]) ? 1 : 0; i < extLits.size(); i++) {
+                    Lit x = extLits[i];
+                    if (value(x) == l_Undef) {
+                        int i_undef = -1, i_max = -1;
+                        CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
+                        assert(cr != CRef_Undef);
+                        enforceWatcherInvariant(cr, i_undef, i_max);
+                        Clause& c = solver->ca[cr];
+                        solver->uncheckedEnqueue(c[0], cr);
+                    }
+                }
+            }
+        }
+
+        extTimerStop(ext_sub_overhead);
+    }
+
+    void SolverER::getExtVarsToDelete(std::tr1::unordered_set<Lit>& varsToDelete, DeletionPredicate& deletionPredicate) const {
+        // Iterate through current extension variables
+        for (auto it = extDefs.begin(); it != extDefs.end(); it++) {
+            Var x = it->first;
+
+            // Find all extension variables that are not basis literals
+            // Extension variables that participate in definitions of other variables cannot be deleted
+            if (xdm.degree(mkLit(x, false)) > 0 || xdm.degree(mkLit(x, true)) > 0) continue;
+
+            // Check whether the solver should delete the variable
+            if (!deletionPredicate(x)) continue;
+
+            // Check whether any of the extension definition clauses are not removable
+            bool canDeleteDef = true;
+            for (CRef cr : it->second) {
+                Clause& c = solver->ca[cr];
+                if (c.mark() == CORE || !c.removable() || solver->locked(c)) {
+                    canDeleteDef = false;
                     break;
                 }
-
-                // Find the backtrack level in case we need to propagate
-                int lvl = level(var(ext_def_clause[i]));
-                if (lvl > max_lvl) max_lvl = lvl;
             }
 
-            if (allFalsified) {
-                return max_lvl;
+            // Queue extension variable to be deleted
+            if (canDeleteDef) {
+                varsToDelete.insert(mkLit(x));
             }
         }
-#endif
-    }
-    return decisionLevel();
-}
-
-inline std::vector<Var> Solver::er_add(
-    std::tr1::unordered_map< Var, std::vector<CRef> >& er_def_db,
-    struct ExtDefMap& er_def_map,
-    const std::vector< std::pair< Var, std::pair<Lit, Lit> > >& newDefMap,
-    int& out_bt_level
-) {
-    // Add extension variables
-    // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
-    // for the provided literal pairs
-
-    // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v a)
-    // TODO: don't add the extension variable in the case where we have x1 = (a v b) and x2 = (x1 v -a)
-    std::vector<Var> new_variables;
-    for (unsigned int i = 0; i < newDefMap.size(); i++) {
-        new_variables.push_back(newVar(ext_pref_sign));
     }
 
-    // Add extension clauses
-    int bt_level = decisionLevel();
-    for (std::vector< std::pair< Var, std::pair<Lit, Lit> > >::const_iterator i = newDefMap.begin(); i != newDefMap.end(); i++) {
-        // Get literals
-        Lit x = mkLit(i->first);
-        Lit a = i->second.first;
-        Lit b = i->second.second;
-        assert(var(x) > var(a) && var(x) > var(b));
+    void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
+        extTimerStart();
 
-        // Save definition
-        er_def_map.insert(x, a, b);
+        // Get extension variables to delete
+        std::tr1::unordered_set<Lit> varsToDelete;
+        getExtVarsToDelete(varsToDelete, deletionPredicate);
 
-        // Create extension clauses and add them to the extension definition database
-        std::vector<CRef> defs;
-        bt_level = std::min(bt_level, addExtDefClause(defs, ~x,  a,  b));
-        bt_level = std::min(bt_level, addExtDefClause(defs,  x, ~a    ));
-        bt_level = std::min(bt_level, addExtDefClause(defs,  x,     ~b));
-        er_def_db.insert(std::make_pair(i->first, defs));
+        // Delete clauses containing the extension variable
+        // 1. TODO: Delete learnt clauses containing the extension variable
+        //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay 
+
+        // 2. Delete extension variable definition clauses
+        for (Lit x : varsToDelete) {
+            for (CRef cr : extDefs.find(var(x))->second) {
+                remove_incremental(cr);
+                solver->removeClause(cr);
+            }
+            extDefs.erase(var(x));
+        }
+
+        // 3. Remove extension variable from definition map to prevent future clause substitution
+        xdm.erase(varsToDelete);
+        remove_flush();
+
+        // Update stats
+        deleted_ext_vars += varsToDelete.size();
+        extTimerStop(ext_delV_overhead);
     }
-    if (bt_level != decisionLevel()) out_bt_level = bt_level;
-    return new_variables;
-}
 
-void Solver::generateExtVars (
-    std::vector<CRef>(*er_select_heuristic)(Solver&, unsigned int),
-    std::vector< std::pair< Var, std::pair<Lit, Lit> > >(*er_add_heuristic)(Solver&, std::vector<CRef>&, unsigned int),
-    unsigned int numClausesToConsider,
-    unsigned int maxNumNewVars
-) {
-    // Get extension clauses according to heuristic
-    extTimerStart();
-    std::vector<CRef> candidateClauses = er_select_heuristic(*this, numClausesToConsider);
-    extTimerStop(ext_sel_overhead);
+    void SolverER::relocAll(ClauseAllocator& to) {
+        // Reloc CRefs stored in buffers
+        for (unsigned int i = 0; i < m_filteredClauses.size(); i++) solver->ca.reloc(m_filteredClauses[i], to);
+        for (unsigned int i = 0; i < m_selectedClauses.size(); i++) solver->ca.reloc(m_selectedClauses[i], to);
 
-    // Get extension variables according to heuristic
-    extTimerStart();
-    const std::vector< std::pair< Var, std::pair<Lit, Lit> > > newDefMap = er_add_heuristic(*this, candidateClauses, maxNumNewVars);
-    extBuffer.insert(extBuffer.end(), newDefMap.begin(), newDefMap.end());
-    extTimerStop(ext_add_overhead);
-}
-
-// Add extension variables to our data structures and prioritize branching on them.
-// This calls a heuristic function which is responsible for identifying extension variable
-// definitions and adding the appropriate clauses and variables.
-int Solver::addExtVars() {
-    // Add the extension variables to our data structures
-    int bt_level = -1;
-    extTimerStart();
-    const std::vector<Var> new_variables = er_add(extDefs, extVarDefs, extBuffer, bt_level);
-    total_ext_vars += new_variables.size();
-    extBuffer.clear();
-    er_prioritize(new_variables);
-    max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
-    extTimerStop(ext_add_overhead);
-    return bt_level;
-}
-
-static inline bool containsAny(Clause& c, const std::tr1::unordered_set<Var>& varSet) {
-    for (int k = 0; k < c.size(); k++) {
-        if (varSet.find(var(c[k])) != varSet.end()) {
-            return true;
+        // Reloc extension definition clauses
+        for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+            std::vector<CRef>& cs = it->second;
+            unsigned int i, j;
+            for (i = j = 0; i < cs.size(); i++) {
+                // Reloc following example of clauses
+                if (solver->ca[cs[i]].mark() != 1){
+                    solver->ca.reloc(cs[i], to);
+                    cs[j++] = cs[i]; }
+            }
+            cs.erase(cs.begin() + j, cs.end());
         }
     }
-    return false;
-}
 
-std::tr1::unordered_set<Var> Solver::delExtVars(Minisat::vec<Minisat::CRef>& db, const std::tr1::unordered_set<Var>& varsToDeleteSet) {
-    // Set of variables whose definitions cannot be deleted due to being locked
-    std::tr1::unordered_set<Var> notDeleted;
-
-    // Delete clauses which contain the extension variable
-    // TODO: is there a more efficient way to implement this? e.g. have a list of clauses for each extension variable?
-    // TODO: Should we queue ER clauses to be deleted when they become unlocked?
-    int i, j;
-    for (i = j = 0; i < db.size(); i++) {
-        Clause& c = ca[db[i]];
-        if (locked(c)) {
-            db[j++] = db[i];
-            // Add ext vars to notDeleted
-            for (int k = 0; k < c.size(); k++) {
-                if (varsToDeleteSet.find(var(c[k])) != varsToDeleteSet.end()) {
-                    notDeleted.insert(var(c[k]));
+    void SolverER::removeSatisfied() {
+        for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
+            std::vector<CRef>& cs = it->second;
+            unsigned int i, j;
+            for (i = j = 0; i < cs.size(); i++) {
+                Clause& c = solver->ca[cs[i]];
+                if (solver->satisfied(c)) {
+                    remove_incremental(cs[i]);
+                    solver->removeClause(cs[i]);
+                } else {
+                    cs[j++] = cs[i];
                 }
             }
-        } else if (containsAny(c, varsToDeleteSet)) {
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
-            user_er_filter_delete_incremental(db[i]);
-#endif
-            removeClause(db[i]);
-        } else {
-            db[j++] = db[i];
-        }
-    }
-    db.shrink(i - j);
-
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
-    user_er_filter_delete_flush();
-#endif
-    return notDeleted;
-}
-
-std::tr1::unordered_set<Var> Solver::delExtVars(std::tr1::unordered_map< Var, std::vector<CRef> >& db, const std::tr1::unordered_set<Var>& varsToDelete) {
-    std::tr1::unordered_set<Var> notDeleted;
-    
-    // Delete from variable definitions
-    for (std::tr1::unordered_set<Var>::const_iterator i = varsToDelete.begin(); i != varsToDelete.end(); i++) {
-        std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.find(*i);
-        std::vector<CRef>& defClauses = it->second;
-
-        // Check if any of the clauses are locked
-        bool canDelete = true;
-        for (std::vector<CRef>::iterator k = defClauses.begin(); k != defClauses.end(); k++) {
-            if (locked(ca[*k])) {
-                canDelete = false;
-                break;
-            }
+            cs.erase(cs.begin() + j, cs.end());
         }
 
-        // Delete definition clauses
-        if (canDelete) {
-            for (std::vector<CRef>::iterator k = defClauses.begin(); k != defClauses.end(); k++) {
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
-                user_er_filter_delete_incremental(*k);
-#endif
-                removeClause(*k);
-            }
-        } else {
-            notDeleted.insert(*i);
-        }
+        remove_flush();
     }
-#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
-    user_er_filter_delete_flush();
-#endif
-
-    return notDeleted;
-}
-
-static inline void setSubtract(std::tr1::unordered_set<Var>& a, const std::tr1::unordered_set<Var>& b) {
-    for (std::tr1::unordered_set<Var>::const_iterator it = b.begin(); it != b.end(); it++) {
-        a.erase(*it);
-    }
-}
-
-void Solver::delExtVars(std::tr1::unordered_set<Var>(*er_delete_heuristic)(Solver&)) {
-    // Delete variables
-    extTimerStart();
-
-    // Get variables to delete
-    std::tr1::unordered_set<Var> varsToDelete = er_delete_heuristic(*this);
-
-    // Option 1: delete all clauses containing the extension variables
-    // Option 2: substitute extension variable with definition (TODO: unimplemented)
-
-    // Only consider extension variables which are not part of the definition of another extension variable
-    std::tr1::unordered_set<Var> cannotBeDeleted;
-    for (std::tr1::unordered_set<Var>::iterator it = varsToDelete.begin(); it != varsToDelete.end(); it++)
-        if (extVarDefs.contains(mkLit(*it, false)) || extVarDefs.contains(mkLit(*it, true)))
-            cannotBeDeleted.insert(*it);
-    setSubtract(varsToDelete, cannotBeDeleted);
-
-    // Delete from learnt clauses
-    // cannotBeDeleted = delExtVars(extLearnts, varsToDelete);
-    // setSubtract(varsToDelete, cannotBeDeleted);
-
-    // Delete clauses from extension definitions
-    cannotBeDeleted = delExtVars(extDefs, varsToDelete);
-    setSubtract(varsToDelete, cannotBeDeleted);
-
-    // Remove variable definitions from other data structures
-    deleted_ext_vars += varsToDelete.size();
-    extVarDefs.erase(varsToDelete);
-
-    extTimerStop(ext_delV_overhead);
-}
-
 }

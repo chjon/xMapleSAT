@@ -19,12 +19,13 @@ RCOBJS     = $(addsuffix r,  $(COBJS))
 
 
 CXX       ?= g++
-CFLAGS    ?= -Wall -Wno-parentheses -std=c++11 $(CMD_CFLAGS)
+CFLAGS    ?= -Wall -Wno-parentheses -std=c++11
 LFLAGS    ?= -Wall
 
 COPTIMIZE ?= -O3
 
 CFLAGS    += -I$(MROOT) -D __STDC_LIMIT_MACROS -D __STDC_FORMAT_MACROS
+CFLAGS    += $(CMD_CFLAGS)
 LFLAGS    += -lz
 
 .PHONY : s p d r rs clean 
@@ -68,7 +69,7 @@ lib$(LIB)_release.a:	$(filter-out */Main.or, $(RCOBJS))
 
 ## Build rule
 %.o %.op %.od %.or:	%.cc
-	@echo Compiling: $(subst $(MROOT)/,,$@) $(CFLAGS)
+	@echo Compiling: $(subst $(MROOT)/,,$@)
 	@$(CXX) $(CFLAGS) -c -o $@ $<
 
 ## Linking rules (standard/profile/debug/release)

@@ -109,7 +109,7 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
         if (*in == EOF) break;
         else if (*in == 'p'){
             if (eagerMatch(in, "p cnf")){
-                /*vars    =*/ parseInt(in);
+                /* vars    = */ parseInt(in);
                 clauses = parseInt(in);
                 // SATRACE'06 hack
                 // if (clauses > 4000000)

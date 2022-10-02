@@ -8,7 +8,9 @@ Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI,
 Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
  
 Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
- 
+
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -35,6 +37,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/Dimacs.h"
 #include "core/Solver.h"
+#include "core/SolverER.h"
 
 using namespace Minisat;
 
@@ -45,27 +48,26 @@ void printStats(Solver& solver)
 {
     double cpu_time = cpuTime();
     double mem_used = memUsedPeak();
-    printf("c restarts              : %"    PRIu64 "\n", solver.starts);
-    printf("c conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
-    printf("c decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
-    printf("c propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
-    printf("c conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
-    printf("c total ext vars        : %-12" PRIu64 "\n", solver.total_ext_vars);
-    printf("c deleted ext vars      : %-12" PRIu64 "\n", solver.deleted_ext_vars);
-    printf("c max ext vars          : %-12" PRIu64 "\n", solver.max_ext_vars);
-    printf("c conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflict_extclauses, solver.conflict_extclauses / cpu_time);
-    printf("c learnt ext clauses    : %-12" PRIu64 "   (%.0f /sec)\n", solver.learnt_extclauses, solver.learnt_extclauses / cpu_time);
-    printf("c total lbd of learnts  : %-12" PRIu64 "   (%.0f /conf)\n", solver.lbd_total, solver.lbd_total / (float)solver.conflicts);
-    printf("c decisions on ext vars : %-12" PRIu64 "\n", solver.branchOnExt);
-    printf("c total learnt ext frac : %g\n", solver.extfrac_total);
+    printf("c restarts              : %" PRIu64"\n", solver.starts);
+    printf("c conflicts             : %-12" PRIu64"   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
+    printf("c decisions             : %-12" PRIu64"   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
+    printf("c propagations          : %-12" PRIu64"   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
+    printf("c conflict literals     : %-12" PRIu64"   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
+    printf("c total ext vars        : %-12" PRIu64 "\n", solver.ser->total_ext_vars);
+    printf("c deleted ext vars      : %-12" PRIu64 "\n", solver.ser->deleted_ext_vars);
+    printf("c max ext vars          : %-12" PRIu64 "\n", solver.ser->max_ext_vars);
+    printf("c conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", solver.ser->conflict_extclauses, solver.ser->conflict_extclauses / cpu_time);
+    printf("c learnt ext clauses    : %-12" PRIu64 "   (%.0f /sec)\n", solver.ser->learnt_extclauses, solver.ser->learnt_extclauses / cpu_time);
+    printf("c decisions on ext vars : %-12" PRIu64 "\n", solver.ser->branchOnExt);
+    // printf("c total learnt ext frac : %g\n", solver.ser->extfrac_total);
     if (mem_used != 0) printf("c Memory used           : %.2f MB\n", mem_used);
     printf("c CPU time              : %g s\n", cpu_time);
-    printf("c ER_sel time           : %g s\n", solver.extTimerRead(0));
-    printf("c ER_add time           : %g s\n", solver.extTimerRead(1));
-    printf("c ER_delC time          : %g s\n", solver.extTimerRead(2));
-    printf("c ER_delV time          : %g s\n", solver.extTimerRead(3));
-    printf("c ER_sub time           : %g s\n", solver.extTimerRead(4));
-    printf("c ER_stat time          : %g s\n", solver.extTimerRead(5));
+    printf("c ER_sel time           : %g s\n", solver.ser->extTimerRead(0));
+    printf("c ER_add time           : %g s\n", solver.ser->extTimerRead(1));
+    printf("c ER_delC time          : %g s\n", solver.ser->extTimerRead(2));
+    printf("c ER_delV time          : %g s\n", solver.ser->extTimerRead(3));
+    printf("c ER_sub time           : %g s\n", solver.ser->extTimerRead(4));
+    printf("c ER_stat time          : %g s\n", solver.ser->extTimerRead(5));
 }
 
 

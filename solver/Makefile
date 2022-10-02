@@ -89,7 +89,6 @@ ER_ADD_LOCATION_AFTER_RESTART  =1
 ER_ADD_LOCATION_AFTER_CONFLICT =2
 
 define make_er_solver
-	make -C core clean
 	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(2) \
 		-D ER_USER_FILTER_HEURISTIC=$(3) \
@@ -105,27 +104,38 @@ define make_er_solver
 	mv core/maplesat_static core/$(1)
 endef
 
+.PHONY: all clean test
+
 all: maplesat xmaplesat
 
-maplesat:
+.prev_%:
+	make -C core clean
+	rm -f .prev_*
+	touch $@
+
+maplesat: .prev_maplesat
 	$(call make_er_solver,maplesat,0,0,0,0,0,0,0,0)
 
 xmaplesat: xmaplesat_rnd_rng xmaplesat_rnd_lbd xmaplesat_sub_rng xmaplesat_sub_lbd xmaplesat_glucoser
 
-xmaplesat_rnd_rng:
+xmaplesat_rnd_rng: .prev_xmaplesat_rnd_rng
 	$(call make_er_solver,xmaplesat_rnd_rng,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplesat_rnd_lbd:
+xmaplesat_rnd_lbd: .prev_xmaplesat_rnd_lbd
 	$(call make_er_solver,xmaplesat_rnd_lbd,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplesat_sub_rng:
+xmaplesat_sub_rng: .prev_xmaplesat_sub_rng
 	$(call make_er_solver,xmaplesat_sub_rng,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplesat_sub_lbd:
+xmaplesat_sub_lbd: .prev_xmaplesat_sub_lbd
 	$(call make_er_solver,xmaplesat_sub_lbd,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART))
 
-xmaplesat_glucoser:
+xmaplesat_glucoser: .prev_xmaplesat_glucoser
 	$(call make_er_solver,xmaplesat_glucoser,$(ER_ADD_HEURISTIC_GLUCOSER),$(ER_FILTER_HEURISTIC_GLUCOSER),$(ER_SELECT_HEURISTIC_GLUCOSER),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),1,$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_CONFLICT),$(ER_ADD_LOCATION_AFTER_CONFLICT))
 
 clean:
 	make -C core clean
+	make -C test clean
+
+test:
+	make CMD_CFLAGS="-D TESTING" -C test

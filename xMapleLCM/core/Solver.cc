@@ -9,9 +9,7 @@ Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective lear
 
 Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
 
-MapleLCMDistChronoBT, based on Maple_LCM_Dist -- Copyright (c), Alexander Nadel, Vadim Ryvchin: "Chronological Backtracking" in SAT-2018, pp. 111-121.
-
-MapleLCMDistChronoBT-DL, based on MapleLCMDistChronoBT -- Copyright (c), Stepan Kochemazov, Oleg Zaikin, Victor Kondratiev, Alexander Semenov: The solver was augmented with heuristic that moves duplicate learnt clauses into the core/tier2 tiers depending on a number of parameters.
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -30,23 +28,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include <math.h>
-#include <algorithm>
 #include <signal.h>
 #include <unistd.h>
 
 #include "mtl/Sort.h"
 #include "core/Solver.h"
+#include "core/SolverER.h"
 
 using namespace Minisat;
-
-//#define PRINT_OUT
 
 #ifdef BIN_DRUP
 int Solver::buf_len = 0;
 unsigned char Solver::drup_buf[2 * 1024 * 1024];
 unsigned char* Solver::buf_ptr = drup_buf;
 #endif
-
 
 //=================================================================================================
 // Options:
@@ -67,45 +62,7 @@ static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the 
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
-static IntOption     opt_ext_freq       (_cat, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_wndw       (_cat, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_num        (_cat, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
-static DoubleOption  opt_ext_prio       (_cat, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
-static BoolOption    opt_ext_sign       (_cat, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-static IntOption     opt_ext_min_width  (_cat, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_max_width  (_cat, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-static IntOption     opt_ext_filter_num (_cat, "ext-filter-num", "Maximum number of clauses after the filter step\n", 200, IntRange(0, INT32_MAX));
-#endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-static IntOption     opt_ext_sub_min_width  (_cat, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_sub_max_width  (_cat, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", 100, IntRange(0, INT32_MAX));
-#endif
-#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-static IntOption     opt_ext_min_lbd    (_cat, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
-static IntOption     opt_ext_max_lbd    (_cat, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
-#endif
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
-#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-static DoubleOption  opt_ext_act_thresh(_cat, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
-#endif
-static IntOption     opt_chrono            (_cat, "chrono",  "Controls if to perform chrono backtrack", 100, IntRange(-1, INT32_MAX));
-static IntOption     opt_conf_to_chrono    (_cat, "confl-to-chrono",  "Controls number of conflicts to perform chrono backtrack", 4000, IntRange(-1, INT32_MAX));
-
-static IntOption     opt_max_lbd_dup       ("DUP-LEARNTS", "lbd-limit",  "specifies the maximum lbd of learnts to be screened for duplicates.", 12, IntRange(0, INT32_MAX));
-static IntOption     opt_min_dupl_app      ("DUP-LEARNTS", "min-dup-app",  "specifies the minimum number of learnts to be included into db.", 3, IntRange(2, INT32_MAX));
-static IntOption     opt_dupl_db_init_size ("DUP-LEARNTS", "dupdb-init",  "specifies the initial maximal duplicates DB size.", 500000, IntRange(1, INT32_MAX));
-
-static IntOption     opt_VSIDS_props_limit ("DUP-LEARNTS", "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
-
-//VSIDS_props_limit
-
-static inline void initOverhead(struct rusage& overhead, int s, int us) {
-    overhead.ru_utime.tv_sec  = s;
-    overhead.ru_utime.tv_usec = us;
-}
+static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -134,30 +91,6 @@ Solver::Solver() :
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
 
-// EXTENDED RESOLUTION parameters
-  , ext_freq         (opt_ext_freq)
-  , ext_window       (opt_ext_wndw)
-  , ext_max_intro    (opt_ext_num)
-  , ext_prio_act     (opt_ext_prio)
-  , ext_pref_sign    (opt_ext_sign)
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-  , ext_min_width    (opt_ext_min_width)
-  , ext_max_width    (opt_ext_max_width)
-#elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LONGEST
-  , ext_filter_num   (opt_ext_filter_num)
-#endif
-#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
-  , ext_sub_min_width (opt_ext_sub_min_width)
-  , ext_sub_max_width (opt_ext_sub_max_width)
-#endif
-#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-  , ext_min_lbd      (opt_ext_min_lbd)
-  , ext_max_lbd      (opt_ext_max_lbd)
-#endif
-#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-  , ext_act_threshold(opt_ext_act_thresh)
-#endif
-
   // Parameters (the rest):
   //
   , learntsize_factor((double)1/(double)3), learntsize_inc(1.1)
@@ -168,19 +101,10 @@ Solver::Solver() :
   , learntsize_adjust_inc         (1.5)
 
   , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
-  , min_number_of_learnts_copies(opt_min_dupl_app)  
-  , max_lbd_dup(opt_max_lbd_dup)
-  , dupl_db_init_size(opt_dupl_db_init_size)
-
-
-
   // Statistics: (formerly in 'SolverStats')
   //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
-  , chrono_backtrack(0), non_chrono_backtrack(0)
-  , total_ext_vars(0), deleted_ext_vars(0), max_ext_vars(0)
-  , conflict_extclauses(0), learnt_extclauses(0), lbd_total(0), branchOnExt(0), extfrac_total(0)
 
   , ok                 (true)
   , cla_inc            (1)
@@ -196,15 +120,11 @@ Solver::Solver() :
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
-  , core_lbd_cut       (2)
+  , core_lbd_cut       (3)
   , global_lbd_sum     (0)
   , lbd_queue          (50)
   , next_T2_reduce     (10000)
   , next_L_reduce      (15000)
-  , originalNumVars    (0)
-  , prevExtensionConflict(0)
-  , confl_to_chrono    (opt_conf_to_chrono)
-  , chrono			   (opt_chrono)
   
   , counter            (0)
 
@@ -214,7 +134,6 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 
-
   // simplfiy
   , nbSimplifyAll(0)
   , s_propagations(0)
@@ -223,22 +142,18 @@ Solver::Solver() :
   , curSimplify(1)
   , nbconfbeforesimplify(1000)
   , incSimplify(1000)
+
   , var_iLevel_inc     (1)
   , my_var_decay       (0.6)
-
   , DISTANCE           (true)
-{}
+
+  , ser (nullptr)
+{ ser = new SolverER(this); }
 
 
 Solver::~Solver()
 {
-    // Initialize overhead measurement
-    initOverhead(ext_sel_overhead , 0, 0);
-    initOverhead(ext_add_overhead , 0, 0);
-    initOverhead(ext_delC_overhead, 0, 0);
-    initOverhead(ext_delV_overhead, 0, 0);
-    initOverhead(ext_sub_overhead , 0, 0);
-    initOverhead(ext_stat_overhead, 0, 0);
+    delete ser;
 }
 
 
@@ -766,47 +681,6 @@ bool Solver::simplifyLearnt_core()
 
 }
 
-
-int Solver::is_duplicate(std::vector<uint32_t>&c){
-   auto time_point_0 = std::chrono::high_resolution_clock::now();
-    dupl_db_size++;
-    int res = 0;    
-    
-    int sz = c.size();
-    std::vector<uint32_t> tmp(c);    
-    sort(tmp.begin(),tmp.end());
-    
-    uint64_t hash = 0;    
-    
-    for (int i =0; i<sz; i++) {
-        hash ^= tmp[i] + 0x9e3779b9 + (hash << 6) + (hash>> 2);     
-    }    
-    
-    int32_t head = tmp[0];
-    auto it0 = ht.find(head);
-    if (it0 != ht.end()){
-        auto it1=ht[head].find(sz);
-        if (it1 != ht[head].end()){
-            auto it2 = ht[head][sz].find(hash);
-            if (it2 != ht[head][sz].end()){
-                it2->second++;
-                res = it2->second;            
-            }
-            else{
-                ht[head][sz][hash]=1;
-            }
-        }
-        else{            
-            ht[head][sz][hash]=1;
-        }
-    }else{        
-        ht[head][sz][hash]=1;
-    } 
-    auto time_point_1 = std::chrono::high_resolution_clock::now();
-    duptime += std::chrono::duration_cast<std::chrono::microseconds>(time_point_1-time_point_0);    
-    return res;
-}
-
 bool Solver::simplifyLearnt_tier2()
 {
     // int beforeSize, afterSize;
@@ -910,39 +784,22 @@ bool Solver::simplifyLearnt_tier2()
 //#endif
                 }
                 else{
-                    
+                    attachClause(cr);
+                    learnts_tier2[cj++] = learnts_tier2[ci];
 
                     nblevels = computeLBD(c);
                     if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
-                     //duplicate learnts 
-                    int id = 0;                    
-                    
-                    std::vector<uint32_t> tmp;
-                    for (int i = 0; i < c.size(); i++)                           
-                        tmp.push_back(c[i].x);
-                    id = is_duplicate(tmp);
-                     
-                                        
-                    //duplicate learnts 
 
-                    if (id < static_cast<int>(min_number_of_learnts_copies+2)){
-                        attachClause(cr);
-                        learnts_tier2[cj++] = learnts_tier2[ci];                    
-                        if (id == static_cast<int>(min_number_of_learnts_copies+1)){                            
-                            duplicates_added_minimization++;                                  
-                        }
-                        if ((c.lbd() <= core_lbd_cut)||(id == static_cast<int>(min_number_of_learnts_copies+1))){
-                        //if (id == min_number_of_learnts_copies+1){
-                            cj--;
-                            learnts_core.push(cr);
-                            c.mark(CORE);
-                        }
-
-                        c.setSimplified(true);
+                    if (c.lbd() <= core_lbd_cut){
+                        cj--;
+                        learnts_core.push(cr);
+                        c.mark(CORE);
                     }
+
+                    c.setSimplified(true);
                 }
             }
         }
@@ -1021,7 +878,9 @@ Var Solver::newVar(bool sign, bool dvar)
     return v;
 }
 
-bool Solver::addClause_(vec<Lit>& ps) {
+
+bool Solver::addClause_(vec<Lit>& ps)
+{
     assert(decisionLevel() == 0);
     if (!ok) return false;
 
@@ -1065,9 +924,6 @@ bool Solver::addClause_(vec<Lit>& ps) {
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
         attachClause(cr);
-        // extTimerStart();
-        // user_er_filter_incremental(cr);
-        // extTimerStop(ext_sel_overhead);
     }
 
     return true;
@@ -1138,74 +994,36 @@ bool Solver::satisfied(const Clause& c) const {
 
 // Revert to the state at given level (keeping all assignment at 'level' but not beyond).
 //
-void Solver::cancelUntil(int bLevel) {
-	
-    if (decisionLevel() > bLevel){
-#ifdef PRINT_OUT
-		std::cout << "bt " << bLevel << "\n";
-#endif				
-		add_tmp.clear();
-        for (int c = trail.size()-1; c >= trail_lim[bLevel]; c--)
-        {
+void Solver::cancelUntil(int level) {
+    if (decisionLevel() > level){
+        for (int c = trail.size()-1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
 
-			if (level(x) <= bLevel)
-			{
-				add_tmp.push(trail[c]);
-			}
-			else
-			{
-				 if (!VSIDS){
-					uint32_t age = conflicts - picked[x];
-					if (age > 0){
-						double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
-						double old_activity = activity_CHB[x];
-						activity_CHB[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
-						if (order_heap_CHB.inHeap(x)){
-							if (activity_CHB[x] > old_activity)
-								order_heap_CHB.decrease(x);
-							else
-								order_heap_CHB.increase(x);
-						}
-					}
+            if (!VSIDS){
+                uint32_t age = conflicts - picked[x];
+                if (age > 0){
+                    double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
+                    double old_activity = activity_CHB[x];
+                    activity_CHB[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
+                    if (order_heap_CHB.inHeap(x)){
+                        if (activity_CHB[x] > old_activity)
+                            order_heap_CHB.decrease(x);
+                        else
+                            order_heap_CHB.increase(x);
+                    }
+                }
 #ifdef ANTI_EXPLORATION
-					canceled[x] = conflicts;
+                canceled[x] = conflicts;
 #endif
-				}
-				
-				assigns [x] = l_Undef;
-#ifdef PRINT_OUT
-				std::cout << "undo " << x << "\n";
-#endif				
-	            if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
-					polarity[x] = sign(trail[c]);
-				insertVarOrder(x);
-			}
-        }
-        qhead = trail_lim[bLevel];
-        trail.shrink(trail.size() - trail_lim[bLevel]);
-        trail_lim.shrink(trail_lim.size() - bLevel);
-        for (int nLitId = add_tmp.size() - 1; nLitId >= 0; --nLitId)
-		{
-			trail.push_(add_tmp[nLitId]);
-		}
-        // if (trail.size() > 25834 && var(trail[25834]) == 56065) {
-        //     printf("Pre-size: %d\n", trail.size() - add_tmp.size());
-        //     for (int iii = 0; iii < trail.size(); iii++) {
-        //         if (var(trail[iii]) == 51290) {
-        //             printf("cu: Found 51290 at %d\n", iii);
-        //         }
-        //     }
-        // }
-        // if (trail.size() > 25743 && var(trail[25743]) == 51290) {
-        //     for (int iii = 0; iii < trail.size(); iii++) {
-        //         if (var(trail[iii]) == 56065) {
-        //             printf("cu: Found 56065 at %d\n", iii);
-        //         }
-        //     }
-        // }
-		
-		add_tmp.clear();
+            }
+
+            assigns [x] = l_Undef;
+            if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
+                polarity[x] = sign(trail[c]);
+            insertVarOrder(x); }
+        qhead = trail_lim[level];
+        trail.shrink(trail.size() - trail_lim[level]);
+        trail_lim.shrink(trail_lim.size() - level);
     } }
 
 
@@ -1251,49 +1069,6 @@ Lit Solver::pickBranchLit()
     return mkLit(next, polarity[next]);
 }
 
-inline Solver::ConflictData Solver::FindConflictLevel(CRef cind)
-{
-	ConflictData data;
-	Clause& conflCls = ca[cind];
-	data.nHighestLevel = level(var(conflCls[0]));
-	if (data.nHighestLevel == decisionLevel() && level(var(conflCls[1])) == decisionLevel())
-	{
-		return data;
-	}
-
-	int highestId = 0;
-    data.bOnlyOneLitFromHighest = true;
-	// find the largest decision level in the clause
-	for (int nLitId = 1; nLitId < conflCls.size(); ++nLitId)
-	{
-		int nLevel = level(var(conflCls[nLitId]));
-		if (nLevel > data.nHighestLevel)
-		{
-			highestId = nLitId;
-			data.nHighestLevel = nLevel;
-			data.bOnlyOneLitFromHighest = true;
-		}
-		else if (nLevel == data.nHighestLevel && data.bOnlyOneLitFromHighest == true)
-		{
-			data.bOnlyOneLitFromHighest = false;
-		}
-	}
-
-	if (highestId != 0)
-	{
-		std::swap(conflCls[0], conflCls[highestId]);
-		if (highestId > 1)
-		{
-			OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = conflCls.size() == 2 ? watches_bin : watches;
-			//ws.smudge(~conflCls[highestId]);
-			remove(ws[~conflCls[highestId]], Watcher(cind, conflCls[1]));
-			ws[~conflCls[0]].push(Watcher(cind, conflCls[1]));
-		}
-	}
-
-	return data;
-}
-
 
 /*_________________________________________________________________________________________________
 |
@@ -1321,8 +1096,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
     //
     out_learnt.push();      // (leave room for the asserting literal)
     int index   = trail.size() - 1;
-    int nDecisionLevel = level(var(ca[confl][0]));
-    assert(nDecisionLevel == level(var(ca[confl][0])));
 
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
@@ -1366,7 +1139,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
                 }else
                     conflicted[var(q)]++;
                 seen[var(q)] = 1;
-                if (level(var(q)) >= nDecisionLevel){
+                if (level(var(q)) >= decisionLevel()){
                     pathC++;
                 }else
                     out_learnt.push(q);
@@ -1374,11 +1147,8 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
         }
         
         // Select next clause to look at:
-		do {
-			while (!seen[var(trail[index--])]);
-			p  = trail[index+1];
-		} while (level(var(p)) < nDecisionLevel);
-		
+        while (!seen[var(trail[index--])]);
+        p     = trail[index+1];
         confl = reason(var(p));
         seen[var(p)] = 0;
         pathC--;
@@ -1576,7 +1346,7 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
 }
 
 
-void Solver::uncheckedEnqueue(Lit p, int level, CRef from)
+void Solver::uncheckedEnqueue(Lit p, CRef from)
 {
     assert(value(p) == l_Undef);
     Var x = var(p);
@@ -1596,7 +1366,7 @@ void Solver::uncheckedEnqueue(Lit p, int level, CRef from)
     }
 
     assigns[x] = lbool(!sign(p));
-    vardata[x] = mkVarData(from, level);
+    vardata[x] = mkVarData(from, decisionLevel());
     trail.push_(p);
 }
 
@@ -1621,7 +1391,6 @@ CRef Solver::propagate()
 
     while (qhead < trail.size()){
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
-        int currLevel = level(var(p));
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
         num_props++;
@@ -1637,12 +1406,7 @@ CRef Solver::propagate()
                 goto ExitProp;
 #endif
             }else if(value(the_other) == l_Undef)
-            {
-                uncheckedEnqueue(the_other, currLevel, ws_bin[k].cref);
-#ifdef  PRINT_OUT                
-                std::cout << "i " << the_other << " l " << currLevel << "\n";
-#endif                
-			}
+                uncheckedEnqueue(the_other, ws_bin[k].cref);
         }
 
         for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
@@ -1682,42 +1446,7 @@ CRef Solver::propagate()
                 while (i < end)
                     *j++ = *i++;
             }else
-            {
-				if (currLevel == decisionLevel())
-				{
-					uncheckedEnqueue(first, currLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << currLevel << "\n";
-#endif					
-				}
-				else
-				{
-					int nMaxLevel = currLevel;
-					int nMaxInd = 1;
-					// pass over all the literals in the clause and find the one with the biggest level
-					for (int nInd = 2; nInd < c.size(); ++nInd)
-					{
-						int nLevel = level(var(c[nInd]));
-						if (nLevel > nMaxLevel)
-						{
-							nMaxLevel = nLevel;
-							nMaxInd = nInd;
-						}
-					}
-
-					if (nMaxInd != 1)
-					{
-						std::swap(c[1], c[nMaxInd]);
-						*j--; // undo last watch
-						watches[~c[1]].push(w);
-					}
-					
-					uncheckedEnqueue(first, nMaxLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << nMaxLevel << "\n";
-#endif	
-				}
-			}
+                uncheckedEnqueue(first, cr);
 
 NextClause:;
         }
@@ -1759,25 +1488,14 @@ void Solver::reduceDB()
     for (i = j = 0; i < learnts_local.size(); i++){
         Clause& c = ca[learnts_local[i]];
         if (c.mark() == LOCAL)
-            if (c.removable() && !locked(c) && i < limit) {
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-                extTimerStart();
-                user_er_filter_delete_incremental(learnts_local[i]);
-                extTimerStop(ext_delC_overhead);
-#endif
+            if (c.removable() && !locked(c) && i < limit)
                 removeClause(learnts_local[i]);
-            } else {
+            else{
                 if (!c.removable()) limit++;
                 c.removable(true);
                 learnts_local[j++] = learnts_local[i]; }
     }
     learnts_local.shrink(i - j);
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-    extTimerStart();
-    user_er_filter_delete_flush();
-    extTimerStop(ext_delC_overhead);
-#endif
 
     checkGarbage();
 }
@@ -1811,22 +1529,6 @@ void Solver::removeSatisfied(vec<CRef>& cs)
             cs[j++] = cs[i];
     }
     cs.shrink(i - j);
-}
-
-void Solver::removeSatisfied(std::tr1::unordered_map< Var, std::vector<CRef> >& defs)
-{
-    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = defs.begin(); it != defs.end(); it++) {
-        std::vector<CRef>& cs = it->second;
-        unsigned int i, j;
-        for (i = j = 0; i < cs.size(); i++){
-            Clause& c = ca[cs[i]];
-            if (satisfied(c))
-                removeClause(cs[i]);
-            else
-                cs[j++] = cs[i];
-        }
-        cs.erase(cs.begin() + j, cs.end());
-    }
 }
 
 void Solver::safeRemoveSatisfied(vec<CRef>& cs, unsigned valid_mark)
@@ -1878,9 +1580,9 @@ bool Solver::simplify()
     removeSatisfied(learnts_core); // Should clean core first.
     safeRemoveSatisfied(learnts_tier2, TIER2);
     safeRemoveSatisfied(learnts_local, LOCAL);
-    if (remove_satisfied) {       // Can be turned off.
+    if (remove_satisfied) {        // Can be turned off.
         removeSatisfied(clauses);
-        removeSatisfied(extDefs);
+        ser->removeSatisfied();
     }
     checkGarbage();
     rebuildOrderHeap();
@@ -1911,7 +1613,6 @@ bool Solver::collectFirstUIP(CRef confl){
             //    varBumpActivity(v);
         }
     }
-
     int limit=trail_lim[minLevel-1];
     for(int i=trail.size()-1; i>=limit; i--) {
         Lit p=trail[i]; Var v=var(p);
@@ -2009,33 +1710,6 @@ CRef Solver::propagateLits(vec<Lit>& lits) {
     }
     return CRef_Undef;
 }
-
-// void Solver::checkTrailInvariant() {
-//     // Periodically check candidate invariant - do all literals appear before their respective implied literals?
-//     // i.e., if a implies b by unit propagation under some partial assignment, does a always
-//     // appear on the trail before b?
-
-//     if (conflicts < 43838) return;
-//     bool* tmp_seen = new bool[nVars()];
-//     // Initially, nothing is seen
-//     for (int i = 0; i < nVars(); i++)
-//         tmp_seen[i] = false;
-
-//     // Check reason vars
-//     for (int i = 0; i < trail.size(); i++) {
-//         Var v = var(trail[i]);
-//         tmp_seen[v] = true;
-
-//         if (reason(v) != CRef_Undef) {
-//             Clause& c = ca[reason(v)];
-//             for (int j = 0; j < c.size(); j++) {
-//                 assert(tmp_seen[var(c[j])]);
-//             }
-//         }
-//     }
-//     delete[] tmp_seen;
-// }
-
 /*_________________________________________________________________________________________________
 |
 |  search : (nof_conflicts : int) (params : const SearchParams&)  ->  [lbool]
@@ -2059,7 +1733,7 @@ lbool Solver::search(int& nof_conflicts)
 
     // simplify
     //
-    if (conflicts >= static_cast<unsigned int>(curSimplify * nbconfbeforesimplify)){
+    if (conflicts >= static_cast<uint64_t>(curSimplify * nbconfbeforesimplify)){
         //        printf("c ### simplifyAll on conflict : %lld\n", conflicts);
         //printf("nbClauses: %d, nbLearnts_core: %d, nbLearnts_tier2: %d, nbLearnts_local: %d, nbLearnts: %d\n",
         //	clauses.size(), learnts_core.size(), learnts_tier2.size(), learnts_local.size(),
@@ -2072,17 +1746,15 @@ lbool Solver::search(int& nof_conflicts)
         nbconfbeforesimplify += incSimplify;
     }
 
-    // Maybe introduce extension variables here
 #if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+    // Generate extension variable definitions
     // Only try generating more extension variables if there aren't any buffered already
-    if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
-        prevExtensionConflict = conflicts;
-        generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-    }
+    ser->generateDefinitions();
 #endif
+
 #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
-    // Add extension variables if there are any in the buffer
-    if (extBuffer.size()) addExtVars();
+    // Add extension variables
+    ser->introduceExtVars(ser->extDefs);
 #endif
 
     for (;;){
@@ -2096,15 +1768,9 @@ lbool Solver::search(int& nof_conflicts)
                 if (step_size > min_step_size) step_size -= step_size_dec;
 
             conflicts++; nof_conflicts--;
-            //if (conflicts == 100000 && learnts_core.size() < 100) core_lbd_cut = 5;
-            ConflictData data = FindConflictLevel(confl);
-            if (data.nHighestLevel == 0) return l_False;
-            if (data.bOnlyOneLitFromHighest)
-            {
-				cancelUntil(data.nHighestLevel - 1);
-				continue;
-			}
-			
+            if (conflicts == 100000 && learnts_core.size() < 100) core_lbd_cut = 5;
+            if (decisionLevel() == 0) return l_False;
+
             learnt_clause.clear();
             if(conflicts>50000) DISTANCE=0;
             else DISTANCE=1;
@@ -2112,54 +1778,12 @@ lbool Solver::search(int& nof_conflicts)
                 collectFirstUIP(confl);
 
             analyze(confl, learnt_clause, backtrack_level, lbd);
-            // check chrono backtrack condition
-            if ((confl_to_chrono < 0 || static_cast<unsigned int>(confl_to_chrono) <= conflicts) && chrono > -1 && (decisionLevel() - backtrack_level) >= chrono)
-            {
-				++chrono_backtrack;
-				cancelUntil(data.nHighestLevel -1);
-			}
-			else // default behavior
-			{
-				++non_chrono_backtrack;
-				cancelUntil(backtrack_level);
-			}
+            cancelUntil(backtrack_level);
 
-            // Check if one literal is undef, the rest are false
-            // int num_undef = 0;
-            // for (int i = 0; i < learnt_clause.size(); i++) {
-            //     lbool val = value(learnt_clause[i]);
-            //     assert(val != l_True);
-            //     if (val == l_Undef) num_undef++;
-            // }
-            // assert(num_undef == 1);
-
-            // Do substitution here?
-#if EXTENSION_SUBSTITUTION
             // EXTENDED RESOLUTION - substitute disjunctions with extension variables
-            //    Note: It is not safe to perform extension variable substitution before computing the backtrack level
-            //    because extension variables may be unassigned.
+            // This must be called after backtracking because extension variables might need to be propagated
+            ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
-            // if (conflicts == 43838) {
-            //     printf("Just before substitution: ( ");
-            //     for (int i = 0; i < learnt_clause.size(); i++) {
-            //         printf("%s%d ", sign(learnt_clause[i]) ? "-" : "", var(learnt_clause[i]));
-            //     }
-            //     printf(")\n");
-            // }
-
-            substituteExt(learnt_clause);
-
-            // if (conflicts == 43838) {
-            //     printf("Just after substitution:  ( ");
-            //     for (int i = 0; i < learnt_clause.size(); i++) {
-            //         printf("%s%d ", sign(learnt_clause[i]) ? "-" : "", var(learnt_clause[i]));
-            //     }
-            //     printf(")\n");
-
-            //     printf("val(46772)=%d, val(46773)=%d, val(56065)=%d\n", value(46772), value(46773), value(56065));
-            // }
-
-# endif
             lbd--;
             if (VSIDS){
                 cached = false;
@@ -2171,35 +1795,11 @@ lbool Solver::search(int& nof_conflicts)
                 uncheckedEnqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
-                // int numExtVarsInClause = getNumExtVars(ca[cr]);
-                // double extFrac = numExtVarsInClause / (double) learnt_clause.size();
-                // extfrac_total += extFrac;
-
-                // if (numExtVarsInClause > 0) {
-                //     learnt_extclauses++;
-                // }
-
                 ca[cr].set_lbd(lbd);
-                //duplicate learnts 
-                int  id = 0;
-                if (lbd <= static_cast<int>(max_lbd_dup)){                        
-                    std::vector<uint32_t> tmp;
-                    for (int i = 0; i < learnt_clause.size(); i++)
-                        tmp.push_back(learnt_clause[i].x);
-                    id = is_duplicate(tmp);             
-                    if (id == static_cast<int>(min_number_of_learnts_copies +1)){
-                        duplicates_added_conflicts++;                        
-                    }                    
-                    if (id == static_cast<int>(min_number_of_learnts_copies)){
-                        duplicates_added_tier2++;
-                    }                                        
-                }
-                //duplicate learnts
-
-                if ((lbd <= core_lbd_cut) || (id == static_cast<int>(min_number_of_learnts_copies+1))){
+                if (lbd <= core_lbd_cut){
                     learnts_core.push(cr);
                     ca[cr].mark(CORE);
-                }else if ((lbd <= 6)||(id == static_cast<int>(min_number_of_learnts_copies))){
+                }else if (lbd <= 6){
                     learnts_tier2.push(cr);
                     ca[cr].mark(TIER2);
                     ca[cr].touched() = conflicts;
@@ -2207,19 +1807,7 @@ lbool Solver::search(int& nof_conflicts)
                     learnts_local.push(cr);
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
-
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-                extTimerStart();
-                user_er_filter_incremental(cr);
-                extTimerStop(ext_sel_overhead);
-#endif
-                // checkTrailInvariant();
-                uncheckedEnqueue(learnt_clause[0], backtrack_level, cr);
-                // checkTrailInvariant();
-#ifdef PRINT_OUT
-                std::cout << "new " << ca[cr] << "\n";
-                std::cout << "ci " << learnt_clause[0] << " l " << backtrack_level << "\n";
-#endif                
+                uncheckedEnqueue(learnt_clause[0], cr);
             }
             if (drup_file){
 #ifdef BIN_DRUP
@@ -2230,20 +1818,6 @@ lbool Solver::search(int& nof_conflicts)
                 fprintf(drup_file, "0\n");
 #endif
             }
-
-#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
-                // Try generating an extension variable based on the last learnt clauses
-                generateExtVars(user_er_select, user_er_add, ext_window, ext_max_intro);
-#endif
-#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
-                // Add extension variables if there are any in the buffer
-                if (extBuffer.size()) {
-                    int bt_level = addExtVars();
-                    if (bt_level > 0) {
-                        cancelUntil(bt_level - 1);
-                    }
-                }
-#endif
 
             if (VSIDS) varDecayActivity();
             claDecayActivity();
@@ -2285,6 +1859,7 @@ lbool Solver::search(int& nof_conflicts)
                 next_T2_reduce = conflicts + 10000;
                 reduceDB_Tier2(); }
             if (conflicts >= next_L_reduce){
+                ser->deleteExtVars(ser->user_extDelPredicate);
                 next_L_reduce = conflicts + 15000;
                 reduceDB(); }
 
@@ -2312,18 +1887,14 @@ lbool Solver::search(int& nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
-                if (isExtVar(var(next))) {
-                    branchOnExt++;
-                    // printf("d %s%d\n", sign(next) ? "-" : "", var(next));
-                }
+
+                if (ser->isExtVar(var(next)))
+                    ser->branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
             newDecisionLevel();
-            uncheckedEnqueue(next, decisionLevel());
-#ifdef PRINT_OUT            
-            std::cout << "d " << next << " l " << decisionLevel() << "\n";
-#endif            
+            uncheckedEnqueue(next);
         }
     }
 }
@@ -2374,28 +1945,6 @@ static double luby(double y, int x){
 static bool switch_mode = false;
 //static void SIGALRM_switch(int signum) { switch_mode = true; }
 
-uint32_t Solver::reduceduplicates(){
-    uint32_t removed_duplicates = 0;
-    std::vector<std::vector<uint64_t>> tmp;
-    //std::map<int32_t,std::map<uint32_t,std::unordered_map<uint64_t,uint32_t>>>  ht;
-    for (auto & outer_mp: ht){//variables
-        for (auto &inner_mp:outer_mp.second){//sizes
-            for (auto &in_in_mp: inner_mp.second){
-                if (in_in_mp.second >= 2){
-                //min_number_of_learnts_copies
-                    tmp.push_back({static_cast<uint64_t>(outer_mp.first),static_cast<uint64_t>(inner_mp.first),in_in_mp.first,static_cast<uint64_t>(in_in_mp.second)});
-                }
-            }                    
-         }
-    }          
-    removed_duplicates = dupl_db_size-tmp.size();  
-    ht.clear();
-    for (unsigned int i=0;i<tmp.size();i++){
-        ht[tmp[i][0]][tmp[i][1]][tmp[i][2]]=tmp[i][3];
-    }
-    return removed_duplicates;
-}
-
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
@@ -2423,37 +1972,16 @@ lbool Solver::solve_()
     add_tmp.clear();
 
     VSIDS = true;
-    originalNumVars = nVars();
+    ser->originalNumVars = nVars();
     int init = 10000;
     while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
     VSIDS = false;
 
-    duplicates_added_conflicts = 0;
-    duplicates_added_minimization=0;
-    duplicates_added_tier2 =0;    
-
-    dupl_db_size=0;
-    size_t dupl_db_size_limit = dupl_db_init_size;
-
     // Search:
     int curr_restarts = 0;
     uint64_t curr_props = 0;
-    uint32_t removed_duplicates =0;
     while (status == l_Undef && withinBudget()){
-        if (dupl_db_size >= dupl_db_size_limit){    
-            printf("c Duplicate learnts added (Minimization) %lu\n",duplicates_added_minimization);    
-            printf("c Duplicate learnts added (conflicts) %lu\n",duplicates_added_conflicts);    
-            printf("c Duplicate learnts added (tier2) %lu\n",duplicates_added_tier2);    
-            printf("c Duptime: %li\n",duptime.count());
-            printf("c Number of conflicts: %lu\n",conflicts);
-            printf("c Core size: %i\n",learnts_core.size());
-            
-            removed_duplicates = reduceduplicates();
-            dupl_db_size_limit*=1.1;
-            dupl_db_size -= removed_duplicates;
-            printf("c removed duplicates %i\n",removed_duplicates);
-        }   
         if (propagations - curr_props >  VSIDS_props_limit){
             curr_props = propagations;
             switch_mode = true;
@@ -2476,7 +2004,6 @@ lbool Solver::solve_()
             else{
                printf("c Switched to LRB.\n");
             }
-            //            reduceduplicates();            
             fflush(stdout);
             picked.clear();
             conflicted.clear();
@@ -2484,6 +2011,15 @@ lbool Solver::solve_()
 #ifdef ANTI_EXPLORATION
             canceled.clear();
 #endif
+            // Instead of clearing, set vectors to 0
+            for (int i = 0; i < nVars(); i++) {
+                picked.push(0);
+                conflicted.push(0);
+                almost_conflicted.push(0);
+    #ifdef ANTI_EXPLORATION
+                canceled.push(0);
+    #endif
+            }
         }
     }
 
@@ -2622,18 +2158,9 @@ void Solver::relocAll(ClauseAllocator& to)
         ca.reloc(learnts_tier2[i], to);
     for (int i = 0; i < learnts_local.size(); i++)
         ca.reloc(learnts_local[i], to);
-    for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
-        std::vector<CRef>& cs = it->second;
-        unsigned int i, j;
-        for (i = j = 0; i < cs.size(); i++) {
-            // Reloc following example of clauses
-            if (ca[cs[i]].mark() != 1){
-                ca.reloc(cs[i], to);
-                cs[j++] = cs[i]; }
-        }
-        cs.erase(cs.begin() + j, cs.end());
-    }
-    user_er_reloc(to);
+
+    // All extension variable definition clauses
+    ser->relocAll(to);
 
     // All original:
     //
