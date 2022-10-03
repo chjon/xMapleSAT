@@ -48,19 +48,23 @@ namespace Minisat {
     static IntOption    opt_ext_num        (_ext, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
     static DoubleOption opt_ext_prio       (_ext, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
     static BoolOption   opt_ext_sign       (_ext, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     static IntOption    opt_ext_min_width  (_ext, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_max_width  (_ext, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
     static IntOption    opt_ext_sub_min_width  (_ext, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
     static IntOption    opt_ext_sub_max_width  (_ext, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
-    #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+#endif
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     static IntOption    opt_ext_min_lbd    (_ext, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_max_lbd    (_ext, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
-    #endif
-    #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
-    #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
-    #endif
+#endif
 
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
@@ -147,6 +151,7 @@ namespace Minisat {
     void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate) {
         extTimerStart();
 
+        // Iterate through all candidate clauses and add the ones that satisfy the predicate
         for (int i = 0; i < candidates.size(); i++) {
             CRef candidate = candidates[i];
             if (filterPredicate(candidate))
@@ -159,6 +164,7 @@ namespace Minisat {
     void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate) {
         extTimerStart();
         
+        // Add the clause if it satisfies the predicate
         if (filterPredicate(candidate))
             m_filteredClauses.push_back(candidate);
         
@@ -166,6 +172,7 @@ namespace Minisat {
     }
 
     void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
+        // TODO: use filterIncremental when learning clauses instead of using filterBatch here
         filterBatch(solver->learnts_core , user_extFilPredicate);
         filterBatch(solver->learnts_tier2, user_extFilPredicate);
 
@@ -296,7 +303,7 @@ namespace Minisat {
             CRef cr = solver->ca.alloc(ps, false);
             db.push_back(cr);
             solver->attachClause(cr);
-        // }
+        }
 
         //////////////////////////////////////////////////////////////////////////////////
 
@@ -328,19 +335,23 @@ namespace Minisat {
         //     db.push_back(cr);
         //     solver->attachClause(cr);
 
-            // Check whether the clause needs to be propagated
-            if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
-                solver->uncheckedEnqueue(ps[0], cr);
-            }
+        //    // Check whether the clause needs to be propagated
+        //    if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
+        //        solver->uncheckedEnqueue(ps[0], cr);
+        //    }
         }
     }
 
     CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
         // Find definition clause which asserts ~x
         int max_lvl;
+
+        // Iterate through definition clauses
         for (CRef cr : cs) {
             Clause& c = solver->ca[cr];
             i_undef = i_max = max_lvl = -1;
+
+            // Check whether the clause is asserting
             for (int k = 0; k < c.size(); k++) {
                 if (value(c[k]) == l_Undef) {
                     if (c[k] != ~x) goto NEXT_CLAUSE;
@@ -455,7 +466,7 @@ namespace Minisat {
 
         // Delete clauses containing the extension variable
         // 1. TODO: Delete learnt clauses containing the extension variable
-        //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay 
+        //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay
 
         // 2. Delete extension variable definition clauses
         for (Lit x : varsToDelete) {
@@ -495,8 +506,11 @@ namespace Minisat {
     }
 
     void SolverER::removeSatisfied() {
+        // Iterate through every extension variable
         for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
             std::vector<CRef>& cs = it->second;
+
+            // Iterate through the extension definition clauses
             unsigned int i, j;
             for (i = j = 0; i < cs.size(); i++) {
                 Clause& c = solver->ca[cs[i]];
@@ -507,6 +521,8 @@ namespace Minisat {
                     cs[j++] = cs[i];
                 }
             }
+
+            // Shrink the vector if clauses were removed
             cs.erase(cs.begin() + j, cs.end());
         }
 

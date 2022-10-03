@@ -40,7 +40,7 @@ SCENARIO("Introducing extension variables", "[SolverER]") {
         WHEN("introducing a new definition") {
             Lit x = mkLit(10), a = mkLit(0), b = mkLit(1);
             additional.push_back(std::vector<Lit>({x, a, b, mkLit(2)}));
-            ser.addToExtDefBuffer(ExtDef{ x, a, b, additional });
+            ser.m_extVarDefBuffer.push_back(ExtDef{ x, a, b, additional });
             ser.introduceExtVars(db);
 
             THEN("clauses should be added to the database and the buffer should be cleared") {
@@ -63,7 +63,7 @@ SCENARIO("Introducing extension variables", "[SolverER]") {
                 REQUIRE(ser.isCurrentExtVar(var(x)));
 
                 // Check whether the buffer was cleared
-                REQUIRE(ser.extDefBufferSize() == 0);
+                REQUIRE(ser.m_extVarDefBuffer.size() == 0);
             }
         }
     }
@@ -176,10 +176,10 @@ SCENARIO("Choosing extension variables to delete", "[SolverER]") {
         ser.originalNumVars = 10;
         for (int i = 0; i < ser.originalNumVars; i++) { s.newVar(); }
 
-        ser.addToExtDefBuffer(ExtDef{ mkLit(10), mkLit(1), mkLit(2), additional });
-        ser.addToExtDefBuffer(ExtDef{ mkLit(11), mkLit(3), mkLit(4), additional });
-        ser.addToExtDefBuffer(ExtDef{ mkLit(12), mkLit(5), mkLit(6), additional });
-        ser.addToExtDefBuffer(ExtDef{ mkLit(13), mkLit(1), mkLit(4), additional });
+        ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(10), mkLit(1), mkLit(2), additional });
+        ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(11), mkLit(3), mkLit(4), additional });
+        ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(12), mkLit(5), mkLit(6), additional });
+        ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(13), mkLit(1), mkLit(4), additional });
         ser.introduceExtVars(ser.extDefs);
 
         WHEN("there are no restrictions") {
@@ -196,8 +196,8 @@ SCENARIO("Choosing extension variables to delete", "[SolverER]") {
         WHEN("some extension variables are basis literals") {
             DeletionPredicate deletionPredicate = [](Var v){ return true; };
 
-            ser.addToExtDefBuffer(ExtDef{ mkLit(14), mkLit( 3), mkLit(10), additional });
-            ser.addToExtDefBuffer(ExtDef{ mkLit(15), mkLit(11), mkLit(12), additional });
+            ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(14), mkLit( 3), mkLit(10), additional });
+            ser.m_extVarDefBuffer.push_back(ExtDef{ mkLit(15), mkLit(11), mkLit(12), additional });
             ser.introduceExtVars(ser.extDefs);
             ser.getExtVarsToDelete(varsToDelete, deletionPredicate);
 
