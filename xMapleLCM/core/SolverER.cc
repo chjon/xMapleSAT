@@ -182,9 +182,11 @@ namespace Minisat {
     }
 
     void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
-        // TODO: use filterIncremental when learning clauses instead of using filterBatch here
-        filterBatch(solver->learnts_core , user_extFilPredicate);
-        filterBatch(solver->learnts_tier2, user_extFilPredicate);
+        // For static metrics, it is prefereable to use filterIncremental when learning clauses
+        // instead of using filterBatch here.
+        // filterBatch(solver->learnts_core , user_extFilPredicate);
+        // filterBatch(solver->learnts_tier2, user_extFilPredicate);
+        // filterBatch(solver->learnts_local, user_extFilPredicate);
 
         extTimerStart();
 

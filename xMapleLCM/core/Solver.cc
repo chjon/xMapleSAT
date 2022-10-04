@@ -1808,6 +1808,7 @@ lbool Solver::search(int& nof_conflicts)
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
                 uncheckedEnqueue(learnt_clause[0], cr);
+                ser->filterIncremental(cr, ser->user_extFilPredicate);
             }
             if (drup_file){
 #ifdef BIN_DRUP

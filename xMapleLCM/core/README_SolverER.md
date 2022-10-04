@@ -20,8 +20,8 @@
 - changes to `Solver::search`:
     - call `ser->generateDefinitions();`, then `ser->introduceExtVars(ser->extDefs);` before the main search loop
     - call `ser->substitute(learnt_clause, ser->user_extSubPredicate);` after backtracking and before adding the clause to the learnt clause database
-    - call `ser->deleteExtVars(ser->user_extDelPredicate);` immediately before learnt clause deletion (`Solver::reduceDB`)
-
+    - call `ser->deleteExtVarsIfNecessary();` before learnt clause deletion (`Solver::reduceDB`)
+    - call `ser->filterIncremental(cr, ser->user_extFilPredicate);` after learning a clause
     - statistics: after picking a branch literal, add `if (ser->isExtVar(var(next))) ser->branchOnExt++;`
 
 - changes to `Solver::solve_`:
