@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <algorithm>
 #include <iterator>
+#include <mtl/Sort.h>
 #include <core/SolverER.h>
 #include <core/SolverERTypes.h>
 
@@ -301,20 +302,30 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
     return true;
 }
 
+void SolverER::user_extDelPredicateSetup_none() {}
+void SolverER::user_extDelPredicateSetup_activity() {
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    m_threshold_activity = ext_act_threshold;
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    // Copy list of activities
+    vec<double> activity;
+    (solver->VSIDS ? solver->activity_VSIDS : solver->activity_CHB).copyTo(activity);
+    
+    // Compute threshold activity
+    sort(activity);
+    m_threshold_activity = activity[(int)(activity.size() * ext_act_threshold)];
+#endif
+}
+
 bool SolverER::user_extDelPredicate_none(Var x) { return false; }
 bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
-    // return solver->activity_CHB[x] < ext_act_threshold;
-    return solver->activity_VSIDS[x] < ext_act_threshold;
-    #if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-        if (solver->VSIDS) return solver->activity_VSIDS[x] < ext_act_threshold;
-        else return solver->activity_CHB[x] < ext_act_threshold;
-    #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-        if (solver->VSIDS) return solver->activity_VSIDS[x] < (solver->activity_VSIDS[order_heap_VSIDS[0]] * ext_act_threshold);
-        else return solver->activity_CHB[x] < (solver->activity_CHB[order_heap_CHB[0]] * ext_act_threshold);
-    #else
-        return false;
-    #endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    const double activity = solver->VSIDS ? solver->activity_VSIDS[x] : solver->activity_CHB[x];
+    return activity < m_threshold_activity;
+#else
+    return false;
+#endif
 }
 
 }

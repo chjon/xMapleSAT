@@ -194,9 +194,15 @@ public:
     /**
      * @brief Remove extension variables from the solver
      * 
+     * @param setup a method to set up the data structures for @code{deletionPredicate}
      * @param deletionPredicate a method for determining whether an extension variable should be removed.
      */
-    void deleteExtVars(DeletionPredicate& deletionPredicate);
+    void deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& deletionPredicate);
+
+    /**
+     * @brief Checks whether to delete variables and then calls @code{deleteExtVars}.
+     */
+    inline void deleteExtVarsIfNecessary();
     
     ///////////////////////
     // Solver.h helpers //
@@ -249,17 +255,20 @@ public:
     bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
 
     // Never delete extension variables
+    void user_extDelPredicateSetup_none();
     bool user_extDelPredicate_none(Var x);
     // Always delete extension variables
     bool user_extDelPredicate_all(Var x);
     // Only delete extension variables with low activities
+    void user_extDelPredicateSetup_activity();
     bool user_extDelPredicate_activity(Var x);
 
-    FilterPredicate       user_extFilPredicate;
-    SelectionHeuristic    user_extSelHeuristic;
-    ExtDefHeuristic       user_extDefHeuristic;
-    SubstitutionPredicate user_extSubPredicate;
-    DeletionPredicate     user_extDelPredicate;
+    FilterPredicate        user_extFilPredicate;
+    SelectionHeuristic     user_extSelHeuristic;
+    ExtDefHeuristic        user_extDefHeuristic;
+    SubstitutionPredicate  user_extSubPredicate;
+    DeletionPredicateSetup user_extDelPredicateSetup;
+    DeletionPredicate      user_extDelPredicate;
 
     ////////////////
     // Statistics //
@@ -271,7 +280,8 @@ public:
     double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
 protected:
-    long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
+    uint64_t prevExtensionConflict; // Stores the last time extension variables were added
+    uint64_t prevDelExtVarConflict; // Stores the last time extension variables were deleted
 
     /////////////////////////////
     // Command-line parameters //
@@ -279,7 +289,7 @@ protected:
     int    ext_freq;          // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
     int    ext_window;        // Number of clauses to consider when introducing extension variables.                       (default 100)
     int    ext_max_intro;     // Maximum number of extension variables to introduce at once.                               (default 1)
-    double ext_prio_act;      // The fraction of maximum activity that should be given to new variables                    (default 0.5)
+    double ext_prio_act;      // The fraction of maximum activity that should be given to new variables                    (default 1.0)
     bool   ext_pref_sign;     // Preferred sign for new variables                                                          (default true (negated))
     int    ext_min_width;     // Minimum clause width to consider when selecting clauses
     int    ext_max_width;     // Maximum clause width to consider when selecting clauses
@@ -289,6 +299,7 @@ protected:
     int    ext_min_lbd;       // Minimum LBD of clauses to substitute into
     int    ext_max_lbd;       // Maximum LBD of clauses to substitute into
     double ext_act_threshold; // Activity threshold for deleting clauses
+    int    ext_del_freq;      // Number of conflicts to wait before trying to delete extension variables
 
     // Measuring extended resolution overhead
     mutable struct rusage ext_timer_start, ext_timer_end;
@@ -344,6 +355,15 @@ protected:
     /////////////////////////////////
 
     /**
+     * @brief Delete clauses from a learnt clause database if they contain variables that are being deleted
+     * 
+     * @param db the learnt clause database to delete from
+     * @param db_mark the clause mark associated with the database
+     * @param varsToDelete the set of variables to delete (represented as a set of positive literals)
+     */
+    void deleteExtVarsFrom(vec<CRef>& db, unsigned int db_mark, LitSet& varsToDelete);
+
+    /**
      * @brief Mark that a clause has been deleted -- must be used in tandem with @code{remove_flush}
      * 
      * @param cr the CRef of the deleted clause
@@ -364,6 +384,11 @@ protected:
 #endif
 
 private:
+    /////////////////////////////////////////////////
+    // DATA STRUCTURES FOR USER-DEFINED HEURISTICS //
+    /////////////////////////////////////////////////
+    double m_threshold_activity;
+
     /////////////////////////////////////////
     // HELPERS FOR USER-DEFINED HEURISTICS //
     /////////////////////////////////////////
@@ -466,6 +491,13 @@ inline void SolverER::generateDefinitions() {
         prevExtensionConflict = solver->conflicts;
         selectClauses(user_extSelHeuristic);
         defineExtVars(user_extDefHeuristic);
+    }
+}
+
+inline void SolverER::deleteExtVarsIfNecessary() {
+    if (solver->conflicts - prevDelExtVarConflict >= static_cast<unsigned int>(ext_del_freq)){
+        prevDelExtVarConflict = solver->conflicts;
+        deleteExtVars(user_extDelPredicateSetup, user_extDelPredicate);
     }
 }
 
