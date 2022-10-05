@@ -307,13 +307,15 @@ void SolverER::user_extDelPredicateSetup_activity() {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     m_threshold_activity = ext_act_threshold;
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-    // Copy list of activities
-    vec<double> activity;
-    (solver->VSIDS ? solver->activity_VSIDS : solver->activity_CHB).copyTo(activity);
+    // Copy activities for current variables
+    vec<double>& activity = (solver->VSIDS ? solver->activity_VSIDS : solver->activity_CHB);
+    vec<double> currentActivity(originalNumVars);
+    for (int i = 0; i < originalNumVars; i++) currentActivity.push(activity[i]);
+    for (auto it = extDefs.begin(); it != extDefs.end(); it++) currentActivity.push(activity[it->first]);
     
     // Compute threshold activity
-    sort(activity);
-    m_threshold_activity = activity[(int)(activity.size() * ext_act_threshold)];
+    sort(currentActivity);
+    m_threshold_activity = currentActivity[(int)((currentActivity.size() - 1) * ext_act_threshold)];
 #endif
 }
 
