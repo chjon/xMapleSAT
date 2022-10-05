@@ -215,6 +215,8 @@ namespace Minisat {
         // Add extension variables
         // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
         // for the provided literal pairs
+        // TODO: can we reuse the memory allocated for deleted variables? this should be safe as long as every
+        // occurrence of the old variable has been removed
         for (auto i = m_extVarDefBuffer.begin(); i != m_extVarDefBuffer.end(); i++) solver->newVar(ext_pref_sign);
 
         // Add extension definition clauses
