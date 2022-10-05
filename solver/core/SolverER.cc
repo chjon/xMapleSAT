@@ -18,9 +18,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include <stdio.h>
+#include <mtl/Alg.h>
+#include <mtl/Sort.h>
 #include "core/Solver.h"
 #include "core/SolverER.h"
-#include "mtl/Sort.h"
 
 // Template specializations for hashing
 namespace std { namespace tr1 {
@@ -45,21 +46,26 @@ namespace Minisat {
     static IntOption    opt_ext_freq       (_ext, "ext-freq","Number of conflicts to wait before trying to introduce an extension variable.\n", 2000, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_wndw       (_ext, "ext-wndw","Number of clauses to consider when introducing extension variables.\n", 100, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_num        (_ext, "ext-num", "Maximum number of extension variables to introduce at once\n", 1, IntRange(0, INT32_MAX));
-    static DoubleOption opt_ext_prio       (_ext, "ext-prio","The fraction of maximum activity that should be given to new variables",  0.5, DoubleRange(0, false, HUGE_VAL, false));
+    static DoubleOption opt_ext_prio       (_ext, "ext-prio","The fraction of maximum activity that should be given to new variables",  1.0, DoubleRange(0, false, HUGE_VAL, false));
     static BoolOption   opt_ext_sign       (_ext, "ext-sign","The default polarity of new extension variables (true = negative, false = positive)\n", true);
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
     static IntOption    opt_ext_min_width  (_ext, "ext-min-width", "Minimum clause width to select\n", 3, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_max_width  (_ext, "ext-max-width", "Maximum clause width to select\n", 100, IntRange(0, INT32_MAX));
+#endif
+#if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
     static IntOption    opt_ext_sub_min_width  (_ext, "ext-sub-min-width", "Minimum width of clauses to substitute into\n", 3, IntRange(3, INT32_MAX));
     static IntOption    opt_ext_sub_max_width  (_ext, "ext-sub-max-width", "Maximum width of clauses to substitute into\n", INT32_MAX, IntRange(3, INT32_MAX));
-    #if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
+#endif
+#if (ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD) || ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
     static IntOption    opt_ext_min_lbd    (_ext, "ext-min-lbd", "Minimum LBD of clauses to substitute into\n", 0, IntRange(0, INT32_MAX));
     static IntOption    opt_ext_max_lbd    (_ext, "ext-max-lbd", "Maximum LBD of clauses to substitute into\n", 5, IntRange(0, INT32_MAX));
-    #endif
-    #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+#endif
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 50, DoubleRange(1, false, HUGE_VAL, false));
-    #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     static DoubleOption opt_ext_act_thresh(_ext, "ext-act-thresh", "Activity threshold for extension variable deletion\n", 0.5, DoubleRange(0, false, 1, false));
-    #endif
+#endif
+    static IntOption    opt_ext_del_freq(_ext, "ext-del-freq", "Number of conflicts to wait before trying to delete extension variables\n", 10000, IntRange(0, INT32_MAX));
 
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
@@ -71,6 +77,7 @@ namespace Minisat {
         , branchOnExt        (0)
 
         , prevExtensionConflict(0)
+        , prevDelExtVarConflict(0)
 
         // Command-line parameters
         , ext_freq         (opt_ext_freq)
@@ -95,6 +102,7 @@ namespace Minisat {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
         , ext_act_threshold(opt_ext_act_thresh)
 #endif
+        , ext_del_freq(opt_ext_del_freq)
         , solver(s)
     {
         using namespace std::placeholders;
@@ -123,12 +131,19 @@ namespace Minisat {
         // Bind clause substitution predicate
         user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
 
+        // Bind variable deletion predicate setup function
+        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_NONE || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+            user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_none, this);
+        #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+            user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_activity, this);
+        #endif
+
         // Bind variable deletion predicate
-        #if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_NONE
+        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_NONE
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_none, this, _1);
-        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+        #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
-        #elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+        #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
         #endif
 
@@ -146,6 +161,7 @@ namespace Minisat {
     void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate) {
         extTimerStart();
 
+        // Iterate through all candidate clauses and add the ones that satisfy the predicate
         for (int i = 0; i < candidates.size(); i++) {
             CRef candidate = candidates[i];
             if (filterPredicate(candidate))
@@ -158,6 +174,7 @@ namespace Minisat {
     void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate) {
         extTimerStart();
         
+        // Add the clause if it satisfies the predicate
         if (filterPredicate(candidate))
             m_filteredClauses.push_back(candidate);
         
@@ -165,7 +182,9 @@ namespace Minisat {
     }
 
     void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
-        filterBatch(solver->learnts, user_extFilPredicate);
+        // For static metrics, it is preferable to use filterIncremental when learning clauses
+        // instead of using filterBatch here.
+        // filterBatch(solver->learnts, user_extFilPredicate);
 
         extTimerStart();
 
@@ -194,6 +213,8 @@ namespace Minisat {
         // Add extension variables
         // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
         // for the provided literal pairs
+        // TODO: can we reuse the memory allocated for deleted variables? this should be safe as long as every
+        // occurrence of the old variable has been removed
         for (auto i = m_extVarDefBuffer.begin(); i != m_extVarDefBuffer.end(); i++) solver->newVar(ext_pref_sign);
 
         // Add extension definition clauses
@@ -219,8 +240,8 @@ namespace Minisat {
             ext_def_db.insert(std::make_pair(var(x), defs));
         }
 
-        // TODO: Prioritize new variables
-        // er_prioritize(m_extVarDefBuffer);
+        // Prioritize new variables
+        prioritize(m_extVarDefBuffer);
 
         // Update stats and clean up
         total_ext_vars += m_extVarDefBuffer.size();
@@ -271,7 +292,7 @@ namespace Minisat {
             CRef cr = solver->ca.alloc(ps, false);
             db.push_back(cr);
             solver->attachClause(cr);
-        // }
+        }
 
         //////////////////////////////////////////////////////////////////////////////////
 
@@ -303,19 +324,23 @@ namespace Minisat {
         //     db.push_back(cr);
         //     solver->attachClause(cr);
 
-            // Check whether the clause needs to be propagated
-            if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
-                solver->uncheckedEnqueue(ps[0], cr);
-            }
-        }
+        //    // Check whether the clause needs to be propagated
+        //    if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
+        //        solver->uncheckedEnqueue(ps[0], cr);
+        //    }
+        // }
     }
 
     CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
         // Find definition clause which asserts ~x
         int max_lvl;
+
+        // Iterate through definition clauses
         for (CRef cr : cs) {
             Clause& c = solver->ca[cr];
             i_undef = i_max = max_lvl = -1;
+
+            // Check whether the clause is asserting
             for (int k = 0; k < c.size(); k++) {
                 if (value(c[k]) == l_Undef) {
                     if (c[k] != ~x) goto NEXT_CLAUSE;
@@ -405,34 +430,61 @@ namespace Minisat {
             if (!deletionPredicate(x)) continue;
 
             // Check whether any of the extension definition clauses are not removable
-            bool canDeleteDef = true;
             for (CRef cr : it->second) {
                 Clause& c = solver->ca[cr];
-                if (solver->locked(c)) {
-                    canDeleteDef = false;
-                    break;
-                }
+                if (solver->locked(c))
+                    goto NEXT_VAR;
             }
 
             // Queue extension variable to be deleted
-            if (canDeleteDef) {
-                varsToDelete.insert(mkLit(x));
-            }
+            varsToDelete.insert(mkLit(x));
+
+            NEXT_VAR:;
         }
     }
 
-    void SolverER::deleteExtVars(DeletionPredicate& deletionPredicate) {
+    static inline bool containsVarToDelete(Clause& c, LitSet& varsToDelete) {
+        for (int i = 0; i < c.size(); i++)
+            if (varsToDelete.find(mkLit(var(c[i]))) != varsToDelete.end())
+                return true;
+
+        return false;
+    }
+
+    void SolverER::deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete) {
+        int i, j;
+        for (i = j = 0; i < db.size(); i++) {
+            CRef cr = db[i];
+            Clause& c = solver->ca[cr];
+            if (!solver->locked(c) && containsVarToDelete(c, varsToDelete)) {
+                remove_incremental(cr);
+                solver->removeClause(cr);
+            } else {
+                db[j++] = db[i];
+            }
+        }
+        db.shrink(i - j);
+    }
+
+    void SolverER::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& deletionPredicate) {
         extTimerStart();
 
         // Get extension variables to delete
-        std::tr1::unordered_set<Lit> varsToDelete;
+        LitSet varsToDelete;
+        setup();
         getExtVarsToDelete(varsToDelete, deletionPredicate);
 
-        // Delete clauses containing the extension variable
-        // 1. TODO: Delete learnt clauses containing the extension variable
-        //    NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay 
+        extTimerStop(ext_delV_overhead);
 
-        // 2. Delete extension variable definition clauses
+        // Delete learnt clauses containing the extension variable
+        // NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay
+        extTimerStart();
+        deleteExtVarsFrom(solver->learnts, varsToDelete); // Delete from learnts
+        extTimerStop(ext_delC_overhead);
+
+        extTimerStart();
+
+        // Delete extension variable definition clauses
         for (Lit x : varsToDelete) {
             for (CRef cr : extDefs.find(var(x))->second) {
                 remove_incremental(cr);
@@ -441,7 +493,7 @@ namespace Minisat {
             extDefs.erase(var(x));
         }
 
-        // 3. Remove extension variable from definition map to prevent future clause substitution
+        // Remove extension variable from definition map to prevent future clause substitution
         xdm.erase(varsToDelete);
         remove_flush();
 
@@ -470,8 +522,11 @@ namespace Minisat {
     }
 
     void SolverER::removeSatisfied() {
+        // Iterate through every extension variable
         for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
             std::vector<CRef>& cs = it->second;
+
+            // Iterate through the extension definition clauses
             unsigned int i, j;
             for (i = j = 0; i < cs.size(); i++) {
                 Clause& c = solver->ca[cs[i]];
@@ -482,6 +537,8 @@ namespace Minisat {
                     cs[j++] = cs[i];
                 }
             }
+
+            // Shrink the vector if clauses were removed
             cs.erase(cs.begin() + j, cs.end());
         }
 

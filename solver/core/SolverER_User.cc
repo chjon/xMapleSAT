@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <algorithm>
 #include <iterator>
+#include <mtl/Sort.h>
 #include <core/SolverER.h>
 #include <core/SolverERTypes.h>
 
@@ -301,13 +302,29 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
     return true;
 }
 
+void SolverER::user_extDelPredicateSetup_none() {}
+void SolverER::user_extDelPredicateSetup_activity() {
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
+    m_threshold_activity = ext_act_threshold;
+#elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    // Copy activities for current variables
+    vec<double>& activity = solver->activity;
+    vec<double> currentActivity(originalNumVars);
+    for (int i = 0; i < originalNumVars; i++) currentActivity.push(activity[i]);
+    for (auto it = extDefs.begin(); it != extDefs.end(); it++) currentActivity.push(activity[it->first]);
+    
+    // Compute threshold activity
+    sort(currentActivity);
+    m_threshold_activity = currentActivity[(int)((currentActivity.size() - 1) * ext_act_threshold)];
+#endif
+}
+
 bool SolverER::user_extDelPredicate_none(Var x) { return false; }
 bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
-#if ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
-    return solver->activity[x] < ext_act_threshold;
-#elif ER_USER_DEL_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-    return solver->activity[x] < (solver->activity[order_heap[0]] * ext_act_threshold);
+#if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
+    const double activity = solver->activity[x];
+    return activity < m_threshold_activity;
 #else
     return false;
 #endif

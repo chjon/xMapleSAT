@@ -821,7 +821,6 @@ lbool Solver::search(int nof_conflicts)
 
             // EXTENDED RESOLUTION - substitute disjunctions with extension variables
             // This must be called after backtracking because extension variables might need to be propagated
-            // TODO: Investigate whether this ever produces duplicate clauses
             ser->substitute(learnt_clause, ser->user_extSubPredicate);
 
 #if BRANCHING_HEURISTIC == CHB
@@ -841,6 +840,7 @@ lbool Solver::search(int nof_conflicts)
                 claBumpActivity(ca[cr]);
 #endif
                 uncheckedEnqueue(learnt_clause[0], cr);
+                ser->filterIncremental(cr, ser->user_extFilPredicate);
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -876,9 +876,9 @@ lbool Solver::search(int nof_conflicts)
             if (decisionLevel() == 0 && !simplify())
                 return l_False;
 
+            ser->deleteExtVarsIfNecessary();
             if (learnts.size()-nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
-                ser->deleteExtVars(ser->user_extDelPredicate);
                 reduceDB();
 #if RAPID_DELETION
                 max_learnts += 500;

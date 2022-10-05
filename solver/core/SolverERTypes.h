@@ -196,6 +196,11 @@ using SubstitutionPredicate = std::function<bool(vec<Lit>&)>;
 // Extension Variable Deletion
 
 /**
+ * @brief A user-defined function to set up for determining whether to delete a variable
+ */
+using DeletionPredicateSetup = std::function<void()>;
+
+/**
  * @brief A user-defined predicate for determining whether to delete a variable
  * 
  * @param x the candidate variable to delete

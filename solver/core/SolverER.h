@@ -47,27 +47,49 @@ public:
     SolverER(Solver* s);
     ~SolverER();
 
-    inline int   level(Var x) const;
-    inline lbool value(Var x) const;
-    inline lbool value(Lit p) const;
+    /**
+     * @brief The number of variables in the original formula.
+     * @note This value is used to quickly check whether a variable is an extension variable
+     */
+    int originalNumVars;
 
-    int originalNumVars; // The number of variables in the original formula
-                         // This value is used to quickly check whether a variable is an extension variable
-    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs; // List of extension definition clauses.
+    // Map from extension variables to a list of their extension definition clauses.
+    std::tr1::unordered_map<Var, std::vector<CRef> > extDefs;
 
-    // Determine whether a variable is an extension variable
+    /**
+     * @brief Determine whether a variable is an extension variable
+     * 
+     * @param x the variable to check
+     * @return true if the variable is an extension variable, regardless of whether it has been deleted
+     * @return false otherwise
+     */
     inline bool isExtVar(Var x) const;
     
-    // Determine whether a variable is an extension variable in the data structure for variable substitution
+    /**
+     * @brief Determine whether a variable is an extension variable and has not been deleted
+     * 
+     * @param x the variable to check
+     * @return true if the variable is an extension variable and has not been deleted
+     * @return false otherwise
+     */
     inline bool isCurrentExtVar(Var x) const;
 
-    // Determine whether a pair of literals can be used as the basis literals for a new extension variable
+    /**
+     * @brief Determine whether a pair of literals can be used as the basis literals for a new extension variable
+     * 
+     * @param a the first literal
+     * @param b the second literal
+     * @param generatedPairs the set of literal pairs queued to be added to the solver
+     * @return false if the literals refer to the same variable, if the literals have been set at the root level,
+     * or the pair of literals has already been added or queued to be added to the solver
+     * @return true otherwise
+     * 
+     * @note This method is intended to be used by variable definition generation heuristics
+     */
     inline bool isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set<LitPair>& generatedPairs) const;
 
 #ifdef TESTING
     inline void set_value(Var x, lbool v, int l);
-    inline void addToExtDefBuffer(ExtDef extDef);
-    inline unsigned int extDefBufferSize();
 #endif
 
     // Clause Selection
@@ -172,9 +194,15 @@ public:
     /**
      * @brief Remove extension variables from the solver
      * 
+     * @param setup a method to set up the data structures for @code{deletionPredicate}
      * @param deletionPredicate a method for determining whether an extension variable should be removed.
      */
-    void deleteExtVars(DeletionPredicate& deletionPredicate);
+    void deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& deletionPredicate);
+
+    /**
+     * @brief Checks whether to delete variables and then calls @code{deleteExtVars}.
+     */
+    inline void deleteExtVarsIfNecessary();
     
     ///////////////////////
     // Solver.h helpers //
@@ -188,13 +216,29 @@ public:
      */
     void relocAll(ClauseAllocator& to);
 
-    // TODO: verify safety
+    /**
+     * @brief Remove extension definition clauses that have already been satisfied
+     */
     void removeSatisfied();
+
+    /////////////////////////
+    // Convenience methods //
+    /////////////////////////
+    // Call the methods implemented by Solver.h by the same names
+    // Implementation is overridden in unit testing
+
+    inline int   level(Var x) const; // Gets the decision level of a variable
+    inline lbool value(Var x) const; // Gets the truth assignment of a variable
+    inline lbool value(Lit p) const; // Gets the truth assignment of a literal
 
     /////////////////////////////
     // USER-DEFINED HEURISTICS //
     /////////////////////////////
+
+    // Decide whether to consider a clause based on its width
     bool user_extFilPredicate_width(CRef cr);
+
+    // Decide whether to consider a clause based on its LBD
     bool user_extFilPredicate_lbd(CRef cr);
     
     // Select all clauses
@@ -202,23 +246,29 @@ public:
     // Select clauses with highest activities
     void user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
     
+    // Define extension variables by selecting two literals at random
     void user_extDefHeuristic_random       (std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
+    // Define extension variables by selecting the most frequently-appearing pairs of literals
     void user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
     
+    // Decide whether to substitute into a clause based on its width and LBD
     bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
 
     // Never delete extension variables
+    void user_extDelPredicateSetup_none();
     bool user_extDelPredicate_none(Var x);
     // Always delete extension variables
     bool user_extDelPredicate_all(Var x);
     // Only delete extension variables with low activities
+    void user_extDelPredicateSetup_activity();
     bool user_extDelPredicate_activity(Var x);
 
-    FilterPredicate       user_extFilPredicate;
-    SelectionHeuristic    user_extSelHeuristic;
-    ExtDefHeuristic       user_extDefHeuristic;
-    SubstitutionPredicate user_extSubPredicate;
-    DeletionPredicate     user_extDelPredicate;
+    FilterPredicate        user_extFilPredicate;
+    SelectionHeuristic     user_extSelHeuristic;
+    ExtDefHeuristic        user_extDefHeuristic;
+    SubstitutionPredicate  user_extSubPredicate;
+    DeletionPredicateSetup user_extDelPredicateSetup;
+    DeletionPredicate      user_extDelPredicate;
 
     ////////////////
     // Statistics //
@@ -230,31 +280,26 @@ public:
     double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
 protected:
-    long unsigned int prevExtensionConflict; // Stores the last time extension variables were added
+    uint64_t prevExtensionConflict; // Stores the last time extension variables were added
+    uint64_t prevDelExtVarConflict; // Stores the last time extension variables were deleted
 
     /////////////////////////////
     // Command-line parameters //
     /////////////////////////////
-    int       ext_freq;           // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
-    int       ext_window;         // Number of clauses to consider when introducing extension variables.                       (default 100)
-    int       ext_max_intro;      // Maximum number of extension variables to introduce at once.                               (default 1)
-    double    ext_prio_act;       // The fraction of maximum activity that should be given to new variables                    (default 0.5)
-    bool      ext_pref_sign;      // Preferred sign for new variables                                                          (default true (negated))
-    int       ext_min_width;      // Minimum clause width to consider when selecting clauses
-    int       ext_max_width;      // Maximum clause width to consider when selecting clauses
-    int       ext_filter_num;     // Maximum number of clauses after the filter step
-    int       ext_sub_min_width;  // Minimum width of clauses to substitute into
-    int       ext_sub_max_width;  // Maximum width of clauses to substitute into
-    int       ext_min_lbd;        // Minimum LBD of clauses to substitute into
-    int       ext_max_lbd;        // Maximum LBD of clauses to substitute into
-    double    ext_act_threshold;  // Activity threshold for deleting clauses
-
-    // // Update stats
-    // void updateExtFracStat(vec<Lit>& clause) {
-    //     int numExtVarsInClause = getNumExtVars(clause);
-    //     double extFrac = numExtVarsInClause / (double) clause.size();
-    //     extfrac_total += extFrac;
-    // }
+    int    ext_freq;          // Number of conflicts to wait before trying to introduce an extension variable              (default 2000)
+    int    ext_window;        // Number of clauses to consider when introducing extension variables.                       (default 100)
+    int    ext_max_intro;     // Maximum number of extension variables to introduce at once.                               (default 1)
+    double ext_prio_act;      // The fraction of maximum activity that should be given to new variables                    (default 1.0)
+    bool   ext_pref_sign;     // Preferred sign for new variables                                                          (default true (negated))
+    int    ext_min_width;     // Minimum clause width to consider when selecting clauses
+    int    ext_max_width;     // Maximum clause width to consider when selecting clauses
+    int    ext_filter_num;    // Maximum number of clauses after the filter step
+    int    ext_sub_min_width; // Minimum width of clauses to substitute into
+    int    ext_sub_max_width; // Maximum width of clauses to substitute into
+    int    ext_min_lbd;       // Minimum LBD of clauses to substitute into
+    int    ext_max_lbd;       // Maximum LBD of clauses to substitute into
+    double ext_act_threshold; // Activity threshold for deleting clauses
+    int    ext_del_freq;      // Number of conflicts to wait before trying to delete extension variables
 
     // Measuring extended resolution overhead
     mutable struct rusage ext_timer_start, ext_timer_end;
@@ -308,7 +353,29 @@ protected:
     /////////////////////////////////
     // HELPERS FOR CLAUSE DELETION //
     /////////////////////////////////
+
+    /**
+     * @brief Delete clauses from a learnt clause database if they contain variables that are being deleted
+     * 
+     * @param db the learnt clause database to delete from
+     * @param varsToDelete the set of variables to delete (represented as a set of positive literals)
+     */
+    void deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete);
+
+    /**
+     * @brief Mark that a clause has been deleted -- must be used in tandem with @code{remove_flush}
+     * 
+     * @param cr the CRef of the deleted clause
+     *
+     * @note adds the CRef to @code{m_deletedClauses}
+     */
     inline void remove_incremental(CRef cr);
+
+    /**
+     * @brief Remove deleted clauses from CRef buffers -- must be used in tandem with @code{remove_incremental} 
+     * 
+     * @note clears @code{m_deletedClauses}
+     */
     inline void remove_flush();
 
 #ifdef TESTING
@@ -316,6 +383,11 @@ protected:
 #endif
 
 private:
+    /////////////////////////////////////////////////
+    // DATA STRUCTURES FOR USER-DEFINED HEURISTICS //
+    /////////////////////////////////////////////////
+    double m_threshold_activity;
+
     /////////////////////////////////////////
     // HELPERS FOR USER-DEFINED HEURISTICS //
     /////////////////////////////////////////
@@ -330,8 +402,6 @@ void  SolverER::set_value(Var x, lbool v, int l) {
     if (it == test_value.end()) test_value.insert(std::make_pair(x, std::make_pair(v, l)));
     else it->second = std::make_pair(v, l);
 }
-void  SolverER::addToExtDefBuffer(ExtDef extDef) { m_extVarDefBuffer.push_back(extDef); }
-unsigned int SolverER::extDefBufferSize() { return m_extVarDefBuffer.size(); }
 
 int   SolverER::level(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (-1     ) : (it->second.second); }
 lbool SolverER::value(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (l_Undef) : (it->second.first ); }
@@ -420,6 +490,13 @@ inline void SolverER::generateDefinitions() {
         prevExtensionConflict = solver->conflicts;
         selectClauses(user_extSelHeuristic);
         defineExtVars(user_extDefHeuristic);
+    }
+}
+
+inline void SolverER::deleteExtVarsIfNecessary() {
+    if (solver->conflicts - prevDelExtVarConflict >= static_cast<unsigned int>(ext_del_freq)){
+        prevDelExtVarConflict = solver->conflicts;
+        deleteExtVars(user_extDelPredicateSetup, user_extDelPredicate);
     }
 }
 
