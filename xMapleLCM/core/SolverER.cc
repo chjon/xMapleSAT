@@ -112,10 +112,12 @@ namespace Minisat {
             user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_width, this, _1);
         #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
             user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_lbd, this, _1);
+        #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_ler, this, _1);
         #endif
 
         // Bind clause selection heuristic
-        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE
+        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE || ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
             user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_all, this, _1, _2, _3);
         #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
             user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_activity, this, _1, _2, _3);
@@ -126,6 +128,8 @@ namespace Minisat {
             user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_subexpression, this, _1, _2, _3);
         #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
             user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_random, this, _1, _2, _3);
+        #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
+            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_ler, this, _1, _2, _3);
         #endif
 
         // Bind clause substitution predicate
@@ -189,10 +193,10 @@ namespace Minisat {
         // filterBatch(solver->learnts_local, user_extFilPredicate);
 
         extTimerStart();
-
-        selectionHeuristic(m_selectedClauses, m_filteredClauses, ext_window);
-        m_filteredClauses.clear();
-        
+        if (m_filteredClauses.size()) {
+            selectionHeuristic(m_selectedClauses, m_filteredClauses, ext_window);
+            m_filteredClauses.clear();
+        }
         extTimerStop(ext_sel_overhead);
     }
 
@@ -272,88 +276,73 @@ namespace Minisat {
         }
     }
 
+    template<class V>
+    static inline void asciiDRUP(unsigned char op, const V& c, FILE* drup_file) {
+        assert(op == 'a' || op == 'd');
+        if (op == 'd') fprintf(drup_file, "d ");
+        for (int i = 0; i < c.size(); i++)
+            fprintf(drup_file, "%i ", (var(c[i]) + 1) * (-2 * sign(c[i]) + 1));
+        fprintf(drup_file, "0\n");
+    }
+
     void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
-        assert(solver->decisionLevel() == 0);
-
-        assert(solver->ok);
-
-        // Check if clause is satisfied and remove false/duplicate literals:
-        // TODO: make this optional depending on when we add the ext def clause
+        // Copy clause
         sort(ps);
+        if (solver->drup_file) ps.copyTo(solver->add_oc);
+
+        // Simplify clause
         Lit p; int i, j;
-
-        if (solver->drup_file){
-            solver->add_oc.clear();
-            for (int i = 0; i < ps.size(); i++) solver->add_oc.push(ps[i]); }
-
         for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
-            if (value(ps[i]) == l_True || ps[i] == ~p)
+            if ((value(ps[i]) == l_True && level(var(ps[i])) == 0) || ps[i] == ~p) // Don't add satisfied clauses
                 return;
-            else if (value(ps[i]) != l_False && ps[i] != p)
+            else if ((value(ps[i]) != l_False || level(var(ps[i])) != 0) && ps[i] != p) // Remove falsified literals
                 ps[j++] = p = ps[i];
         ps.shrink(i - j);
 
-        if (solver->drup_file && i != j){
+        // Write to proof file
+        if (solver->drup_file && i != j) {
     #ifdef BIN_DRUP
             solver->binDRUP('a', ps, solver->drup_file);
             solver->binDRUP('d', solver->add_oc, solver->drup_file);
     #else
-            for (int i = 0; i < ps.size(); i++)
-                fprintf(solver->drup_file, "%i ", (var(ps[i]) + 1) * (-2 * sign(ps[i]) + 1));
-            fprintf(solver->drup_file, "0\n");
-
-            fprintf(solver->drup_file, "d ");
-            for (int i = 0; i < solver->add_oc.size(); i++)
-                fprintf(solver->drup_file, "%i ", (var(solver->add_oc[i]) + 1) * (-2 * sign(solver->add_oc[i]) + 1));
-            fprintf(solver->drup_file, "0\n");
+            asciiDRUP('a', ps, solver->drup_file);
+            asciiDRUP('d', solver->add_oc, solver->drup_file);
     #endif
         }
 
-        if (ps.size() == 0)
+        // Check if we can skip adding the clause
+        if (ps.size() == 0) {
             return;
-        else if (ps.size() == 1)
+        } else if (ps.size() == 1) {
             solver->uncheckedEnqueue(ps[0]);
-        else {
-            CRef cr = solver->ca.alloc(ps, false);
-            db.push_back(cr);
-            solver->attachClause(cr);
+            return;
         }
 
-        //////////////////////////////////////////////////////////////////////////////////
+        // Enforce watcher invariant
 
-        // TODO: What happens if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT?
-        // Do we need to propagate here?
-        // BCP works by iterating through the literals on the trail 
-        //
-        // For ER_ADD_LOCATION_AFTER_RESTART:
-        //    This means there are unit literals on the trail
-        //    propagate() should handle this automatically
-        //    
-        // For ER_ADD_LOCATION_AFTER_CONFLICT:
-        //    x = a v b: (-x a b)(x -a)(x -b)
-        //    BCP will miss this if a and b were already set earlier
-        //    We should backtrack to the appropriate level (max(lvl(a), lvl(b))) if we want to propagate, and
-        //    let propagate() handle it for us
+        // Move undefined variables to the front
+        int i_max = 0, max_lvl = 0;
+        for (i = j = 0; i < ps.size(); i++)
+            if (value(ps[i]) == l_Undef) {
+                std::swap(ps[i], ps[j++]);
+            } else if (level(var(ps[i])) > max_lvl) {
+                i_max = i;
+                max_lvl = level(var(ps[i]));
+            }
 
-        // if (ps.size() == 1) {
-        //     solver->uncheckedEnqueue(ext_lit);
-        // } else {
+        // Move highest-level literal to ps[1]
+        if (j == 1) std::swap(ps[i_max], ps[1]);
 
-        //     // Add clause to data structures
-        //     ClauseAllocator& ca = solver->ca;
-        //     CRef cr = ca.alloc(ps, false); // Allocating clause as if it were an original clause
-        //     int lbd = solver->computeLBD(ca[cr]);
-        //     ca[cr].set_lbd(lbd);
+        assert(value(ps[0]) != l_False); // New clauses should not be conflicting!
 
-        //     // Add clause to db
-        //     db.push_back(cr);
-        //     solver->attachClause(cr);
+        // Add clause
+        CRef cr = solver->ca.alloc(ps, false);
+        db.push_back(cr);
+        solver->attachClause(cr);
 
-        //    // Check whether the clause needs to be propagated
-        //    if (value(ps[0]) == l_Undef && value(ps[1]) == l_False) {
-        //        solver->uncheckedEnqueue(ps[0], cr);
-        //    }
-        // }
+        // Propagate clause if necessary
+        if (value(ps[0]) == l_Undef && value(ps[1]) == l_False)
+            solver->uncheckedEnqueue(ps[0], cr);
     }
 
     CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
@@ -419,7 +408,7 @@ namespace Minisat {
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
         if (p(clause)) {
-            vec<Lit>& extLits = tmp; extLits.clear();
+            vec<Lit>& extLits = tmp_vec; extLits.clear();
             xdm.substitute(clause, extLits);
 
             // Ensure variables are assigned so the clause is still asserting

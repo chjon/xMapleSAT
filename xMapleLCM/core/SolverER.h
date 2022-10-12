@@ -237,19 +237,22 @@ public:
 
     // Decide whether to consider a clause based on its width
     bool user_extFilPredicate_width(CRef cr);
-
     // Decide whether to consider a clause based on its LBD
     bool user_extFilPredicate_lbd(CRef cr);
+    // Decide whether to consider a clause based on the LER proof system (GlucosER)
+    bool user_extFilPredicate_ler(CRef cr);
     
     // Select all clauses
     void user_extSelHeuristic_all     (std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
     // Select clauses with highest activities
     void user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses);
-    
+
     // Define extension variables by selecting two literals at random
     void user_extDefHeuristic_random       (std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
     // Define extension variables by selecting the most frequently-appearing pairs of literals
     void user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
+    // Define extension variables based on the LER proof system (GlucosER)
+    void user_extDefHeuristic_ler          (std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars);
     
     // Decide whether to substitute into a clause based on its width and LBD
     bool user_extSubPredicate_size_lbd(vec<Lit>& clause);
@@ -322,7 +325,6 @@ protected:
 
     // Keep track of clauses which have been removed so that they can be removed from the buffers above
     std::tr1::unordered_set<CRef> m_deletedClauses;
-    vec<Lit> tmp;
 
     //////////////////////////////
     // HELPERS FOR SUBSTITUTION //
@@ -384,14 +386,33 @@ protected:
 #endif
 
 private:
+    ///////////////////////////////
+    // TEMPORARY DATA STRUCTURES //
+    ///////////////////////////////
+    // These are declared here to avoid repeated memory allocation.
+    // These data structures should only be used locally.
+    vec<Lit> tmp_vec;
+    LitSet tmp_set;
+
     /////////////////////////////////////////////////
     // DATA STRUCTURES FOR USER-DEFINED HEURISTICS //
     /////////////////////////////////////////////////
-    double m_threshold_activity;
+    double m_threshold_activity; // Threshold activity for variable deletion
 
     /////////////////////////////////////////
     // HELPERS FOR USER-DEFINED HEURISTICS //
     /////////////////////////////////////////
+    
+    /**
+     * @brief Find the literals that are different between two clauses
+     * 
+     * @param output return value -- a vector of literals that differ between the clauses
+     * @param c1 the first clause
+     * @param c2 the second clause
+     * @return the number of literals that are different
+     */
+    int numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2);
+
     void quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_map<LitPair, int>& subexpr_count, int l, int r, int k);
     std::tr1::unordered_map<LitPair, int> countSubexprs(std::vector<LitSet>& sets);
     std::vector<LitPair> getFreqSubexprs(std::tr1::unordered_map<LitPair, int>& subexpr_counts, unsigned int numSubexprs);
@@ -455,12 +476,12 @@ inline double SolverER::extTimerRead(unsigned int i) {
 }
 
 inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
-    tmp.clear(); for (const auto l : clause) tmp.push(l);
-    addExtDefClause(db, ext_lit, tmp);
+    tmp_vec.clear(); for (const auto l : clause) tmp_vec.push(l);
+    addExtDefClause(db, ext_lit, tmp_vec);
 }
 inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause) {
-    tmp.clear(); for (const auto l : clause) tmp.push(l);
-    addExtDefClause(db, ext_lit, tmp);
+    tmp_vec.clear(); for (const auto l : clause) tmp_vec.push(l);
+    addExtDefClause(db, ext_lit, tmp_vec);
 }
 
 inline bool SolverER::isExtVar(Var x) const {

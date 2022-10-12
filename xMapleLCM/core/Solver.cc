@@ -1835,6 +1835,18 @@ lbool Solver::search(int& nof_conflicts)
                            (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), progressEstimate()*100);
             }*/
 
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
+            // Generate extension variable definitions
+            // Only try generating more extension variables if there aren't any buffered already
+            ser->selectClauses(ser->user_extSelHeuristic);
+            ser->defineExtVars(ser->user_extDefHeuristic);
+#endif
+
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
+            // Add extension variables
+            ser->introduceExtVars(ser->extDefs);
+#endif
+
         }else{
             // NO CONFLICT
             bool restart = false;

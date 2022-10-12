@@ -35,8 +35,45 @@ bool SolverER::user_extFilPredicate_lbd(CRef cr) {
     return ext_min_lbd <= lbd && lbd <= ext_max_lbd;
 }
 
+int SolverER::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
+    output.clear(); tmp_set.clear();
+
+    // Make a set of all the literals in clause 1
+    for (int i = 0; i < c1.size(); i++) tmp_set.insert(c1[i]);
+
+    // Add all the literals in clause 2 that are not in clause 1
+    for (int i = 0; i < c2.size(); i++) {
+        if (tmp_set.find(c2[i]) == tmp_set.end()) {
+            output.push(c2[i]);
+        } else {
+            tmp_set.erase(c2[i]);
+        }
+    }
+
+    // Add all the literals in clause 1 that are not in clause 2
+    for (Lit l : tmp_set) output.push(l);
+
+    // Return the number of literals that are different between the two clauses
+    return output.size();
+}
+
+bool SolverER::user_extFilPredicate_ler(CRef cr) {
+    if (m_filteredClauses.size() > 0) {
+        const Clause& c1 = solver->ca[cr];
+        const Clause& c2 = solver->ca[m_filteredClauses[m_filteredClauses.size() - 1]];
+
+        if (
+            c1.size() != c2.size() ||
+            numDiffs(tmp_vec, c1, c2) != 2
+        ) m_filteredClauses.clear();
+    }
+
+    return true;
+}
+
 void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
-    std::copy(input.begin(), input.end(), std::back_inserter(output));
+    const int start_index = std::max(0, static_cast<int>(input.size()) - static_cast<int>(numClauses));
+    std::copy(input.begin() + start_index, input.end(), std::back_inserter(output));
 }
 
 void SolverER::user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
@@ -282,6 +319,24 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
                 x++;
                 break;
             }
+        }
+    }
+}
+
+void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
+    // Add extension variables
+    std::tr1::unordered_set<LitPair> generatedPairs;
+    Var x = solver->nVars() + extVarDefBuffer.size();
+    for (unsigned int i = 1; i < selectedClauses.size(); i++) {
+        int n = numDiffs(tmp_vec, solver->ca[selectedClauses[i]], solver->ca[selectedClauses[i - 1]]);
+        assert(n == 2);
+        const Lit a = tmp_vec[0], b = tmp_vec[1];
+        LitPair litPair = mkLitPair(a, b);
+        if (isValidDefPair(a, b, generatedPairs)) {
+            // Add extension variable
+            generatedPairs.insert(litPair);
+            extVarDefBuffer.push_back(ExtDef { mkLit(x), a, b, std::vector< std::vector<Lit> >() });
+            x++;
         }
     }
 }
