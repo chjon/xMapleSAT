@@ -330,7 +330,7 @@ void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, co
     for (unsigned int i = 1; i < selectedClauses.size(); i++) {
         int n = numDiffs(tmp_vec, solver->ca[selectedClauses[i]], solver->ca[selectedClauses[i - 1]]);
         assert(n == 2);
-        const Lit a = tmp_vec[0], b = tmp_vec[1];
+        const Lit a = ~tmp_vec[0], b = ~tmp_vec[1];
         LitPair litPair = mkLitPair(a, b);
         if (isValidDefPair(a, b, generatedPairs)) {
             // Add extension variable
