@@ -26,8 +26,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <vector>
 #include <core/SolverTypes.h>
 
+#ifndef ER_ENABLE_GLUCOSER
+    #define ER_ENABLE_GLUCOSER false
+#endif
 #ifndef ER_USER_ADD_SUBEXPR_SET_INTERSECTION
-    #define ER_USER_ADD_SUBEXPR_SET_INTERSECTION false
+    #define ER_USER_ADD_SUBEXPR_SET_INTERSECTION true
+#endif
+#ifndef EXTENSION_SUBSTITUTION
+    #define EXTENSION_SUBSTITUTION true
+#endif
+#ifndef EXTENSION_FORCE_BRANCHING
+    #define EXTENSION_FORCE_BRANCHING false
 #endif
 
 // Define heuristic for filtering clauses before clause selection
@@ -41,7 +50,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 // Define heuristic for selecting clauses
-#define ER_SELECT_HEURISTIC_NONE      0 // Consider all clauses
+#define ER_SELECT_HEURISTIC_ALL       0 // Consider all clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY  1 // Select most active clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
 #define ER_SELECT_HEURISTIC_GLUCOSER  3 // Only consider the previous two learnt clauses
@@ -50,7 +59,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 // Define heuristic for replacing extension definitions in clauses
-#define ER_SUBSTITUTE_HEURISTIC_NONE  0x0 // Consider all clauses
+#define ER_SUBSTITUTE_HEURISTIC_NONE  0x0 // Don't substitute
 #define ER_SUBSTITUTE_HEURISTIC_WIDTH 0x1 // Consider clauses within a clause width range
 #define ER_SUBSTITUTE_HEURISTIC_LBD   0x2 // Consider clauses within an LBD range
 #ifndef ER_USER_SUBSTITUTE_HEURISTIC
@@ -64,16 +73,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
 #ifndef ER_USER_ADD_HEURISTIC
     #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
-#endif
-
-#if ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE && ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE && ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_NONE
-    #error Must select at least one filter/selection heuristic
-#endif
-
-#if (ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER && ER_USER_SELECT_HEURISTIC != ER_SELECT_HEURISTIC_GLUCOSER)
-    #error ER_ADD_HEURISTIC_GLUCOSER requires ER_SELECT_HEURISTIC_GLUCOSER
-#elif (ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER && ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_GLUCOSER)
-    #error ER_SELECT_HEURISTIC_GLUCOSER requires ER_FILTER_HEURISTIC_GLUCOSER
 #endif
 
 // Define heuristics for deleting extension variables
@@ -99,17 +98,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_ADD_LOCATION_AFTER_CONFLICT 2 // Add extension variables after a conflict
 #ifndef ER_USER_ADD_LOCATION
     #define ER_USER_ADD_LOCATION ER_GEN_LOCATION_AFTER_RESTART
-#endif
-
-#ifndef EXTENSION_SUBSTITUTION
-    #define EXTENSION_SUBSTITUTION true
-#endif
-#ifndef EXTENSION_FORCE_BRANCHING
-    #define EXTENSION_FORCE_BRANCHING false
-#endif
-
-#if EXTENSION_SUBSTITUTION && ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_NONE
-    #error EXTENSION_SUBSTITUTION requires ER_USER_ADD_HEURISTIC != ER_ADD_HEURISTIC_NONE
 #endif
 
 namespace Minisat {

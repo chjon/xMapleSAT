@@ -48,6 +48,15 @@ public:
     ~SolverER();
 
     /**
+     * @brief The overall definition heuristic
+     * @note This is used to choose separate data structures for different heuristics
+     */
+    enum HeuristicType : int {
+        DEFAULT = 0,
+        LER = 1
+    };
+
+    /**
      * @brief The number of variables in the original formula.
      * @note This value is used to quickly check whether a variable is an extension variable
      */
@@ -99,30 +108,46 @@ public:
      * 
      * @param candidates a list of clauses to check
      * @param filterPredicate a method for selecting clauses for defining extension variables
+     * @param heuristicType the overall heuristic type
      * 
      * @note Saves outputs in @code{m_filteredClauses}
      */
-    void filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate);
+    void filterBatch(
+        const vec<CRef>& candidates,
+        FilterPredicate& filterPredicate,
+        HeuristicType heuristicType = HeuristicType::DEFAULT
+    );
 
     /**
      * @brief Filter clauses for clause selection
      * 
      * @param candidate the clause to check
      * @param filterPredicate a method for selecting clauses for defining extension variables
+     * @param heuristicType the overall heuristic type
      * 
      * @note Saves outputs in @code{m_filteredClauses}
      */
-    void filterIncremental(const CRef candidate, FilterPredicate& filterPredicate);
+    void filterIncremental(
+        const CRef candidate,
+        FilterPredicate& filterPredicate,
+        HeuristicType heuristicType = HeuristicType::DEFAULT
+    );
 
     /**
      * @brief Select clauses for defining extension variables
      * 
      * @param selectionHeuristic a method for selecting clauses for defining extension variables
+     * @param heuristicType the overall heuristic type
+     * @param numKeepFiltered the number of filtered clauses to keep between function calls
      * 
      * @note Takes input from @code{m_filteredClauses}
      * @note Saves outputs in @code{m_selectedClauses}
      */
-    void selectClauses(SelectionHeuristic& selectionHeuristic);
+    void selectClauses(
+        SelectionHeuristic& selectionHeuristic,
+        HeuristicType heuristicType = HeuristicType::DEFAULT,
+        unsigned int numKeepFiltered = 0
+    );
 
     // Extension Variable Definition
 
@@ -130,8 +155,12 @@ public:
      * @brief Generate extension variable definitions
      * 
      * @param extDefHeuristic a method for generating extension variable definitions given a list of selected clauses
+     * @param heuristicType the overall heuristic type
      */
-    void defineExtVars(ExtDefHeuristic& extDefHeuristic);
+    void defineExtVars(
+        ExtDefHeuristic& extDefHeuristic,
+        HeuristicType heuristicType = HeuristicType::DEFAULT
+    );
     
     /**
      * @brief Checks whether to generate definitions and then calls @code{selectClauses} and @code{defineExtVars}.
@@ -145,8 +174,12 @@ public:
      * 
      * @param ext_def_db The map of extension variables to a list of their corresponding extension definition clauses.
      * In most cases this should be equal to @code{extDefs}.
+     * @param heuristicType the overall heuristic type
      */
-    void introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db);
+    void introduceExtVars(
+        std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db,
+        HeuristicType heuristicType = HeuristicType::DEFAULT
+    );
 
     /**
      * @brief Adds an extension definition clause to the appropriate clause database
@@ -397,6 +430,9 @@ private:
     /////////////////////////////////////////////////
     // DATA STRUCTURES FOR USER-DEFINED HEURISTICS //
     /////////////////////////////////////////////////
+    std::vector<CRef> m_filteredClauses_ler;
+    std::vector<CRef> m_selectedClauses_ler;
+    std::vector<ExtDef> m_extVarDefBuffer_ler;
     double m_threshold_activity; // Threshold activity for variable deletion
 
     /////////////////////////////////////////
@@ -510,7 +546,7 @@ inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set
 inline void SolverER::generateDefinitions() {
     if (solver->conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = solver->conflicts;
-        selectClauses(user_extSelHeuristic);
+        selectClauses(user_extSelHeuristic, SolverER::HeuristicType::DEFAULT);
         defineExtVars(user_extDefHeuristic);
     }
 }
@@ -526,24 +562,22 @@ inline void SolverER::remove_incremental(CRef cr) {
     m_deletedClauses.insert(cr);
 }
 
-inline void SolverER::remove_flush() {
+inline static void removeSet(std::vector<CRef>& vec, const std::tr1::unordered_set<CRef>& toDelete) {
     unsigned int i, j;
+    for (i = j = 0; i < vec.size(); i++)
+        if (toDelete.find(vec[i]) == toDelete.end())
+            vec[j++] = vec[i];
+    vec.erase(vec.begin() + j, vec.end());
+}
 
-    // Remove CRefs from buffer of filtered clauses
-    for (i = j = 0; i < m_filteredClauses.size(); i++) {
-        if (m_deletedClauses.find(m_filteredClauses[i]) == m_deletedClauses.end()) {
-            m_filteredClauses[j++] = m_filteredClauses[i];
-        }
-    }
-    m_filteredClauses.erase(m_filteredClauses.begin() + j, m_filteredClauses.end());
+inline void SolverER::remove_flush() {
+    // Remove CRefs from buffers of filtered clauses
+    removeSet(m_filteredClauses, m_deletedClauses);
+    removeSet(m_filteredClauses_ler, m_deletedClauses);
 
     // Remove CRefs from buffer of selected clauses
-    for (i = j = 0; i < m_selectedClauses.size(); i++) {
-        if (m_deletedClauses.find(m_selectedClauses[i]) == m_deletedClauses.end()) {
-            m_selectedClauses[j++] = m_selectedClauses[i];
-        }
-    }
-    m_selectedClauses.erase(m_selectedClauses.begin() + j, m_selectedClauses.end());
+    removeSet(m_selectedClauses, m_deletedClauses);
+    removeSet(m_selectedClauses_ler, m_deletedClauses);
 
     // Clear deletion buffer
     m_deletedClauses.clear();

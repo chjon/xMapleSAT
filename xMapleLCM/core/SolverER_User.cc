@@ -58,14 +58,14 @@ int SolverER::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
 }
 
 bool SolverER::user_extFilPredicate_ler(CRef cr) {
-    if (m_filteredClauses.size() > 0) {
+    if (m_filteredClauses_ler.size() > 0) {
         const Clause& c1 = solver->ca[cr];
-        const Clause& c2 = solver->ca[m_filteredClauses[m_filteredClauses.size() - 1]];
+        const Clause& c2 = solver->ca[m_filteredClauses_ler[m_filteredClauses_ler.size() - 1]];
 
         if (
             c1.size() != c2.size() ||
             numDiffs(tmp_vec, c1, c2) != 2
-        ) m_filteredClauses.clear();
+        ) m_filteredClauses_ler.clear();
     }
 
     return true;

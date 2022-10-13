@@ -112,12 +112,10 @@ namespace Minisat {
             user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_width, this, _1);
         #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
             user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_lbd, this, _1);
-        #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-            user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_ler, this, _1);
         #endif
 
         // Bind clause selection heuristic
-        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_NONE || ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_GLUCOSER
+        #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ALL
             user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_all, this, _1, _2, _3);
         #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
             user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_activity, this, _1, _2, _3);
@@ -128,24 +126,20 @@ namespace Minisat {
             user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_subexpression, this, _1, _2, _3);
         #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
             user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_random, this, _1, _2, _3);
-        #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_GLUCOSER
-            user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_ler, this, _1, _2, _3);
         #endif
 
         // Bind clause substitution predicate
         user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
 
         // Bind variable deletion predicate setup function
-        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_NONE || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
             user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_none, this);
         #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
             user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_activity, this);
         #endif
 
         // Bind variable deletion predicate
-        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_NONE
-            user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_none, this, _1);
-        #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
+        #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
         #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
             user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
@@ -162,30 +156,44 @@ namespace Minisat {
 
     SolverER::~SolverER() {}
 
-    void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate) {
+    void SolverER::filterBatch(const vec<CRef>& candidates, FilterPredicate& filterPredicate, HeuristicType heuristicType) {
         extTimerStart();
+
+        // Select data structure to use
+        std::vector<CRef>* filteredClauses = nullptr;
+        switch (heuristicType) {
+            case HeuristicType::LER: filteredClauses = &m_filteredClauses_ler; break;
+            default:                 filteredClauses = &m_filteredClauses    ; break;
+        }
 
         // Iterate through all candidate clauses and add the ones that satisfy the predicate
         for (int i = 0; i < candidates.size(); i++) {
             CRef candidate = candidates[i];
             if (filterPredicate(candidate))
-                m_filteredClauses.push_back(candidate);
+                filteredClauses->push_back(candidate);
         }
 
         extTimerStop(ext_sel_overhead);
     }
 
-    void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate) {
+    void SolverER::filterIncremental(const CRef candidate, FilterPredicate& filterPredicate, HeuristicType heuristicType) {
         extTimerStart();
         
+        // Select data structure to use
+        std::vector<CRef>* filteredClauses = nullptr;
+        switch (heuristicType) {
+            case HeuristicType::LER: filteredClauses = &m_filteredClauses_ler; break;
+            default:                 filteredClauses = &m_filteredClauses    ; break;
+        }
+
         // Add the clause if it satisfies the predicate
         if (filterPredicate(candidate))
-            m_filteredClauses.push_back(candidate);
+            filteredClauses->push_back(candidate);
         
         extTimerStop(ext_sel_overhead);
     }
 
-    void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic) {
+    void SolverER::selectClauses(SelectionHeuristic& selectionHeuristic, HeuristicType heuristicType, unsigned int numKeepFiltered) {
         // For static metrics, it is preferable to use filterIncremental when learning clauses
         // instead of using filterBatch here.
         // filterBatch(solver->learnts_core , user_extFilPredicate);
@@ -193,44 +201,78 @@ namespace Minisat {
         // filterBatch(solver->learnts_local, user_extFilPredicate);
 
         extTimerStart();
-        if (m_filteredClauses.size()) {
-            selectionHeuristic(m_selectedClauses, m_filteredClauses, ext_window);
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-            CRef cr = m_filteredClauses[m_filteredClauses.size() - 1];
-#endif
-            m_filteredClauses.clear();
-#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
-            m_filteredClauses.push_back(cr);
-#endif      
+
+        // Select data structure to use
+        std::vector<CRef>* filteredClauses = nullptr;
+        std::vector<CRef>* selectedClauses = nullptr;
+        switch (heuristicType) {
+            case HeuristicType::LER: {
+                filteredClauses = &m_filteredClauses_ler;
+                selectedClauses = &m_selectedClauses_ler;
+            } break;
+            default: {
+                filteredClauses = &m_filteredClauses;
+                selectedClauses = &m_selectedClauses;
+            } break;
+        }
+
+        if (filteredClauses->size()) {
+            selectionHeuristic(*selectedClauses, *filteredClauses, ext_window);
+            const int end_index = std::max(0, static_cast<int>(filteredClauses->size()) - static_cast<int>(numKeepFiltered));
+            filteredClauses->erase(filteredClauses->begin(), filteredClauses->begin() + end_index);
         }
         extTimerStop(ext_sel_overhead);
     }
 
-    void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic) {
+    void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic, HeuristicType heuristicType) {
         extTimerStart();
 
+        // Select data structure to use
+        std::vector<CRef  >* selectedClauses = nullptr;
+        std::vector<ExtDef>* extVarDefBuffer = nullptr;
+        switch (heuristicType) {
+            case HeuristicType::LER: {
+                selectedClauses = &m_selectedClauses_ler;
+                extVarDefBuffer = &m_extVarDefBuffer_ler;
+            } break;
+            default: {
+                selectedClauses = &m_selectedClauses;
+                extVarDefBuffer = &m_extVarDefBuffer;
+            } break;
+        }
+
         // Generate extension variable definitions
-        extDefHeuristic(m_extVarDefBuffer, m_selectedClauses, ext_max_intro);
+        extDefHeuristic(*extVarDefBuffer, *selectedClauses, ext_max_intro);
 
         // Update stats and clean up
-        m_selectedClauses.clear();
+        selectedClauses->clear();
         extTimerStop(ext_add_overhead);
     }
 
-    void SolverER::introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db) {
-        if (m_extVarDefBuffer.size() == 0) return;
+    void SolverER::introduceExtVars(std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db, HeuristicType heuristicType) {
 
         extTimerStart();
+
+        // Select data structure to use
+        std::vector<ExtDef>* extVarDefBuffer = nullptr;
+        switch (heuristicType) {
+            case HeuristicType::LER: {
+                extVarDefBuffer = &m_extVarDefBuffer_ler;
+            } break;
+            default: {
+                extVarDefBuffer = &m_extVarDefBuffer;
+            } break;
+        }
 
         // Add extension variables
         // It is the responsibility of the user heuristic to ensure that we do not have pre-existing extension variables
         // for the provided literal pairs
         // TODO: can we reuse the memory allocated for deleted variables? this should be safe as long as every
         // occurrence of the old variable has been removed
-        for (auto i = m_extVarDefBuffer.begin(); i != m_extVarDefBuffer.end(); i++) solver->newVar(ext_pref_sign);
+        for (auto i = extVarDefBuffer->begin(); i != extVarDefBuffer->end(); i++) solver->newVar(ext_pref_sign);
 
         // Add extension definition clauses
-        for (const ExtDef& def : m_extVarDefBuffer) {
+        for (const ExtDef& def : *extVarDefBuffer) {
             const Lit x = def.x, a = def.a, b = def.b;
             assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
 
@@ -253,12 +295,12 @@ namespace Minisat {
         }
 
         // Prioritize new variables
-        prioritize(m_extVarDefBuffer);
+        prioritize(*extVarDefBuffer);
 
         // Update stats and clean up
-        total_ext_vars += m_extVarDefBuffer.size();
+        total_ext_vars += extVarDefBuffer->size();
         max_ext_vars = std::max(max_ext_vars, total_ext_vars - deleted_ext_vars);
-        m_extVarDefBuffer.clear();
+        extVarDefBuffer->clear();
 
         extTimerStop(ext_add_overhead);
     }
@@ -529,6 +571,8 @@ namespace Minisat {
         // Reloc CRefs stored in buffers
         for (unsigned int i = 0; i < m_filteredClauses.size(); i++) solver->ca.reloc(m_filteredClauses[i], to);
         for (unsigned int i = 0; i < m_selectedClauses.size(); i++) solver->ca.reloc(m_selectedClauses[i], to);
+        for (unsigned int i = 0; i < m_filteredClauses_ler.size(); i++) solver->ca.reloc(m_filteredClauses_ler[i], to);
+        for (unsigned int i = 0; i < m_selectedClauses_ler.size(); i++) solver->ca.reloc(m_selectedClauses_ler[i], to);
 
         // Reloc extension definition clauses
         for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {

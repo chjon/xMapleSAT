@@ -1782,7 +1782,9 @@ lbool Solver::search(int& nof_conflicts)
 
             // EXTENDED RESOLUTION - substitute disjunctions with extension variables
             // This must be called after backtracking because extension variables might need to be propagated
+#if ER_USER_SUBSTITUTE_HEURISTIC != ER_SUBSTITUTE_HEURISTIC_NONE
             ser->substitute(learnt_clause, ser->user_extSubPredicate);
+#endif
 
             lbd--;
             if (VSIDS){
@@ -1808,7 +1810,14 @@ lbool Solver::search(int& nof_conflicts)
                     claBumpActivity(ca[cr]); }
                 attachClause(cr);
                 uncheckedEnqueue(learnt_clause[0], cr);
-                ser->filterIncremental(cr, ser->user_extFilPredicate);
+
+#if ER_ENABLE_GLUCOSER
+                static FilterPredicate fil_ler = std::bind(&SolverER::user_extFilPredicate_ler, ser, std::placeholders::_1);
+                ser->filterIncremental(cr, fil_ler, SolverER::HeuristicType::LER);
+#endif
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+                ser->filterIncremental(cr, ser->user_extFilPredicate, SolverER::HeuristicType::DEFAULT);
+#endif
             }
             if (drup_file){
 #ifdef BIN_DRUP
@@ -1835,16 +1844,20 @@ lbool Solver::search(int& nof_conflicts)
                            (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), progressEstimate()*100);
             }*/
 
-#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
-            // Generate extension variable definitions
-            // Only try generating more extension variables if there aren't any buffered already
-            ser->selectClauses(ser->user_extSelHeuristic);
-            ser->defineExtVars(ser->user_extDefHeuristic);
-#endif
+#if ER_ENABLE_GLUCOSER
+            {
+                using namespace std::placeholders;
 
-#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
-            // Add extension variables
-            ser->introduceExtVars(ser->extDefs);
+                // Generate extension variable definitions
+                // Only try generating more extension variables if there aren't any buffered already
+                static SelectionHeuristic sel_ler = std::bind(&SolverER::user_extSelHeuristic_all, ser, _1, _2, _3);
+                static ExtDefHeuristic    def_ler = std::bind(&SolverER::user_extDefHeuristic_ler, ser, _1, _2, _3);
+                ser->selectClauses(sel_ler, SolverER::HeuristicType::LER, 1);
+                ser->defineExtVars(def_ler, SolverER::HeuristicType::LER);
+
+                // Add extension variables
+                ser->introduceExtVars(ser->extDefs, SolverER::HeuristicType::LER);
+            }
 #endif
 
         }else{
@@ -1867,8 +1880,9 @@ lbool Solver::search(int& nof_conflicts)
             // Simplify the set of problem clauses:
             if (decisionLevel() == 0 && !simplify())
                 return l_False;
-
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
             ser->deleteExtVarsIfNecessary();
+#endif
             if (conflicts >= next_T2_reduce){
                 next_T2_reduce = conflicts + 10000;
                 reduceDB_Tier2(); }
@@ -1901,8 +1915,7 @@ lbool Solver::search(int& nof_conflicts)
                     // Model found:
                     return l_True;
 
-                if (ser->isExtVar(var(next)))
-                    ser->branchOnExt++;
+                if (ser->isExtVar(var(next))) ser->branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
