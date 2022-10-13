@@ -195,7 +195,13 @@ namespace Minisat {
         extTimerStart();
         if (m_filteredClauses.size()) {
             selectionHeuristic(m_selectedClauses, m_filteredClauses, ext_window);
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+            CRef cr = m_filteredClauses[m_filteredClauses.size() - 1];
+#endif
             m_filteredClauses.clear();
+#if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_GLUCOSER
+            m_filteredClauses.push_back(cr);
+#endif      
         }
         extTimerStop(ext_sel_overhead);
     }
