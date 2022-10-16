@@ -369,17 +369,14 @@ namespace Minisat {
         // Enforce watcher invariant
 
         // Move undefined variables to the front
-        int i_max = 0, max_lvl = 0;
         for (i = j = 0; i < ps.size(); i++)
-            if (value(ps[i]) == l_Undef) {
+            if (value(ps[i]) == l_Undef)
                 std::swap(ps[i], ps[j++]);
-            } else if (level(var(ps[i])) > max_lvl) {
-                i_max = i;
-                max_lvl = level(var(ps[i]));
-            }
 
-        // Move highest-level literal to ps[1]
-        if (j == 1) std::swap(ps[i_max], ps[1]);
+        // Move highest-level literal to ps[1] if there is only one unassigned variable
+        for (i = j; j == 1 && i < ps.size(); i++)
+            if (level(var(ps[i])) > level(var(ps[1])))
+                std::swap(ps[i], ps[1]);
 
         assert(value(ps[0]) != l_False); // New clauses should not be conflicting!
 
