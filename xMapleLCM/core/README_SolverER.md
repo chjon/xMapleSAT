@@ -11,9 +11,11 @@
 ## Changes to Solver.cc
 - additional #includes:
     - `#include "core/SolverER.h"`
+    
 - constructor/destructor:
     - add `ser = new SolverER(this);` to the constructor
     - add `delete ser;` to the destructor
+
 - changes to `Solver::simplify`:
     - call `ser->removeSatisfied();` similarly to `removeSatisfied`
 

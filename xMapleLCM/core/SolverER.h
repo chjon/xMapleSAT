@@ -65,6 +65,14 @@ public:
     // Map from extension variables to a list of their extension definition clauses.
     std::tr1::unordered_map<Var, std::vector<CRef> > extDefs;
 
+    // Map from variables to their extension level
+    vec<unsigned int> extensionLevel;
+
+    /**
+     * @brief Update data structures to allocate enough memory when a new variable is added
+     */
+    inline void newVar();
+
     /**
      * @brief Determine whether a variable is an extension variable
      * 
@@ -470,6 +478,10 @@ lbool SolverER::value(Var x) const { return solver->value(x); }
 lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
+inline void SolverER::newVar() {
+    extensionLevel.push(0);
+}
+
 // EXTENDED RESOLUTION - statistics
 inline void SolverER::extTimerStart() const {
     getrusage(RUSAGE_SELF, &ext_timer_start);
@@ -535,6 +547,7 @@ inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set
     if (var(a) == var(b)) return false;
 
     // Ensure literals in pair are not set at level 0
+    // FIXME: this breaks if the pair is over extension variables which have not been added yet
     if (value(a) != l_Undef && level(var(a)) == 0) return false;
     if (value(b) != l_Undef && level(var(b)) == 0) return false;
     

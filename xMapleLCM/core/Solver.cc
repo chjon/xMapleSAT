@@ -101,6 +101,9 @@ Solver::Solver() :
   , learntsize_adjust_inc         (1.5)
 
   , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
+
+  , ser (new SolverER(this))
+
   // Statistics: (formerly in 'SolverStats')
   //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
@@ -114,9 +117,15 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
+#if ER_PRIORITIZE_EXTVAR
+  , order_heap_CHB     (ExtVarOrderLt(ser->extensionLevel, activity_CHB))
+  , order_heap_VSIDS   (ExtVarOrderLt(ser->extensionLevel, activity_VSIDS))
+  , order_heap_distance(ExtVarOrderLt(ser->extensionLevel, activity_distance))
+#else
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
+#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -147,8 +156,7 @@ Solver::Solver() :
   , my_var_decay       (0.6)
   , DISTANCE           (true)
 
-  , ser (nullptr)
-{ ser = new SolverER(this); }
+{}
 
 
 Solver::~Solver()
@@ -875,6 +883,9 @@ Var Solver::newVar(bool sign, bool dvar)
     var_iLevel.push(0);
     var_iLevel_tmp.push(0);
     pathCs.push(0);
+
+    ser->newVar();
+
     return v;
 }
 
@@ -1035,7 +1046,7 @@ Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
-    Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
+    auto& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
 
     // Random decision:
     /*if (drand(random_seed) < random_var_freq && !order_heap.empty()){

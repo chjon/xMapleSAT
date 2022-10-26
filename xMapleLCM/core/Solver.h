@@ -198,6 +198,8 @@ public:
 
     uint64_t       VSIDS_props_limit;
 
+    SolverER* ser;
+
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
@@ -262,8 +264,14 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-    Heap<VarOrderLt>    order_heap_CHB,   // A priority queue of variables ordered with respect to the variable activity.
-    order_heap_VSIDS,order_heap_distance;
+#if ER_PRIORITIZE_EXTVAR
+    Heap<ExtVarOrderLt>
+#else
+    Heap<VarOrderLt>
+#endif
+                        order_heap_CHB, // A priority queue of variables ordered with respect to the variable activity.
+                        order_heap_VSIDS,
+                        order_heap_distance;
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -453,8 +461,6 @@ public:
     double    my_var_decay;
     bool   DISTANCE;
 
-    SolverER* ser;
-
 private:
     friend class SolverER;
 };
@@ -468,7 +474,7 @@ inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
-    Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
+    auto& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 inline void Solver::varDecayActivity() {

@@ -275,6 +275,9 @@ namespace Minisat {
         for (const ExtDef& def : *extVarDefBuffer) {
             const Lit x = def.x, a = def.a, b = def.b;
             assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
+            
+            // Update extension level
+            extensionLevel[var(x)] = 1 + std::max(extensionLevel[var(a)], extensionLevel[var(b)]);
 
             // Save definition (x <=> a v b)
             xdm.insert(x, a, b);
@@ -295,7 +298,7 @@ namespace Minisat {
         }
 
         // Prioritize new variables
-        prioritize(*extVarDefBuffer);
+        // prioritize(*extVarDefBuffer);
 
         // Update stats and clean up
         total_ext_vars += extVarDefBuffer->size();

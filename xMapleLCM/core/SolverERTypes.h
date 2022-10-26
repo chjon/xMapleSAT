@@ -38,6 +38,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
+#ifndef ER_PRIORITIZE_EXTVAR
+    #define ER_PRIORITIZE_EXTVAR true
+#endif
 
 // Define heuristic for filtering clauses before clause selection
 #define ER_FILTER_HEURISTIC_NONE     0 // Consider all clauses
@@ -196,6 +199,24 @@ using DeletionPredicateSetup = std::function<void()>;
  * @return false otherwise
  */
 using DeletionPredicate = std::function<bool(Var)>;
+
+/**
+ * @brief Comparison function for prioritizing extension variables
+ */
+struct ExtVarOrderLt {
+    const vec<unsigned int>& extLevel;
+    const vec<double      >& activity;
+    bool operator () (Var x, Var y) const {
+        // Lexicographic ordering over the tuple (extLevel, activity)
+        // Return values are written here in order of priority
+        if (extLevel[x] != extLevel[y]) return extLevel[x] > extLevel[y];
+        else                            return activity[x] > activity[y];
+    }
+    ExtVarOrderLt(const vec<unsigned int>& lvl, const vec<double>& act)
+        : extLevel(lvl)
+        , activity(act)
+    {}
+};
 
 }
 
