@@ -855,8 +855,10 @@ lbool Solver::search(int nof_conflicts)
 #if RANDOM_RESET
                 // Reset activities
                 if (reset_probability > 0 && drand(random_seed) <= reset_probability) {
-                    for (int v = 0; v < nVars(); v++)
+                    for (int v = 0; v < nVars(); v++) {
                         activity[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+                    }
+                    rebuildOrderHeap();
                 }
 #endif
 
