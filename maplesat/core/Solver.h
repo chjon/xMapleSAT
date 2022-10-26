@@ -162,7 +162,9 @@ public:
     int action;
     double reward_multiplier;
 #endif
-
+#if RANDOM_RESET
+    double reset_probability;
+#endif
     vec<long double> total_actual_rewards;
     vec<int> total_actual_count;
 

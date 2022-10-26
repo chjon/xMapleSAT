@@ -54,7 +54,9 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
-
+#if RANDOM_RESET
+static DoubleOption  opt_reset_probability (_cat, "reset-probability", "Reset probability", 0.05, DoubleRange(0, true, 1, true));
+#endif
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -105,6 +107,9 @@ Solver::Solver() :
 #if BRANCHING_HEURISTIC == CHB
   , action(0)
   , reward_multiplier(opt_reward_multiplier)
+#endif
+#if RANDOM_RESET
+  , reset_probability(opt_reset_probability)
 #endif
 
   , ok                 (true)
@@ -845,6 +850,15 @@ lbool Solver::search(int nof_conflicts)
             if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()){
                 // Reached bound on number of conflicts:
                 progress_estimate = progressEstimate();
+
+#if RANDOM_RESET
+                // Reset activities
+                if (reset_probability > 0 && drand(random_seed) >= reset_probability)
+                    for (int v = 0; v < nVars(); v++)
+                        activity[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+#endif
+
+                // Restart
                 cancelUntil(0);
                 return l_Undef; }
 
