@@ -112,6 +112,7 @@ Solver::Solver() :
   , simpDB_props       (0)
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
+  , order_heap_distance(VarOrderLt(activity_distance))
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -138,10 +139,9 @@ Solver::Solver() :
   , nbconfbeforesimplify(1000)
   , incSimplify(1000)
 
+  , var_iLevel_inc     (1)
   , my_var_decay       (0.6)
   , DISTANCE           (true)
-  , var_iLevel_inc     (1)
-  , order_heap_distance(VarOrderLt(activity_distance))
 
 {}
 
@@ -382,8 +382,8 @@ void Solver::simplifyLearnt(Clause& c)
     //sort(&c[0], c.size(), VarOrderLevelLt(vardata));
 
     bool True_confl = false;
-    int beforeSize, afterSize;
-    beforeSize = c.size();
+    // int beforeSize, afterSize;
+    // beforeSize = c.size();
     int i, j;
     CRef confl;
 
@@ -412,7 +412,7 @@ void Solver::simplifyLearnt(Clause& c)
         }
     }
     c.shrink(c.size() - j);
-    afterSize = c.size();
+    // afterSize = c.size();
     //printf("\nbefore : %d, after : %d ", beforeSize, afterSize);
 
 
@@ -441,8 +441,8 @@ void Solver::simplifyLearnt(Clause& c)
 
 bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
 {
-    int beforeSize, afterSize;
-    int learnts_x_size_before = learnts_x.size();
+    // int beforeSize, afterSize;
+    // int learnts_x_size_before = learnts_x.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -492,12 +492,12 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
 
                 //printf("beforeSize: %2d, afterSize: %2d\n", beforeSize, afterSize);
 
@@ -517,7 +517,7 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                     learnts_x[cj++] = learnts_x[ci];
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -552,8 +552,8 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
 
 bool Solver::simplifyLearnt_core()
 {
-    int beforeSize, afterSize;
-    int learnts_core_size_before = learnts_core.size();
+    // int beforeSize, afterSize;
+    // int learnts_core_size_before = learnts_core.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -607,12 +607,12 @@ bool Solver::simplifyLearnt_core()
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
                 
                 if(saved_size !=c.size()){
 
@@ -657,7 +657,7 @@ bool Solver::simplifyLearnt_core()
                     learnts_core[cj++] = learnts_core[ci];
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -678,8 +678,8 @@ bool Solver::simplifyLearnt_core()
 
 bool Solver::simplifyLearnt_tier2()
 {
-    int beforeSize, afterSize;
-    int learnts_tier2_size_before = learnts_tier2.size();
+    // int beforeSize, afterSize;
+    // int learnts_tier2_size_before = learnts_tier2.size();
 
     int ci, cj, li, lj;
     bool sat, false_lit;
@@ -733,12 +733,12 @@ bool Solver::simplifyLearnt_tier2()
                     c.shrink(li - lj);
                 }
 
-                beforeSize = c.size();
+                // beforeSize = c.size();
                 assert(c.size() > 1);
                 // simplify a learnt clause c
                 simplifyLearnt(c);
                 assert(c.size() > 0);
-                afterSize = c.size();
+                // afterSize = c.size();
                 
                 if(saved_size!=c.size()){
 
@@ -783,7 +783,7 @@ bool Solver::simplifyLearnt_tier2()
                     learnts_tier2[cj++] = learnts_tier2[ci];
 
                     nblevels = computeLBD(c);
-                    if (nblevels < c.lbd()){
+                    if (nblevels < static_cast<unsigned int>(c.lbd())){
                         //printf("lbd-before: %d, lbd-after: %d\n", c.lbd(), nblevels);
                         c.set_lbd(nblevels);
                     }
@@ -1448,7 +1448,9 @@ NextClause:;
         ws.shrink(i - j);
     }
 
+#ifndef LOOSE_PROP_STAT
 ExitProp:;
+#endif
     propagations += num_props;
     simpDB_props -= num_props;
 
@@ -1724,7 +1726,7 @@ lbool Solver::search(int& nof_conflicts)
 
     // simplify
     //
-    if (conflicts >= curSimplify * nbconfbeforesimplify){
+    if (conflicts >= static_cast<unsigned int>(curSimplify * nbconfbeforesimplify)){
         //        printf("c ### simplifyAll on conflict : %lld\n", conflicts);
         //printf("nbClauses: %d, nbLearnts_core: %d, nbLearnts_tier2: %d, nbLearnts_local: %d, nbLearnts: %d\n",
         //	clauses.size(), learnts_core.size(), learnts_tier2.size(), learnts_local.size(),
