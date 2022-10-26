@@ -59,7 +59,9 @@ static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the 
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
-
+#if RANDOM_RESET
+static DoubleOption  opt_reset_probability (_cat, "reset-probability", "Reset probability", 0.05, DoubleRange(0, true, 1, true));
+#endif
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -96,6 +98,10 @@ Solver::Solver() :
   //
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
+
+#if RANDOM_RESET
+  , reset_probability(opt_reset_probability)
+#endif
 
   // Statistics: (formerly in 'SolverStats')
   //
@@ -1826,6 +1832,15 @@ lbool Solver::search(int& nof_conflicts)
                 cached = false;
                 // Reached bound on number of conflicts:
                 progress_estimate = progressEstimate();
+
+#if RANDOM_RESET
+                // Reset activities
+                if (reset_probability > 0 && drand(random_seed) <= reset_probability) {
+                    for (int v = 0; v < nVars(); v++)
+                        activity[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+                }
+#endif
+
                 cancelUntil(0);
                 return l_Undef; }
 

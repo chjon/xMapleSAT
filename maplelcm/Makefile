@@ -1,8 +1,13 @@
 MROOT := $(shell pwd)
 export MROOT
 
-minisat:
+maplelcm:
 	make -C core rs
+	mv core/glucose_static core/maplelcm
+
+maplelcm_reset:
+	make CMD_CFLAGS="-D RANDOM_RESET=1" -C core rs
+	mv core/glucose_static core/maplelcm_reset
 
 clean:
 	make -C core clean

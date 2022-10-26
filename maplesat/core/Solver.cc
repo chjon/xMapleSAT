@@ -98,6 +98,10 @@ Solver::Solver() :
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
 
+#if RANDOM_RESET
+  , reset_probability(opt_reset_probability)
+#endif
+
     // Statistics: (formerly in 'SolverStats')
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
@@ -107,9 +111,6 @@ Solver::Solver() :
 #if BRANCHING_HEURISTIC == CHB
   , action(0)
   , reward_multiplier(opt_reward_multiplier)
-#endif
-#if RANDOM_RESET
-  , reset_probability(opt_reset_probability)
 #endif
 
   , ok                 (true)
