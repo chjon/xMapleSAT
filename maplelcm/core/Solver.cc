@@ -59,6 +59,7 @@ static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the 
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
+static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 #if RANDOM_RESET
 static DoubleOption  opt_reset_probability (_cat, "reset-probability", "Reset probability", 0.05, DoubleRange(0, true, 1, true));
 #endif
@@ -98,6 +99,8 @@ Solver::Solver() :
   //
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
+
+  , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
 
 #if RANDOM_RESET
   , reset_probability(opt_reset_probability)
@@ -620,7 +623,7 @@ bool Solver::simplifyLearnt_core()
                 assert(c.size() > 0);
                 // afterSize = c.size();
                 
-                if(saved_size !=c.size()){
+                if(drup_file && saved_size !=c.size()){
 
 #ifdef BIN_DRUP
                     binDRUP('a', c , drup_file);
@@ -746,7 +749,7 @@ bool Solver::simplifyLearnt_tier2()
                 assert(c.size() > 0);
                 // afterSize = c.size();
                 
-                if(saved_size!=c.size()){
+                if(drup_file && saved_size!=c.size()){
 
 #ifdef BIN_DRUP
                     binDRUP('a', c , drup_file);
@@ -1936,13 +1939,13 @@ static double luby(double y, int x){
 }
 
 static bool switch_mode = false;
-static void SIGALRM_switch(int signum) { switch_mode = true; }
+// static void SIGALRM_switch(int signum) { switch_mode = true; }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
-    signal(SIGALRM, SIGALRM_switch);
-    alarm(2500);
+    // signal(SIGALRM, SIGALRM_switch);
+    // alarm(2500);
 
     model.clear();
     conflict.clear();
@@ -1972,7 +1975,13 @@ lbool Solver::solve_()
 
     // Search:
     int curr_restarts = 0;
+    uint64_t curr_props = 0;
     while (status == l_Undef /*&& withinBudget()*/){
+        if (propagations - curr_props >  VSIDS_props_limit){
+            curr_props = propagations;
+            switch_mode = true;
+            VSIDS_props_limit = VSIDS_props_limit + VSIDS_props_limit/10;
+        }     
         if (VSIDS){
             int weighted = INT32_MAX;
             status = search(weighted);
@@ -1981,9 +1990,15 @@ lbool Solver::solve_()
             curr_restarts++;
             status = search(nof_conflicts);
         }
-        if (!VSIDS && switch_mode){
-            VSIDS = true;
-            printf("c Switched to VSIDS.\n");
+        if (switch_mode){ 
+            switch_mode = false;
+            VSIDS = !VSIDS;
+            if (VSIDS){
+                printf("c Switched to VSIDS.\n");
+            }
+            else{
+               printf("c Switched to LRB.\n");
+            }
             fflush(stdout);
             picked.clear();
             conflicted.clear();
