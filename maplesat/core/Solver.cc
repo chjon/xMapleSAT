@@ -301,6 +301,19 @@ Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
 
+#ifdef RANDOM_DECISION
+    while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
+        if (order_heap.empty()){
+            next = var_Undef;
+            break;
+        } else {
+            next = order_heap[irand(random_seed,order_heap.size())];
+            activity[next] = activity[order_heap[0]] * 1.5;
+            order_heap.decrease(next);
+            order_heap.removeMin();
+        }
+    }
+#else
     // Random decision:
     if (drand(random_seed) < random_var_freq && !order_heap.empty()){
         next = order_heap[irand(random_seed,order_heap.size())];
@@ -329,6 +342,7 @@ Lit Solver::pickBranchLit()
 #endif
             next = order_heap.removeMin();
         }
+#endif
 
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
 }

@@ -1038,6 +1038,20 @@ void Solver::cancelUntil(int level) {
 Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
+
+#ifdef RANDOM_DECISION
+    while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
+        if (order_heap_VSIDS.empty()){
+            next = var_Undef;
+            break;
+        } else {
+            next = order_heap_VSIDS[irand(random_seed,order_heap_VSIDS.size())];
+            activity[next] = activity[order_heap_VSIDS[0]] * 1.5;
+            order_heap_VSIDS.decrease(next);
+            order_heap_VSIDS.removeMin();
+        }
+    }
+#else
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
     Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
 
@@ -1069,6 +1083,7 @@ Lit Solver::pickBranchLit()
 #endif
             next = order_heap.removeMin();
         }
+#endif
 
     return mkLit(next, polarity[next]);
 }
