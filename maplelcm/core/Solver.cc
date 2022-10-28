@@ -1039,14 +1039,14 @@ Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
 
-#ifdef RANDOM_DECISION
+#if RANDOM_DECISION
     while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
         if (order_heap_VSIDS.empty()){
             next = var_Undef;
             break;
         } else {
             next = order_heap_VSIDS[irand(random_seed,order_heap_VSIDS.size())];
-            activity[next] = activity[order_heap_VSIDS[0]] * 1.5;
+            activity_VSIDS[next] = activity_VSIDS[order_heap_VSIDS[0]] * 1.5;
             order_heap_VSIDS.decrease(next);
             order_heap_VSIDS.removeMin();
         }
