@@ -210,6 +210,21 @@ protected:
 #endif
     };
 
+#if PRIORITIZE_ER
+    struct LitOrderLt {
+        const vec<double>&  activity;
+        const vec<unsigned int>& extensionLevel;
+        bool operator () (Lit x, Lit y) const {
+            if (extensionLevel[var(x)] != extensionLevel[var(y)]) return extensionLevel[var(x)] > extensionLevel[var(y)];
+            else                                                  return activity[var(x)] > activity[var(y)];
+        }
+        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+            : activity(act)
+            , extensionLevel(extlvl)
+        { }
+    };
+#endif
+
     // Solver state:
     //
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
@@ -235,6 +250,10 @@ protected:
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
+
+#if PRIORITIZE_ER
+    Heap<LitOrderLt>    bcp_order_heap;
+#endif
 
     ClauseAllocator     ca;
 

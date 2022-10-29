@@ -564,7 +564,11 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
 #endif
     assigns[var(p)] = lbool(!sign(p));
     vardata[var(p)] = mkVarData(from, decisionLevel());
+#if PRIORITIZE_ER
+    bcp_order_heap.insert(var(p));
+#else
     trail.push_(p);
+#endif
 }
 
 
@@ -585,8 +589,13 @@ CRef Solver::propagate()
     int     num_props = 0;
     watches.cleanAll();
 
+#if PRIORITIZE_ER
+    if (!bcp_order_heap.empty()){
+        Lit            p   = bcp_order_heap.removeMin();
+#else
     while (qhead < trail.size()){
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
+#endif
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
         num_props++;
@@ -636,6 +645,10 @@ CRef Solver::propagate()
     }
     propagations += num_props;
     simpDB_props -= num_props;
+
+#if PRIORITIZE_ER
+    // TODO: clear propagation heap?
+#endif
 
     return confl;
 }
