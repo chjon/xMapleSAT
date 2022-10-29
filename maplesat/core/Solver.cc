@@ -118,7 +118,11 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
+#if PRIORITIZE_ER
+  , order_heap         (VarOrderLt(activity, extensionLevel))
+#else
   , order_heap         (VarOrderLt(activity))
+#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -158,6 +162,9 @@ Var Solver::newVar(bool sign, bool dvar)
     lbd_seen.push(0);
     picked.push(0);
     conflicted.push(0);
+#if PRIORITIZE_ER
+    extensionLevel.push(0);
+#endif
 #if ALMOST_CONFLICT
     almost_conflicted.push(0);
 #endif
