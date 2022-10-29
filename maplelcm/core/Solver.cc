@@ -110,9 +110,15 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
+#if PRIORITIZE_ER
+  , order_heap_CHB     (VarOrderLt(activity_CHB, extensionLevel))
+  , order_heap_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel))
+  , order_heap_distance(VarOrderLt(activity_distance, extensionLevel))
+#else
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
+#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -854,6 +860,9 @@ Var Solver::newVar(bool sign, bool dvar)
 
     picked.push(0);
     conflicted.push(0);
+#if PRIORITIZE_ER
+    extensionLevel.push(0);
+#endif
     almost_conflicted.push(0);
 #ifdef ANTI_EXPLORATION
     canceled.push(0);
