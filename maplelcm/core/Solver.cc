@@ -1845,7 +1845,7 @@ lbool Solver::search(int& nof_conflicts)
                 restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > global_lbd_sum / conflicts_VSIDS);
                 cached = true;
             }
-            if (restart /*|| !withinBudget()*/){
+            if (restart || !withinBudget()){
                 lbd_queue.clear();
                 cached = false;
                 // Reached bound on number of conflicts:
@@ -1855,9 +1855,9 @@ lbool Solver::search(int& nof_conflicts)
                 // Reset activities
                 if (reset_probability > 0 && drand(random_seed) <= reset_probability) {
                     for (int v = 0; v < nVars(); v++) {
-                        activity_CHB     [v] = 0;
+                        // activity_CHB     [v] = 0;
                         activity_VSIDS   [v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
-                        activity_distance[v] = 0;
+                        // activity_distance[v] = 0;
                     }
                     rebuildOrderHeap();
                 }
@@ -1984,14 +1984,14 @@ lbool Solver::solve_()
 
     VSIDS = true;
     int init = 10000;
-    while (status == l_Undef && init > 0 /*&& withinBudget()*/)
+    while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
     VSIDS = false;
 
     // Search:
     int curr_restarts = 0;
     uint64_t curr_props = 0;
-    while (status == l_Undef /*&& withinBudget()*/){
+    while (status == l_Undef && withinBudget()){
         if (propagations - curr_props >  VSIDS_props_limit){
             curr_props = propagations;
             switch_mode = true;
