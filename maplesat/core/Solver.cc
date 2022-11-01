@@ -873,7 +873,9 @@ lbool Solver::search(int nof_conflicts)
                     for (Var v = 0; v < nVars(); v++) {
                         activity[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
                     }
+#if RANDOM_RESET_WEIRD
                     rebuildOrderHeap();
+#endif
                 }
 #endif
                 return l_Undef; }
