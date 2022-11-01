@@ -1851,19 +1851,16 @@ lbool Solver::search(int& nof_conflicts)
                 // Reached bound on number of conflicts:
                 progress_estimate = progressEstimate();
 
+                cancelUntil(0);
 #if RANDOM_RESET
                 // Reset activities
                 if (reset_probability > 0 && drand(random_seed) <= reset_probability) {
-                    for (int v = 0; v < nVars(); v++) {
-                        // activity_CHB     [v] = 0;
-                        activity_VSIDS   [v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
-                        // activity_distance[v] = 0;
+                    for (Var v = 0; v < nVars(); v++) {
+                        activity_VSIDS[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
                     }
                     rebuildOrderHeap();
                 }
 #endif
-
-                cancelUntil(0);
                 return l_Undef; }
 
             // Simplify the set of problem clauses:
