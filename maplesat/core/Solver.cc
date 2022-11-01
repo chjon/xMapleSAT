@@ -119,6 +119,7 @@ Solver::Solver() :
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
+  , bcp_order_heap     (LitOrderLt(activity, extensionLevel))
   , order_heap         (VarOrderLt(activity, extensionLevel))
 #else
   , order_heap         (VarOrderLt(activity))
@@ -291,6 +292,9 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
+#if PRIORITIZE_ER
+        bcp_order_heap.clear();
+#endif
     } }
 
 
@@ -647,7 +651,8 @@ CRef Solver::propagate()
     simpDB_props -= num_props;
 
 #if PRIORITIZE_ER
-    // TODO: clear propagation heap?
+    // Clear propagation heap
+    bcp_order_heap.clear();
 #endif
 
     return confl;

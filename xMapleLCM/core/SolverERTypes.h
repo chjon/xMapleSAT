@@ -38,8 +38,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef ER_PRIORITIZE_EXTVAR
-    #define ER_PRIORITIZE_EXTVAR true
+#ifndef PRIORITIZE_ER
+    #define PRIORITIZE_ER true
 #endif
 
 // Define heuristic for filtering clauses before clause selection
