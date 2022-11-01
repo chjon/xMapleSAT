@@ -871,7 +871,7 @@ lbool Solver::search(int nof_conflicts)
                 // Reset activities
                 if (reset_probability > 0 && drand(random_seed) <= reset_probability) {
                     for (Var v = 0; v < nVars(); v++) {
-                        activity_VSIDS[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+                        activity[v] = (rnd_init_act ? drand(random_seed) * 0.00001 : 0);
                     }
                     rebuildOrderHeap();
                 }
