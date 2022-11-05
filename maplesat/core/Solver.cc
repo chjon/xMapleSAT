@@ -119,9 +119,14 @@ Solver::Solver() :
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
-  , bcp_order_heap     (LitOrderLt(activity, extensionLevel))
+#if BCP_PRIORITY
+  , bcp_order_heap     (VarOrderLt(activity, extensionLevel))
+#endif
   , order_heap         (VarOrderLt(activity, extensionLevel))
 #else
+#if BCP_PRIORITY
+  , bcp_order_heap     (VarOrderLt(activity))
+#endif
   , order_heap         (VarOrderLt(activity))
 #endif
   , progress_estimate  (0)
@@ -259,6 +264,9 @@ bool Solver::satisfied(const Clause& c) const {
 //
 void Solver::cancelUntil(int level) {
     if (decisionLevel() > level){
+#if BCP_PRIORITY
+        assert(bcp_order_heap.empty());
+#endif
         for (int c = trail.size()-1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
             uint64_t age = conflicts - picked[x];
@@ -292,9 +300,6 @@ void Solver::cancelUntil(int level) {
         qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
-#if PRIORITIZE_ER
-        bcp_order_heap.clear();
-#endif
     } }
 
 
@@ -568,8 +573,8 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
 #endif
     assigns[var(p)] = lbool(!sign(p));
     vardata[var(p)] = mkVarData(from, decisionLevel());
-#if PRIORITIZE_ER
-    bcp_order_heap.insert(var(p));
+#if BCP_PRIORITY
+    bcp_order_heap.insert(p.x);
 #else
     trail.push_(p);
 #endif
@@ -593,13 +598,17 @@ CRef Solver::propagate()
     int     num_props = 0;
     watches.cleanAll();
 
-#if PRIORITIZE_ER
-    if (!bcp_order_heap.empty()){
-        Lit            p   = bcp_order_heap.removeMin();
+#if BCP_PRIORITY
+    while (qhead < trail.size() || !bcp_order_heap.empty()) {
+        while (!bcp_order_heap.empty()) {
+            Lit q;
+            q.x = bcp_order_heap.removeMin();
+            trail.push_(q);
+        }
 #else
     while (qhead < trail.size()){
-        Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
 #endif
+        Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
         num_props++;
@@ -636,6 +645,13 @@ CRef Solver::propagate()
             *j++ = w;
             if (value(first) == l_False){
                 confl = cr;
+#if BCP_PRIORITY
+                while (!bcp_order_heap.empty()) {
+                    Lit q;
+                    q.x = bcp_order_heap.removeMin();
+                    trail.push_(q);
+                }
+#endif
                 qhead = trail.size();
                 // Copy the remaining watches:
                 while (i < end)
@@ -649,11 +665,6 @@ CRef Solver::propagate()
     }
     propagations += num_props;
     simpDB_props -= num_props;
-
-#if PRIORITIZE_ER
-    // Clear propagation heap
-    bcp_order_heap.clear();
-#endif
 
     return confl;
 }
@@ -1115,6 +1126,9 @@ void Solver::relocAll(ClauseAllocator& to)
 
     // All reasons:
     //
+#if BCP_PRIORITY
+    assert(bcp_order_heap.empty());
+#endif
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
 

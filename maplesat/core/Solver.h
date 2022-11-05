@@ -210,21 +210,6 @@ protected:
 #endif
     };
 
-#if PRIORITIZE_ER
-    struct LitOrderLt {
-        const vec<double>&  activity;
-        const vec<unsigned int>& extensionLevel;
-        bool operator () (Lit x, Lit y) const {
-            if (extensionLevel[var(x)] != extensionLevel[var(y)]) return extensionLevel[var(x)] > extensionLevel[var(y)];
-            else                                                  return activity[var(x)] > activity[var(y)];
-        }
-        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
-            : activity(act)
-            , extensionLevel(extlvl)
-        { }
-    };
-#endif
-
     // Solver state:
     //
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
@@ -247,8 +232,8 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if PRIORITIZE_ER
-    Heap<LitOrderLt>    bcp_order_heap;
+#if BCP_PRIORITY
+    Heap<VarOrderLt>    bcp_order_heap;
 #endif
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
