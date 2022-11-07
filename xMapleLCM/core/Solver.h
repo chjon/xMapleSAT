@@ -236,8 +236,20 @@ protected:
 
     struct VarOrderLt {
         const vec<double>&  activity;
+#if PRIORITIZE_ER
+        const vec<unsigned int>& extensionLevel;
+        bool operator () (Var x, Var y) const {
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
+            else                                        return activity[x] > activity[y];
+        }
+        VarOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+            : activity(act)
+            , extensionLevel(extlvl)
+        { }
+#else
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
         VarOrderLt(const vec<double>&  act) : activity(act) { }
+#endif
     };
 
     // Solver state:

@@ -861,6 +861,9 @@ Var Solver::newVar(bool sign, bool dvar)
 
     picked.push(0);
     conflicted.push(0);
+#if PRIORITIZE_ER
+    ser->extensionLevel.push(0);
+#endif
     almost_conflicted.push(0);
 #ifdef ANTI_EXPLORATION
     canceled.push(0);
