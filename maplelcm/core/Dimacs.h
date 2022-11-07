@@ -124,7 +124,7 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
                 int lvl = parseInt(in);
                 S.extensionLevel[var] = lvl;
             }else{
-                printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
+                skipLine(in);
             }
         } else if (*in == 'p')
             skipLine(in);
