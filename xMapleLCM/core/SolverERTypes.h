@@ -200,24 +200,6 @@ using DeletionPredicateSetup = std::function<void()>;
  */
 using DeletionPredicate = std::function<bool(Var)>;
 
-/**
- * @brief Comparison function for prioritizing extension variables
- */
-struct ExtVarOrderLt {
-    const vec<unsigned int>& extLevel;
-    const vec<double      >& activity;
-    bool operator () (Var x, Var y) const {
-        // Lexicographic ordering over the tuple (extLevel, activity)
-        // Return values are written here in order of priority
-        if (extLevel[x] != extLevel[y]) return extLevel[x] > extLevel[y];
-        else                            return activity[x] > activity[y];
-    }
-    ExtVarOrderLt(const vec<unsigned int>& lvl, const vec<double>& act)
-        : extLevel(lvl)
-        , activity(act)
-    {}
-};
-
 }
 
 #endif

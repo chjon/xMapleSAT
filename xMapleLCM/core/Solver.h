@@ -264,11 +264,7 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if ER_PRIORITIZE_EXTVAR
-    Heap<ExtVarOrderLt>
-#else
     Heap<VarOrderLt>
-#endif
                         order_heap_CHB, // A priority queue of variables ordered with respect to the variable activity.
                         order_heap_VSIDS,
                         order_heap_distance;

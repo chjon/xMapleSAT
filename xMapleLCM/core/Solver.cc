@@ -117,15 +117,9 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if ER_PRIORITIZE_EXTVAR
-  , order_heap_CHB     (ExtVarOrderLt(ser->extensionLevel, activity_CHB))
-  , order_heap_VSIDS   (ExtVarOrderLt(ser->extensionLevel, activity_VSIDS))
-  , order_heap_distance(ExtVarOrderLt(ser->extensionLevel, activity_distance))
-#else
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
-#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
