@@ -264,9 +264,6 @@ bool Solver::satisfied(const Clause& c) const {
 //
 void Solver::cancelUntil(int level) {
     if (decisionLevel() > level){
-#if BCP_PRIORITY
-        assert(bcp_order_heap.empty());
-#endif
         for (int c = trail.size()-1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
             uint64_t age = conflicts - picked[x];
@@ -553,7 +550,7 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
 }
 
 
-void Solver::uncheckedEnqueue(Lit p, CRef from)
+void Solver::uncheckedEnqueue(Lit p, CRef from, bool useHeap)
 {
     assert(value(p) == l_Undef);
     picked[var(p)] = conflicts;
@@ -573,11 +570,17 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
 #endif
     assigns[var(p)] = lbool(!sign(p));
     vardata[var(p)] = mkVarData(from, decisionLevel());
+
+if (useHeap) {
 #if BCP_PRIORITY
-    bcp_order_heap.insert(p.x);
+    // bcp_order_heap.insert(p.x);
+    bcp_order_vec.push(p.x);
 #else
     trail.push_(p);
 #endif
+} else {
+    trail.push_(p);
+}
 }
 
 
@@ -598,16 +601,7 @@ CRef Solver::propagate()
     int     num_props = 0;
     watches.cleanAll();
 
-#if BCP_PRIORITY
-    while (qhead < trail.size() || !bcp_order_heap.empty()) {
-        while (!bcp_order_heap.empty()) {
-            Lit q;
-            q.x = bcp_order_heap.removeMin();
-            trail.push_(q);
-        }
-#else
     while (qhead < trail.size()){
-#endif
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
@@ -645,22 +639,31 @@ CRef Solver::propagate()
             *j++ = w;
             if (value(first) == l_False){
                 confl = cr;
-#if BCP_PRIORITY
-                while (!bcp_order_heap.empty()) {
-                    Lit q;
-                    q.x = bcp_order_heap.removeMin();
-                    trail.push_(q);
-                }
-#endif
                 qhead = trail.size();
                 // Copy the remaining watches:
                 while (i < end)
                     *j++ = *i++;
             }else
-                uncheckedEnqueue(first, cr);
+                uncheckedEnqueue(first, cr, true);
 
         NextClause:;
         }
+
+#if BCP_PRIORITY
+        // while (!bcp_order_heap.empty()) {
+        //     Lit q; q.x = bcp_order_heap.removeMin();
+        //     trail.push_(q);
+        // }
+
+        // for (int k = bcp_order_vec.size() - 1; k >= 0; k--) {
+        for (int k = 0; k < bcp_order_vec.size(); k++) {
+            Lit q; q.x = bcp_order_vec[k];
+            trail.push_(q);
+        }
+        bcp_order_vec.clear();
+
+        if (confl != CRef_Undef) qhead = trail.size();
+#endif
         ws.shrink(i - j);
     }
     propagations += num_props;
@@ -1126,9 +1129,6 @@ void Solver::relocAll(ClauseAllocator& to)
 
     // All reasons:
     //
-#if BCP_PRIORITY
-    assert(bcp_order_heap.empty());
-#endif
     for (int i = 0; i < trail.size(); i++){
         Var v = var(trail[i]);
 
