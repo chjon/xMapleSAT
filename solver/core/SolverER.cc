@@ -333,7 +333,7 @@ namespace Minisat {
                 ps[j++] = p = ps[i];
         ps.shrink(i - j);
 
-        if (ps.size() == 0)
+        if (ps.size() == 0) {
             return;
         } else if (ps.size() == 1) {
             solver->uncheckedEnqueue(ps[0]);
