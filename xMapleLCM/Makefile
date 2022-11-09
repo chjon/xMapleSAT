@@ -103,7 +103,7 @@ all: maplelcm xmaplelcm
 	touch $@
 
 maplelcm: .prev_maplelcm
-	$(call make_er_solver,maplelcm,0,0,0,0,0,0,0,0)
+	$(call make_er_solver,maplelcm,0,0,0,0,0,0,0,0,0)
 
 xmaplelcm: xmaplelcm_rnd_rng xmaplelcm_rnd_lbd xmaplelcm_sub_rng xmaplelcm_sub_lbd xmaplelcm_glucoser
 
