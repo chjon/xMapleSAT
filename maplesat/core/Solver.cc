@@ -640,13 +640,18 @@ CRef Solver::propagate()
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
 #if BCP_PRIORITY
-            if (value(first) == l_False || (bcp_assigns[var(first)] ^ sign(first)) == l_False){
-                while (!bcp_order_heap.empty()) {
-                    Lit p; p.x = bcp_order_heap.removeMin();
-                    if (value(p) == l_Undef)
-                        uncheckedEnqueue(p, vardata[var(p)].reason);
+            if (value(first) == l_False || bcpValue(first) == l_False){
+                // Found a conflict!
+                // Make sure conflicting literal is on the trail
+                if (value(first) == l_Undef)
+                    uncheckedEnqueue(~first, vardata[var(first)].reason);
+
+                // Clear the propagation queue
+                for (int k = 0; k < bcp_order_heap.size(); k++) {
+                    Lit p; p.x = bcp_order_heap[k];
                     bcp_assigns[var(p)] = l_Undef;
                 }
+                bcp_order_heap.clear();
 #else
             if (value(first) == l_False){
 #endif
@@ -658,7 +663,7 @@ CRef Solver::propagate()
             } else {
 #if BCP_PRIORITY
                 // Queue literal for propagation
-                if ((bcp_assigns[var(first)] ^ sign(first)) == l_Undef) {
+                if (bcpValue(first) == l_Undef) {
                     bcp_assigns[var(first)] = lbool(!sign(first));
                     vardata[var(first)].reason = cr;
                     bcp_order_heap.insert(first.x);

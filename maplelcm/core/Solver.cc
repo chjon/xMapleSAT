@@ -1426,34 +1426,36 @@ CRef Solver::propagate()
         vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
-            if (value(the_other) == l_False){
+            if (value(the_other) == l_True || bcpValue(the_other) == l_True) {
+                continue;
+#if BCP_PRIORITY
+            } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
+                // Found a conflict!
+                // Make sure conflicting literal is on the trail
+                if (value(the_other) == l_Undef)
+                    uncheckedEnqueue(~the_other, vardata[var(the_other)].reason);
+
+                // Clear the propagation queue
+                for (int k = 0; k < bcp_order_heap.size(); k++) {
+                    Lit p; p.x = bcp_order_heap[k];
+                    bcp_assigns[var(p)] = l_Undef;
+                }
+                bcp_order_heap.clear();
+#else
+            } else if (value(the_other) == l_False) {
+#endif
                 confl = ws_bin[k].cref;
 #ifdef LOOSE_PROP_STAT
                 return confl;
 #else
                 goto ExitProp;
 #endif
-            }else if(value(the_other) == l_Undef) {
+            } else {
 #if BCP_PRIORITY
                 // Queue literal for propagation
-                if ((bcp_assigns[var(the_other)] ^ sign(the_other)) == l_Undef) {
-                    bcp_assigns[var(the_other)] = lbool(!sign(the_other));
-                    vardata[var(the_other)].reason = ws_bin[k].cref;
-                    bcp_order_heap.insert(the_other.x);
-                } else if ((bcp_assigns[var(the_other)] ^ sign(the_other)) == l_False) {
-                    while (!bcp_order_heap.empty()) {
-                        Lit p; p.x = bcp_order_heap.removeMin();
-                        if (value(p) == l_Undef)
-                            uncheckedEnqueue(p, vardata[var(p)].reason);
-                        bcp_assigns[var(p)] = l_Undef;
-                    }
-                    confl = ws_bin[k].cref;
-#ifdef LOOSE_PROP_STAT
-                    return confl;
-#else
-                    goto ExitProp;
-#endif
-                }
+                bcp_assigns[var(the_other)] = lbool(!sign(the_other));
+                vardata[var(the_other)].reason = ws_bin[k].cref;
+                bcp_order_heap.insert(the_other.x);
 #else
                 uncheckedEnqueue(the_other, ws_bin[k].cref);
 #endif
@@ -1491,13 +1493,18 @@ CRef Solver::propagate()
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
 #if BCP_PRIORITY
-            if (value(first) == l_False || (bcp_assigns[var(first)] ^ sign(first)) == l_False){
-                while (!bcp_order_heap.empty()) {
-                    Lit p; p.x = bcp_order_heap.removeMin();
-                    if (value(p) == l_Undef)
-                        uncheckedEnqueue(p, vardata[var(p)].reason);
+            if (value(first) == l_False || bcpValue(first) == l_False){
+                // Found a conflict!
+                // Make sure conflicting literal is on the trail
+                if (value(first) == l_Undef)
+                    uncheckedEnqueue(~first, vardata[var(first)].reason);
+
+                // Clear the propagation queue
+                for (int k = 0; k < bcp_order_heap.size(); k++) {
+                    Lit p; p.x = bcp_order_heap[k];
                     bcp_assigns[var(p)] = l_Undef;
                 }
+                bcp_order_heap.clear();
 #else
             if (value(first) == l_False){
 #endif
@@ -1509,7 +1516,7 @@ CRef Solver::propagate()
             } else {
 #if BCP_PRIORITY
                 // Queue literal for propagation
-                if ((bcp_assigns[var(first)] ^ sign(first)) == l_Undef) {
+                if (bcpValue(first) == l_Undef) {
                     bcp_assigns[var(first)] = lbool(!sign(first));
                     vardata[var(first)].reason = cr;
                     bcp_order_heap.insert(first.x);
