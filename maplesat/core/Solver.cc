@@ -643,7 +643,8 @@ CRef Solver::propagate()
             if (value(first) == l_False || (bcp_assigns[var(first)] ^ sign(first)) == l_False){
                 while (!bcp_order_heap.empty()) {
                     Lit p; p.x = bcp_order_heap.removeMin();
-                    uncheckedEnqueue(p, vardata[var(p)].reason);
+                    if (value(p) == l_Undef)
+                        uncheckedEnqueue(p, vardata[var(p)].reason);
                     bcp_assigns[var(p)] = l_Undef;
                 }
 #else
