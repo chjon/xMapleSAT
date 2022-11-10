@@ -234,7 +234,7 @@ protected:
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
 #if BCP_PRIORITY
     Heap<VarOrderLt>    bcp_order_heap;
-    vec<int>    bcp_order_vec;
+    vec<lbool>          bcp_assigns;
 #endif
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
@@ -265,7 +265,7 @@ protected:
     void     insertVarOrder   (Var x);                                                 // Insert a variable in the decision order priority queue.
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     newDecisionLevel ();                                                      // Begins a new decision level.
-    void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef, bool useHeap=false);                         // Enqueue a literal. Assumes value of literal is undefined.
+    void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
     CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
