@@ -201,7 +201,11 @@ protected:
 #if PRIORITIZE_ER
         const vec<unsigned int>& extensionLevel;
         bool operator () (Var x, Var y) const {
+#if PRIORITIZE_ER_LOW
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
+#else
             if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
+#endif
             else                                        return activity[x] > activity[y];
         }
         VarOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
