@@ -1426,7 +1426,7 @@ CRef Solver::propagate()
         vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
-            if (value(the_other) == l_True || bcpValue(the_other) == l_True) {
+            if (value(the_other) == l_True) {
                 continue;
 #if BCP_PRIORITY
             } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
@@ -1436,10 +1436,8 @@ CRef Solver::propagate()
                     uncheckedEnqueue(~the_other, vardata[var(the_other)].reason);
 
                 // Clear the propagation queue
-                for (int k = 0; k < bcp_order_heap.size(); k++) {
-                    Lit p; p.x = bcp_order_heap[k];
-                    bcp_assigns[var(p)] = l_Undef;
-                }
+                for (int k = 0; k < bcp_order_heap.size(); k++)
+                    bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
                 bcp_order_heap.clear();
 #else
             } else if (value(the_other) == l_False) {
@@ -1453,9 +1451,11 @@ CRef Solver::propagate()
             } else {
 #if BCP_PRIORITY
                 // Queue literal for propagation
-                bcp_assigns[var(the_other)] = lbool(!sign(the_other));
-                vardata[var(the_other)].reason = ws_bin[k].cref;
-                bcp_order_heap.insert(the_other.x);
+                if (bcpValue(the_other) == l_Undef) {
+                    bcp_assigns[var(the_other)] = lbool(!sign(the_other));
+                    vardata[var(the_other)].reason = ws_bin[k].cref;
+                    bcp_order_heap.insert(the_other.x);
+                }
 #else
                 uncheckedEnqueue(the_other, ws_bin[k].cref);
 #endif

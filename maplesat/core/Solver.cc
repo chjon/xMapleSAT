@@ -647,10 +647,8 @@ CRef Solver::propagate()
                     uncheckedEnqueue(~first, vardata[var(first)].reason);
 
                 // Clear the propagation queue
-                for (int k = 0; k < bcp_order_heap.size(); k++) {
-                    Lit p; p.x = bcp_order_heap[k];
-                    bcp_assigns[var(p)] = l_Undef;
-                }
+                for (int k = 0; k < bcp_order_heap.size(); k++)
+                    bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
                 bcp_order_heap.clear();
 #else
             if (value(first) == l_False){
