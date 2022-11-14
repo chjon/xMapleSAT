@@ -112,18 +112,18 @@ Solver::Solver() :
   , simpDB_props       (0)
 #if PRIORITIZE_ER
 #if BCP_PRIORITY
-  , bcp_order_heap_CHB     (VarOrderLt(activity_CHB, extensionLevel))
-  , bcp_order_heap_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel))
-  , bcp_order_heap_distance(VarOrderLt(activity_distance, extensionLevel))
+  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB, extensionLevel))
+  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS, extensionLevel))
+  , bcp_order_heap_distance(LitOrderLt(activity_distance, extensionLevel))
 #endif
   , order_heap_CHB     (VarOrderLt(activity_CHB, extensionLevel))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel))
   , order_heap_distance(VarOrderLt(activity_distance, extensionLevel))
 #else
 #if BCP_PRIORITY
-  , bcp_order_heap_CHB     (VarOrderLt(activity_CHB))
-  , bcp_order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
-  , bcp_order_heap_distance(VarOrderLt(activity_distance))
+  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB))
+  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS))
+  , bcp_order_heap_distance(LitOrderLt(activity_distance))
 #endif
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
@@ -1407,7 +1407,7 @@ CRef Solver::propagate()
     watches_bin.cleanAll();
 
 #if BCP_PRIORITY
-    Heap<VarOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
+    Heap<LitOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
 
     while (qhead < trail.size() || !bcp_order_heap.empty()){
         if (qhead == trail.size()) {

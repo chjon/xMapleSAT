@@ -230,6 +230,32 @@ protected:
         bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
     };
 
+    struct LitOrderLt {
+        const vec<double>&  activity;
+#if PRIORITIZE_ER
+        const vec<unsigned int>& extensionLevel;
+        bool operator () (Var x, Var y) const {
+            x >>= 1; y >>= 1;
+#if PRIORITIZE_ER_LOW
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
+#else
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
+#endif
+            else                                        return activity[x] > activity[y];
+        }
+        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+            : activity(act)
+            , extensionLevel(extlvl)
+        { }
+#else
+        bool operator () (Var x, Var y) const {
+            x >>= 1; y >>= 1;
+            return activity[x] > activity[y];
+        }
+        LitOrderLt(const vec<double>&  act) : activity(act) { }
+#endif
+    };
+
     struct VarOrderLt {
         const vec<double>&  activity;
 #if PRIORITIZE_ER
@@ -277,7 +303,7 @@ protected:
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
 #if BCP_PRIORITY
-    Heap<VarOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
+    Heap<LitOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
     vec<lbool>          bcp_assigns;
 #endif
     Heap<VarOrderLt>    order_heap_CHB,   // A priority queue of variables ordered with respect to the variable activity.

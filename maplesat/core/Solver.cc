@@ -120,12 +120,12 @@ Solver::Solver() :
   , simpDB_props       (0)
 #if PRIORITIZE_ER
 #if BCP_PRIORITY
-  , bcp_order_heap     (VarOrderLt(activity, extensionLevel))
+  , bcp_order_heap     (LitOrderLt(activity, extensionLevel))
 #endif
   , order_heap         (VarOrderLt(activity, extensionLevel))
 #else
 #if BCP_PRIORITY
-  , bcp_order_heap     (VarOrderLt(activity))
+  , bcp_order_heap     (LitOrderLt(activity))
 #endif
   , order_heap         (VarOrderLt(activity))
 #endif
