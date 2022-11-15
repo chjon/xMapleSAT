@@ -118,10 +118,20 @@ Solver::Solver() :
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
+#if BCP_PRIORITY
+  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB, ser->extensionLevel))
+  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS, ser->extensionLevel))
+  , bcp_order_heap_distance(LitOrderLt(activity_distance, ser->extensionLevel))
+#endif
   , order_heap_CHB     (VarOrderLt(activity_CHB, ser->extensionLevel))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS, ser->extensionLevel))
   , order_heap_distance(VarOrderLt(activity_distance, ser->extensionLevel))
 #else
+#if BCP_PRIORITY
+  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB))
+  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS))
+  , bcp_order_heap_distance(LitOrderLt(activity_distance))
+#endif
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
@@ -1406,7 +1416,18 @@ CRef Solver::propagate()
     watches.cleanAll();
     watches_bin.cleanAll();
 
+#if BCP_PRIORITY
+    Heap<LitOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
+
+    while (qhead < trail.size() || !bcp_order_heap.empty()){
+        if (qhead == trail.size()) {
+            Lit p; p.x = bcp_order_heap.removeMin();
+            uncheckedEnqueue(p, vardata[var(p)].reason);
+            bcp_assigns[var(p)] = l_Undef;
+        }
+#else
     while (qhead < trail.size()){
+#endif
         Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
@@ -1415,15 +1436,40 @@ CRef Solver::propagate()
         vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
-            if (value(the_other) == l_False){
+            if (value(the_other) == l_True) {
+                continue;
+#if BCP_PRIORITY
+            } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
+                // Found a conflict!
+                // Make sure conflicting literal is on the trail
+                if (value(the_other) == l_Undef)
+                    uncheckedEnqueue(~the_other, vardata[var(the_other)].reason);
+
+                // Clear the propagation queue
+                for (int k = 0; k < bcp_order_heap.size(); k++)
+                    bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
+                bcp_order_heap.clear();
+#else
+            } else if (value(the_other) == l_False) {
+#endif
                 confl = ws_bin[k].cref;
 #ifdef LOOSE_PROP_STAT
                 return confl;
 #else
                 goto ExitProp;
 #endif
-            }else if(value(the_other) == l_Undef)
+            } else {
+#if BCP_PRIORITY
+                // Queue literal for propagation
+                if (bcpValue(the_other) == l_Undef) {
+                    bcp_assigns[var(the_other)] = lbool(!sign(the_other));
+                    vardata[var(the_other)].reason = ws_bin[k].cref;
+                    bcp_order_heap.insert(the_other.x);
+                }
+#else
                 uncheckedEnqueue(the_other, ws_bin[k].cref);
+#endif
+            }
         }
 
         for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
@@ -1456,14 +1502,39 @@ CRef Solver::propagate()
 
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
+#if BCP_PRIORITY
+            if (value(first) == l_False || bcpValue(first) == l_False){
+                // Found a conflict!
+                // Make sure conflicting literal is on the trail
+                if (value(first) == l_Undef)
+                    uncheckedEnqueue(~first, vardata[var(first)].reason);
+
+                // Clear the propagation queue
+                for (int k = 0; k < bcp_order_heap.size(); k++) {
+                    Lit p; p.x = bcp_order_heap[k];
+                    bcp_assigns[var(p)] = l_Undef;
+                }
+                bcp_order_heap.clear();
+#else
             if (value(first) == l_False){
+#endif
                 confl = cr;
                 qhead = trail.size();
                 // Copy the remaining watches:
                 while (i < end)
                     *j++ = *i++;
-            }else
+            } else {
+#if BCP_PRIORITY
+                // Queue literal for propagation
+                if (bcpValue(first) == l_Undef) {
+                    bcp_assigns[var(first)] = lbool(!sign(first));
+                    vardata[var(first)].reason = cr;
+                    bcp_order_heap.insert(first.x);
+                }
+#else
                 uncheckedEnqueue(first, cr);
+#endif
+            }
 
 NextClause:;
         }

@@ -94,6 +94,10 @@ public:
     //
     lbool   value      (Var x) const;       // The current value of a variable.
     lbool   value      (Lit p) const;       // The current value of a literal.
+#if BCP_PRIORITY
+    lbool   bcpValue  (Var x) const;       // The queued value of a variable.
+    lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
+#endif
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nAssigns   ()      const;       // The current number of assigned literals.
@@ -451,6 +455,10 @@ inline int      Solver::decisionLevel ()      const   { return trail_lim.size();
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
 inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
+#if BCP_PRIORITY
+inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
+inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
+#endif
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
