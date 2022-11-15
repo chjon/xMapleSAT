@@ -527,9 +527,6 @@ inline void Solver::varDecayActivity() {
     var_inc *= (1 / var_decay); }
 
 inline void Solver::varBumpActivity(Var v, double mult) {
-#if BUMP_ER
-    mult *= (ser->extensionLevel[v] + 1);
-#endif
     if ( (activity_VSIDS[v] += var_inc * mult) > 1e100 ) {
         // Rescale:
         for (int i = 0; i < nVars(); i++)

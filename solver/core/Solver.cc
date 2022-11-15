@@ -396,7 +396,11 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 #if BRANCHING_HEURISTIC == CHB
                 last_conflict[var(q)] = conflicts;
 #elif BRANCHING_HEURISTIC == VSIDS
+#if BUMP_ER
+                varBumpActivity(var(q), var_inc * (ser->extensionLevel[var(q)] + 1));
+#else
                 varBumpActivity(var(q));
+#endif
 #endif
                 conflicted[var(q)]++;
                 seen[var(q)] = 1;
