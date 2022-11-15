@@ -31,7 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_SolverTypes_h
 
 #ifndef BCP_PRIORITY
-    #define BCP_PRIORITY true
+    #define BCP_PRIORITY false
 #endif
 
 #ifndef PRIORITIZE_ER
