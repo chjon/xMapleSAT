@@ -10,7 +10,7 @@ maplesat_bcp_priority:
 	mv core/maplesat_static core/maplesat_bcp_priority
 
 maplesat_er_bump:
-	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D BUMP_ER=1" -C core rs 
+	make CMD_CFLAGS="-D BUMP_ER=1" -C core rs 
 	mv core/maplesat_static core/maplesat_er_bump
 
 maplesat_er_priority:

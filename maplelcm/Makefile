@@ -10,7 +10,7 @@ maplelcm_bcp_priority:
 	mv core/glucose_static core/maplelcm_bcp_priority
 
 maplelcm_er_bump:
-	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D BUMP_ER=1" -C core rs 
+	make CMD_CFLAGS="-D BUMP_ER=1" -C core rs 
 	mv core/glucose_static core/maplelcm_er_bump
 
 maplelcm_er_priority:
