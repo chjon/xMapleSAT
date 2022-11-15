@@ -26,6 +26,26 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define CHB 1
 #define LRB 2
 
+#ifndef BCP_PRIORITY
+    #define BCP_PRIORITY true
+#endif
+
+#ifndef PRIORITIZE_ER
+    #define PRIORITIZE_ER false
+#endif
+
+#ifndef PRIORITIZE_ER_LOW
+    #define PRIORITIZE_ER_LOW false
+#endif
+
+#ifndef PRIORITIZE_ER_BINARY
+    #define PRIORITIZE_ER_BINARY false
+#endif
+
+#ifndef BUMP_ER
+    #define BUMP_ER false
+#endif
+
 #ifndef BRANCHING_HEURISTIC
     #define BRANCHING_HEURISTIC LRB
 #endif

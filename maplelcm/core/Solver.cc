@@ -870,7 +870,7 @@ Var Solver::newVar(bool sign, bool dvar)
 
     picked.push(0);
     conflicted.push(0);
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER || BUMP_ER
     extensionLevel.push(0);
 #endif
 #if BCP_PRIORITY

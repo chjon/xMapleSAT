@@ -199,7 +199,7 @@ public:
 
     vec<uint32_t> picked;
     vec<uint32_t> conflicted;
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER || BUMP_ER
     // Map from variables to their extension level
     vec<unsigned int> extensionLevel;
 #endif
@@ -514,6 +514,9 @@ inline void Solver::varDecayActivity() {
     var_inc *= (1 / var_decay); }
 
 inline void Solver::varBumpActivity(Var v, double mult) {
+#if BUMP_ER
+    mult *= (extensionLevel[v] + 1);
+#endif
     if ( (activity_VSIDS[v] += var_inc * mult) > 1e100 ) {
         // Rescale:
         for (int i = 0; i < nVars(); i++)

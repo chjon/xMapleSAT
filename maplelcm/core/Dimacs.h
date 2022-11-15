@@ -63,7 +63,7 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER || BUMP_ER
         } else if (*in == 'c') {
             if (eagerMatch(in, "c extlvl")){
                 int var = parseInt(in);
@@ -134,7 +134,7 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("c PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER || BUMP_ER
         } else if (*in == 'c') {
             if (eagerMatch(in, "c extlvl")){
                 int var = parseInt(in);
