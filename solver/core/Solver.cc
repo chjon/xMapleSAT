@@ -99,6 +99,8 @@ Solver::Solver() :
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
 
+  , ser (new SolverER(this))
+
     // Statistics: (formerly in 'SolverStats')
     //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
@@ -121,7 +123,11 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
+#if PRIORITIZE_ER
+  , order_heap         (VarOrderLt(activity, ser->extensionLevel))
+#else
   , order_heap         (VarOrderLt(activity))
+#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -131,8 +137,7 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 
-  , ser (nullptr)
-{ ser = new SolverER(this); }
+{}
 
 
 Solver::~Solver()
@@ -164,6 +169,12 @@ Var Solver::newVar(bool sign, bool dvar)
     lbd_seen.push(0);
     picked.push(0);
     conflicted.push(0);
+#if PRIORITIZE_ER || BUMP_ER
+    ser->extensionLevel.push(0);
+#endif
+#if BCP_PRIORITY
+    bcp_assigns.push(l_Undef);
+#endif
 #if ALMOST_CONFLICT
     almost_conflicted.push(0);
 #endif

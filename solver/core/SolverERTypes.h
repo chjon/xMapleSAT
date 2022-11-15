@@ -38,8 +38,20 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef ER_PRIORITIZE_EXTVAR
-    #define ER_PRIORITIZE_EXTVAR true
+#ifndef BCP_PRIORITY
+    #define BCP_PRIORITY false
+#endif
+#ifndef PRIORITIZE_ER
+    #define PRIORITIZE_ER false
+#endif
+#ifndef PRIORITIZE_ER_LOW
+    #define PRIORITIZE_ER_LOW false
+#endif
+#ifndef PRIORITIZE_ER_BINARY
+    #define PRIORITIZE_ER_BINARY false
+#endif
+#ifndef BUMP_ER
+    #define BUMP_ER false
 #endif
 
 // Define heuristic for filtering clauses before clause selection

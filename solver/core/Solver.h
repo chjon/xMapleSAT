@@ -168,6 +168,8 @@ public:
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
 
+    SolverER* ser;
+
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
@@ -214,10 +216,52 @@ protected:
         bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
     };
 
+    struct LitOrderLt {
+        const vec<double>&  activity;
+#if PRIORITIZE_ER
+        const vec<unsigned int>& extensionLevel;
+        bool operator () (Var x, Var y) const {
+            x >>= 1; y >>= 1;
+#if PRIORITIZE_ER_LOW
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
+#else
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
+#endif
+            else                                        return activity[x] > activity[y];
+        }
+        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+            : activity(act)
+            , extensionLevel(extlvl)
+        { }
+#else
+        bool operator () (Var x, Var y) const {
+            x >>= 1; y >>= 1;
+            return activity[x] > activity[y];
+        }
+        LitOrderLt(const vec<double>&  act) : activity(act) { }
+#endif
+    };
+
     struct VarOrderLt {
         const vec<double>&  activity;
+#if PRIORITIZE_ER
+        const vec<unsigned int>& extensionLevel;
+        bool operator () (Var x, Var y) const {
+#if PRIORITIZE_ER_LOW
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
+#else
+            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
+#endif
+            else                                        return activity[x] > activity[y];
+        }
+        VarOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+            : activity(act)
+            , extensionLevel(extlvl)
+        { }
+#else
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
         VarOrderLt(const vec<double>&  act) : activity(act) { }
+#endif
     };
 
     // Solver state:
@@ -243,6 +287,10 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
+#if BCP_PRIORITY
+    Heap<LitOrderLt>    bcp_order_heap;
+    vec<lbool>          bcp_assigns;
+#endif
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
@@ -345,9 +393,6 @@ protected:
     // Returns a random integer 0 <= x < size. Seed must never be 0.
     static inline int irand(double& seed, int size) {
         return (int)(drand(seed) * size); }
-
-public:
-    SolverER* ser;
 
 private:
     friend class SolverER;
