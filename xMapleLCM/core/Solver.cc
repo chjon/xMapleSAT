@@ -1248,7 +1248,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
             Var v = var(add_tmp[i]);
             if (level(v) >= out_btlevel - 1)
 #if BUMP_ER
-                varBumpActivity(v, 1 * (ser->extensionLevel[var(q)] + 1));
+                varBumpActivity(v, 1 * (ser->extensionLevel[v] + 1));
 #else
                 varBumpActivity(v, 1);
 #endif
