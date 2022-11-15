@@ -13,6 +13,10 @@ maplelcm_er_priority:
 	make CMD_CFLAGS="-D PRIORITIZE_ER=1" -C core rs 
 	mv core/glucose_static core/maplelcm_er_priority
 
+maplelcm_er_priority_binary:
+	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D PRIORITIZE_ER_BINARY=1" -C core rs 
+	mv core/glucose_static core/maplelcm_er_priority_binary
+
 maplelcm_er_priority_low:
 	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D PRIORITIZE_ER_LOW=1" -C core rs 
 	mv core/glucose_static core/maplelcm_er_priority_low
