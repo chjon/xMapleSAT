@@ -867,8 +867,11 @@ Var Solver::newVar(bool sign, bool dvar)
 
     picked.push(0);
     conflicted.push(0);
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER || BUMP_ER
     ser->extensionLevel.push(0);
+#endif
+#if BCP_PRIORITY
+    bcp_assigns.push(l_Undef);
 #endif
     almost_conflicted.push(0);
 #ifdef ANTI_EXPLORATION
