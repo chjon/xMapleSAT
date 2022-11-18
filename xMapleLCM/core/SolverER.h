@@ -318,8 +318,8 @@ public:
     // Statistics //
     ////////////////
 
-    uint64_t total_ext_vars, deleted_ext_vars, max_ext_vars;
-    uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+    mutable uint64_t total_ext_vars, tried_del_ext_vars, deleted_ext_vars, max_ext_vars;
+    mutable uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
 
     double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 

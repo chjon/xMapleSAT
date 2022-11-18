@@ -69,6 +69,7 @@ namespace Minisat {
 
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
+        , tried_del_ext_vars (0)
         , deleted_ext_vars   (0)
         , max_ext_vars       (0)
         , conflict_extclauses(0)
@@ -490,6 +491,9 @@ namespace Minisat {
 
             // Check whether the solver should delete the variable
             if (!deletionPredicate(x)) continue;
+
+            // Increment the number of attempted deletions
+            tried_del_ext_vars++;
 
             // Check whether any of the extension definition clauses are not removable
             for (CRef cr : it->second) {

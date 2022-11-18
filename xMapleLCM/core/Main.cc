@@ -54,6 +54,7 @@ void printStats(Solver& solver)
     printf("c propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
     printf("c conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     printf("c total ext vars        : %-12" PRIu64 "\n", solver.ser->total_ext_vars);
+    printf("c tried delete ext vars : %-12" PRIu64 "\n", solver.ser->tried_del_ext_vars);
     printf("c deleted ext vars      : %-12" PRIu64 "\n", solver.ser->deleted_ext_vars);
     printf("c max ext vars          : %-12" PRIu64 "\n", solver.ser->max_ext_vars);
     printf("c conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", solver.ser->conflict_extclauses, solver.ser->conflict_extclauses / cpu_time);
