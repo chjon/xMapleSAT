@@ -276,7 +276,9 @@ namespace Minisat {
             assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
             
             // Update extension level
+#if PRIORITIZE_ER || BUMP_ER
             extensionLevel[var(x)] = 1 + std::max(extensionLevel[var(a)], extensionLevel[var(b)]);
+#endif
 
             // Save definition (x <=> a v b)
             xdm.insert(x, a, b);
