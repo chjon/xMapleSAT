@@ -38,9 +38,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_FORCE_BRANCHING
     #define EXTENSION_FORCE_BRANCHING false
 #endif
-#ifndef BCP_PRIORITY
-    #define BCP_PRIORITY false
-#endif
 #ifndef PRIORITIZE_ER
     #define PRIORITIZE_ER false
 #endif
@@ -52,6 +49,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 #ifndef BUMP_ER
     #define BUMP_ER false
+#endif
+
+// Define BCP-prioritization mode
+#define BCP_PRIORITY_IMMEDIATE    0 // Immediate propagation
+#define BCP_PRIORITY_DELAYED      1 // Delayed propagation
+#define BCP_PRIORITY_OUT_OF_ORDER 2 // Out-of-order propagation
+
+#ifndef BCP_PRIORITY_MODE
+    #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
 #endif
 
 // Define heuristic for filtering clauses before clause selection

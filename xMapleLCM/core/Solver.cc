@@ -118,20 +118,16 @@ Solver::Solver() :
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
-#if BCP_PRIORITY
   , bcp_order_heap_CHB     (LitOrderLt(activity_CHB, ser->extensionLevel))
   , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS, ser->extensionLevel))
   , bcp_order_heap_distance(LitOrderLt(activity_distance, ser->extensionLevel))
-#endif
   , order_heap_CHB     (VarOrderLt(activity_CHB, ser->extensionLevel))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS, ser->extensionLevel))
   , order_heap_distance(VarOrderLt(activity_distance, ser->extensionLevel))
 #else
-#if BCP_PRIORITY
   , bcp_order_heap_CHB     (LitOrderLt(activity_CHB))
   , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS))
   , bcp_order_heap_distance(LitOrderLt(activity_distance))
-#endif
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
@@ -880,9 +876,7 @@ Var Solver::newVar(bool sign, bool dvar)
 #if PRIORITIZE_ER || BUMP_ER
     ser->extensionLevel.push(0);
 #endif
-#if BCP_PRIORITY
     bcp_assigns.push(l_Undef);
-#endif
     almost_conflicted.push(0);
 #ifdef ANTI_EXPLORATION
     canceled.push(0);
@@ -1405,48 +1399,17 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     trail.push_(p);
 }
 
-
-/*_________________________________________________________________________________________________
-|
-|  propagate : [void]  ->  [Clause*]
-|  
-|  Description:
-|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
-|    otherwise CRef_Undef.
-|  
-|    Post-conditions:
-|      * the propagation queue is empty, even if there was a conflict.
-|________________________________________________________________________________________________@*/
-CRef Solver::propagate()
-{
-    CRef    confl     = CRef_Undef;
-    int     num_props = 0;
-    watches.cleanAll();
-    watches_bin.cleanAll();
-
-#if BCP_PRIORITY
-    Heap<LitOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
-
-    while (qhead < trail.size() || !bcp_order_heap.empty()){
-        if (qhead == trail.size()) {
-            Lit p; p.x = bcp_order_heap.removeMin();
-            uncheckedEnqueue(p, vardata[var(p)].reason);
-            bcp_assigns[var(p)] = l_Undef;
-        }
-#else
-    while (qhead < trail.size()){
-#endif
-        Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
+inline CRef Solver::propagate_single (Heap<LitOrderLt>& bcp_order_heap, Lit p) {
+        CRef confl = CRef_Undef;
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
-        num_props++;
 
         vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
             if (value(the_other) == l_True) {
                 continue;
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
             } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
                 // Found a conflict!
                 // Make sure conflicting literal is on the trail
@@ -1457,23 +1420,24 @@ CRef Solver::propagate()
                 for (int k = 0; k < bcp_order_heap.size(); k++)
                     bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
                 bcp_order_heap.clear();
+#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+            } else if (value(the_other) == l_False) {
+                bcp_order_heap.clear();
 #else
             } else if (value(the_other) == l_False) {
 #endif
-                confl = ws_bin[k].cref;
-#ifdef LOOSE_PROP_STAT
-                return confl;
-#else
-                goto ExitProp;
-#endif
+                return ws_bin[k].cref;
             } else {
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
                 // Queue literal for propagation
                 if (bcpValue(the_other) == l_Undef) {
                     bcp_assigns[var(the_other)] = lbool(!sign(the_other));
                     vardata[var(the_other)].reason = ws_bin[k].cref;
                     bcp_order_heap.insert(the_other.x);
                 }
+#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+                bcp_order_heap.insert(the_other.x);
+                uncheckedEnqueue(the_other, ws_bin[k].cref);
 #else
                 uncheckedEnqueue(the_other, ws_bin[k].cref);
 #endif
@@ -1510,7 +1474,7 @@ CRef Solver::propagate()
 
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
             if (value(first) == l_False || bcpValue(first) == l_False){
                 // Found a conflict!
                 // Make sure conflicting literal is on the trail
@@ -1523,22 +1487,27 @@ CRef Solver::propagate()
                     bcp_assigns[var(p)] = l_Undef;
                 }
                 bcp_order_heap.clear();
+#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+            if (value(first) == l_False) {
+                bcp_order_heap.clear();
 #else
             if (value(first) == l_False){
 #endif
                 confl = cr;
-                qhead = trail.size();
                 // Copy the remaining watches:
                 while (i < end)
                     *j++ = *i++;
             } else {
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
                 // Queue literal for propagation
                 if (bcpValue(first) == l_Undef) {
                     bcp_assigns[var(first)] = lbool(!sign(first));
                     vardata[var(first)].reason = cr;
                     bcp_order_heap.insert(first.x);
                 }
+#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+                bcp_order_heap.insert(first.x);
+                uncheckedEnqueue(first, cr);
 #else
                 uncheckedEnqueue(first, cr);
 #endif
@@ -1547,13 +1516,58 @@ CRef Solver::propagate()
 NextClause:;
         }
         ws.shrink(i - j);
+        return confl;
+}
+
+/*_________________________________________________________________________________________________
+|
+|  propagate : [void]  ->  [Clause*]
+|  
+|  Description:
+|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
+|    otherwise CRef_Undef.
+|  
+|    Post-conditions:
+|      * the propagation queue is empty, even if there was a conflict.
+|________________________________________________________________________________________________@*/
+CRef Solver::propagate()
+{
+    CRef    confl     = CRef_Undef;
+    int     num_props = 0;
+    Lit     p         = lit_Undef;
+    watches.cleanAll();
+    watches_bin.cleanAll();
+
+    Heap<LitOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
+
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+    while (qhead < trail.size() || !bcp_order_heap.empty()){
+        if (qhead == trail.size()) {
+            p.x = bcp_order_heap.removeMin();
+            uncheckedEnqueue(p, vardata[var(p)].reason);
+            bcp_assigns[var(p)] = l_Undef;
+        }
+        p = trail[qhead++];
+#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+    for (int i = qhead; i < trail.size(); i++)
+        bcp_order_heap.insert(trail[i].x);
+
+    while (!bcp_order_heap.empty()) {
+        p.x = bcp_order_heap.removeMin();
+#else
+    while (qhead < trail.size()){
+        p = trail[qhead++];
+#endif
+        num_props++;
+        confl = propagate_single(bcp_order_heap, p);
+        if (confl != CRef_Undef) {
+            break;
+        }
     }
 
-#ifndef LOOSE_PROP_STAT
-ExitProp:;
-#endif
     propagations += num_props;
     simpDB_props -= num_props;
+    qhead = trail.size();
 
     return confl;
 }

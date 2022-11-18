@@ -141,10 +141,8 @@ public:
     //
     lbool   value      (Var x) const;       // The current value of a variable.
     lbool   value      (Lit p) const;       // The current value of a literal.
-#if BCP_PRIORITY
     lbool   bcpValue  (Var x) const;       // The queued value of a variable.
     lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
-#endif
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nAssigns   ()      const;       // The current number of assigned literals.
@@ -310,10 +308,8 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if BCP_PRIORITY
     Heap<LitOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
     vec<lbool>          bcp_assigns;
-#endif
     Heap<VarOrderLt>
                         order_heap_CHB, // A priority queue of variables ordered with respect to the variable activity.
                         order_heap_VSIDS,
@@ -359,6 +355,7 @@ protected:
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
+    CRef     propagate_single (Heap<LitOrderLt>& bcp_order_heap, Lit p);
     CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);    // (bt = backtrack)
@@ -566,10 +563,8 @@ inline int      Solver::decisionLevel ()      const   { return trail_lim.size();
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
 inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
-#if BCP_PRIORITY
 inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
 inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
-#endif
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
