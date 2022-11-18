@@ -131,6 +131,9 @@ xmaplelcm_sub_lbd_bcp_priority2: .prev_xmaplelcm_sub_lbd_bcp_priority2
 xmaplelcm_glucoser_bcp_priority: .prev_xmaplelcm_glucoser_bcp_priority
 	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D BCP_PRIORITY_MODE=1)
 
+xmaplelcm_glucoser_bcp_priority2: .prev_xmaplelcm_glucoser_bcp_priority2
+	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D BCP_PRIORITY_MODE=2)
+
 xmaplelcm_rnd_rng_er_priority: .prev_xmaplelcm_rnd_rng_er_priority
 	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D PRIORITIZE_ER=1)
 
