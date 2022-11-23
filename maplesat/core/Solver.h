@@ -83,7 +83,7 @@ public:
     //
     lbool   value      (Var x) const;       // The current value of a variable.
     lbool   value      (Lit p) const;       // The current value of a literal.
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     lbool   bcpValue  (Var x) const;       // The queued value of a variable.
     lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
 #endif
@@ -266,7 +266,7 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
     Heap<LitOrderLt>    bcp_order_heap;
     vec<lbool>          bcp_assigns;
 #endif
@@ -301,6 +301,7 @@ protected:
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
+    CRef     propagate_single (Lit p);                                                 // Perform unit propagation. Returns possibly conflicting clause.
     CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
@@ -427,7 +428,7 @@ inline int      Solver::decisionLevel ()      const   { return trail_lim.size();
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
 inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
-#if BCP_PRIORITY
+#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
 inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
 inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
 #endif
