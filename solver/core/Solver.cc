@@ -945,10 +945,13 @@ lbool Solver::search(int nof_conflicts)
                 return l_Undef; }
 
             // Simplify the set of problem clauses:
-            if (decisionLevel() == 0 && !simplify())
-                return l_False;
+            if (decisionLevel() == 0) {
+                if (!simplify()) return l_False;
+#if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+                ser->deleteExtVarsIfNecessary();
+#endif
+            }
 
-            ser->deleteExtVarsIfNecessary();
             if (learnts.size()-nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
                 reduceDB();

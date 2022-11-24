@@ -1988,11 +1988,13 @@ lbool Solver::search(int& nof_conflicts)
                 return l_Undef; }
 
             // Simplify the set of problem clauses:
-            if (decisionLevel() == 0 && !simplify())
-                return l_False;
+            if (decisionLevel() == 0) {
+                if (!simplify()) return l_False;
 #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
-            ser->deleteExtVarsIfNecessary();
+                ser->deleteExtVarsIfNecessary();
 #endif
+            }
+
             if (conflicts >= next_T2_reduce){
                 next_T2_reduce = conflicts + 10000;
                 reduceDB_Tier2(); }
