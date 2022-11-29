@@ -139,6 +139,7 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
             if (eagerMatch(in, "c extlvl")){
                 int var = parseInt(in);
                 int lvl = parseInt(in);
+                S.extCovered[var] = parseInt(in);
 #if PRIORITIZE_ER_BINARY
                 S.extensionLevel[var] = lvl ? 1 : 0;
 #else

@@ -202,6 +202,8 @@ public:
 #if PRIORITIZE_ER || BUMP_ER
     // Map from variables to their extension level
     vec<unsigned int> extensionLevel;
+    // Map from variables to whether there is an extension variable defined over it
+    vec<bool> extCovered;
 #endif
     vec<uint32_t> almost_conflicted;
 #ifdef ANTI_EXPLORATION

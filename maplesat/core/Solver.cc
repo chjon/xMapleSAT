@@ -170,6 +170,7 @@ Var Solver::newVar(bool sign, bool dvar)
     conflicted.push(0);
 #if PRIORITIZE_ER || BUMP_ER
     extensionLevel.push(0);
+    extCovered.push(false);
 #endif
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     bcp_assigns.push(l_Undef);
