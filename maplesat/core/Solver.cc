@@ -118,15 +118,13 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if PRIORITIZE_ER
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-  , bcp_order_heap     (LitOrderLt(activity, extensionLevel))
-#endif
-  , order_heap         (VarOrderLt(activity, extensionLevel))
-#else
 #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
   , bcp_order_heap     (LitOrderLt(activity))
 #endif
+#if PRIORITIZE_ER
+  , order_heap_extlvl  (VarOrderLt(activity, extensionLevel, !(PRIORITIZE_ER_LOW)))
+  , order_heap_degree  (VarOrderLt(activity, degree, true))
+#else
   , order_heap         (VarOrderLt(activity))
 #endif
   , progress_estimate  (0)
@@ -169,8 +167,8 @@ Var Solver::newVar(bool sign, bool dvar)
     picked.push(0);
     conflicted.push(0);
 #if PRIORITIZE_ER || BUMP_ER
+    degree.push(0);
     extensionLevel.push(0);
-    extCovered.push(false);
 #endif
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     bcp_assigns.push(l_Undef);
@@ -205,6 +203,11 @@ bool Solver::addClause_(vec<Lit>& ps)
         else if (value(ps[i]) != l_False && ps[i] != p)
             ps[j++] = p = ps[i];
     ps.shrink(i - j);
+
+#if PRIORITIZE_ER || BUMP_ER
+    for (int k = 0; k < ps.size(); k++)
+        degree[var(ps[k])]++;
+#endif
 
     if (ps.size() == 0)
         return ok = false;
@@ -281,6 +284,9 @@ void Solver::cancelUntil(int level) {
 #endif
                 double old_activity = activity[x];
                 activity[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
+#if PRIORITIZE_ER
+                Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
+#endif
                 if (order_heap.inHeap(x)) {
                     if (activity[x] > old_activity)
                         order_heap.decrease(x);
@@ -312,14 +318,23 @@ Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
 
+    {
+#if PRIORITIZE_ER
+    Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
+#endif
+
     // Random decision:
     if (drand(random_seed) < random_var_freq && !order_heap.empty()){
         next = order_heap[irand(random_seed,order_heap.size())];
         if (value(next) == l_Undef && decision[next])
             rnd_decisions++; }
+    }
 
     // Activity based decision:
-    while (next == var_Undef || value(next) != l_Undef || !decision[next])
+    while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
+#if PRIORITIZE_ER
+        Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
+#endif
         if (order_heap.empty()){
             next = var_Undef;
             break;
@@ -340,6 +355,7 @@ Lit Solver::pickBranchLit()
 #endif
             next = order_heap.removeMin();
         }
+    }
 
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
 }
@@ -563,9 +579,16 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     if (age > 0) {
         double decay = pow(0.95, age);
         activity[var(p)] *= decay;
+#if PRIORITIZE_ER
+        if (order_heap_extlvl.inHeap(var(p)))
+            order_heap_extlvl.increase(var(p));
+        if (order_heap_degree.inHeap(var(p)))
+            order_heap_degree.increase(var(p));
+#else
         if (order_heap.inHeap(var(p))) {
             order_heap.increase(var(p));
         }
+#endif
     }
 #endif
     conflicted[var(p)] = 0;
@@ -781,11 +804,21 @@ void Solver::removeSatisfied(vec<CRef>& cs)
 
 void Solver::rebuildOrderHeap()
 {
+#if PRIORITIZE_ER
+    order_heap_extlvl.clear();
+    order_heap_degree.clear();
+    for (Var v = 0; v < nVars(); v++)
+        if (decision[v] && value(v) == l_Undef) {
+            order_heap_degree.insert(v);
+            if (extensionLevel[v]) order_heap_extlvl.insert(v);
+        }
+#else
     vec<Var> vs;
     for (Var v = 0; v < nVars(); v++)
         if (decision[v] && value(v) == l_Undef)
             vs.push(v);
     order_heap.build(vs);
+#endif
 }
 
 

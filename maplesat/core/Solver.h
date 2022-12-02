@@ -156,10 +156,10 @@ public:
     vec<uint64_t> picked;
     vec<uint64_t> conflicted;
 #if PRIORITIZE_ER || BUMP_ER
+    // Number of times a variable occurs in a clause
+    vec<uint64_t> degree;
     // Map from variables to their extension level
-    vec<unsigned int> extensionLevel;
-    // Map from variables to whether there is an extension variable defined over it
-    vec<bool> extCovered;
+    vec<uint64_t> extensionLevel;
 #endif
 #if ALMOST_CONFLICT
     vec<uint64_t> almost_conflicted;
@@ -200,45 +200,23 @@ protected:
 
     struct LitOrderLt {
         const vec<double>&  activity;
-#if PRIORITIZE_ER
-        const vec<unsigned int>& extensionLevel;
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-#if PRIORITIZE_ER_LOW
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
-#else
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
-#endif
-            else                                        return activity[x] > activity[y];
-        }
-        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
-            : activity(act)
-            , extensionLevel(extlvl)
-        { }
-#else
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-            return activity[x] > activity[y];
-        }
+        bool operator () (Var x, Var y) const { return activity[x >> 1] > activity[y >> 1]; }
         LitOrderLt(const vec<double>&  act) : activity(act) { }
-#endif
     };
 
     struct VarOrderLt {
         const vec<double>&  activity;
 #if PRIORITIZE_ER
-        const vec<unsigned int>& extensionLevel;
+        const vec<uint64_t>& order_param;
+        bool greater_than;
         bool operator () (Var x, Var y) const {
-#if PRIORITIZE_ER_LOW
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
-#else
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
-#endif
-            else                                        return activity[x] > activity[y];
+            if (order_param[x] != order_param[y]) return greater_than ^ (order_param[x] < order_param[y]);
+            return activity[x] > activity[y];
         }
-        VarOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+        VarOrderLt(const vec<double>&  act, const vec<uint64_t>& ord, bool gt = false)
             : activity(act)
-            , extensionLevel(extlvl)
+            , order_param(ord)
+            , greater_than(gt)
         { }
 #else
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
@@ -272,7 +250,12 @@ protected:
     Heap<LitOrderLt>    bcp_order_heap;
     vec<lbool>          bcp_assigns;
 #endif
+#if PRIORITIZE_ER
+    Heap<VarOrderLt>    order_heap_extlvl;       // A priority queue of variables ordered with respect to the extension level.
+    Heap<VarOrderLt>    order_heap_degree;       // A priority queue of variables ordered with respect to the variable degree.
+#else
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
+#endif
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -382,6 +365,9 @@ inline CRef Solver::reason(Var x) const { return vardata[x].reason; }
 inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
+#if PRIORITIZE_ER
+    Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
+#endif
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -398,8 +384,15 @@ inline void Solver::varBumpActivity(Var v, double inc) {
         var_inc *= 1e-100; }
 
     // Update order_heap with respect to new activity:
+#if PRIORITIZE_ER
+    if (order_heap_extlvl.inHeap(v))
+        order_heap_extlvl.decrease(v); }
+    if (order_heap_degree.inHeap(v))
+        order_heap_degree.decrease(v); }
+#else
     if (order_heap.inHeap(v))
         order_heap.decrease(v); }
+#endif
 #endif
 #if ! LBD_BASED_CLAUSE_DELETION
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
