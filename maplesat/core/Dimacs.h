@@ -63,16 +63,12 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
         } else if (*in == 'c') {
             if (eagerMatch(in, "c extlvl")){
                 int var = parseInt(in);
                 int lvl = parseInt(in);
-#if PRIORITIZE_ER_BINARY
-                S.extensionLevel[var - 1] = lvl ? 1 : 0;
-#else
                 S.extensionLevel[var - 1] = lvl;
-#endif
             }else{
                 skipLine(in);
             }

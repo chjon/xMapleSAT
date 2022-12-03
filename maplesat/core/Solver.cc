@@ -122,7 +122,7 @@ Solver::Solver() :
   , bcp_order_heap     (LitOrderLt(activity))
 #endif
 #if PRIORITIZE_ER
-  , order_heap_extlvl  (VarOrderLt(activity, extensionLevel, !(PRIORITIZE_ER_LOW)))
+  , order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
   , order_heap_degree  (VarOrderLt(activity, degree, true))
 #else
   , order_heap         (VarOrderLt(activity))
@@ -166,7 +166,7 @@ Var Solver::newVar(bool sign, bool dvar)
     lbd_seen.push(0);
     picked.push(0);
     conflicted.push(0);
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
     degree.push(0);
     extensionLevel.push(0);
 #endif
@@ -204,7 +204,7 @@ bool Solver::addClause_(vec<Lit>& ps)
             ps[j++] = p = ps[i];
     ps.shrink(i - j);
 
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
     for (int k = 0; k < ps.size(); k++)
         degree[var(ps[k])]++;
 #endif
@@ -910,7 +910,10 @@ lbool Solver::search(int nof_conflicts)
 #if BRANCHING_HEURISTIC == CHB
             action = trail.size();
 #endif
-
+#if PRIORITIZE_ER
+            for (int k = 0; k < learnt_clause.size(); k++)
+                degree[var(learnt_clause[k])]++;
+#endif
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
             }else{

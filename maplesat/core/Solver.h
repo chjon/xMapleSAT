@@ -155,7 +155,7 @@ public:
     vec<uint64_t> lbd_seen;
     vec<uint64_t> picked;
     vec<uint64_t> conflicted;
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
     // Number of times a variable occurs in a clause
     vec<uint64_t> degree;
     // Map from variables to their extension level
@@ -374,9 +374,6 @@ inline void Solver::insertVarOrder(Var x) {
 inline void Solver::varDecayActivity() { var_inc *= (1 / var_decay); }
 inline void Solver::varBumpActivity(Var v) { varBumpActivity(v, var_inc); }
 inline void Solver::varBumpActivity(Var v, double inc) {
-#if BUMP_ER
-    inc *= (extensionLevel[v] + 1);
-#endif
     if ( (activity[v] += inc) > 1e100 ) {
         // Rescale:
         for (int i = 0; i < nVars(); i++)
