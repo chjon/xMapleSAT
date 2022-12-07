@@ -17,6 +17,10 @@ maplesat_er_priority:
 	make CMD_CFLAGS="-D PRIORITIZE_ER=1" -C core rs 
 	mv core/maplesat_static core/maplesat_er_priority
 
+maplesat_er_priority_vote:
+	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D POLARITY_VOTING" -C core rs 
+	mv core/maplesat_static core/maplesat_er_priority_vote
+
 maplesat_bcp_er_priority:
 	make CMD_CFLAGS="-D PRIORITIZE_ER=1 -D BCP_PRIORITY_MODE=1" -C core rs 
 	mv core/maplesat_static core/maplesat_bcp_er_priority

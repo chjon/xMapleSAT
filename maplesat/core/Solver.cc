@@ -357,7 +357,13 @@ Lit Solver::pickBranchLit()
         }
     }
 
+#ifdef POLARITY_VOTING
+    double vote = group_polarity[extensionLevel[next]];
+    bool preferred_polarity = (vote == 0) ? polarity[next] : (vote < 0);
+    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : preferred_polarity);
+#else
     return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
+#endif
 }
 
 /*_________________________________________________________________________________________________
@@ -387,6 +393,12 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.push();      // (leave room for the asserting literal)
     int index   = trail.size() - 1;
 
+#ifdef POLARITY_VOTING
+    // Count votes for the polarity that led to the conflict
+    vec<int> count;
+    for (int k = 0; k < group_polarity.size(); k++) count.push(0);
+#endif
+
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
@@ -408,6 +420,10 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 #elif BRANCHING_HEURISTIC == VSIDS
                 varBumpActivity(var(q));
 #endif
+#ifdef POLARITY_VOTING
+                // Count votes for the polarity that led to the conflict
+                count[extensionLevel[var(q)]] += sign(q) ? (+1) : (-1);
+#endif
                 conflicted[var(q)]++;
                 seen[var(q)] = 1;
                 if (level(var(q)) >= decisionLevel())
@@ -426,6 +442,15 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     }while (pathC > 0);
     out_learnt[0] = ~p;
+
+#ifdef POLARITY_VOTING
+    // Apply EMA to group polarities
+    for (int k = 0; k < group_polarity.size(); k++) {
+        if (count[k]) {
+            group_polarity[k] = 0.9 * (group_polarity[k] + count[k]);
+        }
+    }
+#endif
 
     // Simplify conflict clause:
     //
@@ -994,6 +1019,9 @@ lbool Solver::search(int nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+#ifdef POLARITY_VOTING
+                group_polarity[extensionLevel[var(next)]] += (sign(next) ? (-1) : (+1)) * 0.01;
+#endif
             }
 
             // Increase decision level and enqueue 'next'

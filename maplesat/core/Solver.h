@@ -160,6 +160,10 @@ public:
     vec<uint64_t> degree;
     // Map from variables to their extension level
     vec<uint64_t> extensionLevel;
+
+#ifdef POLARITY_VOTING
+    vec<double> group_polarity;   // The preferred polarity of each group.
+#endif
 #endif
 #if ALMOST_CONFLICT
     vec<uint64_t> almost_conflicted;
