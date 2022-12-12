@@ -135,7 +135,11 @@ Solver::Solver() :
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
-{}
+{
+#ifdef POLARITY_VOTING
+    group_polarity.push(0);
+#endif
+}
 
 
 Solver::~Solver()
