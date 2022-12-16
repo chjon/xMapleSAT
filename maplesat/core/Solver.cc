@@ -122,8 +122,12 @@ Solver::Solver() :
   , bcp_order_heap     (LitOrderLt(activity))
 #endif
 #if PRIORITIZE_ER
+#ifdef EXTLVL_ACTIVITY
+  , order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
+#else
   , order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
   , order_heap_degree  (VarOrderLt(activity, degree, true))
+#endif
 #else
   , order_heap         (VarOrderLt(activity))
 #endif
@@ -288,7 +292,7 @@ void Solver::cancelUntil(int level) {
 #endif
                 double old_activity = activity[x];
                 activity[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
                 Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
 #endif
                 if (order_heap.inHeap(x)) {
@@ -323,7 +327,7 @@ Lit Solver::pickBranchLit()
     Var next = var_Undef;
 
     {
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
 #endif
 
@@ -336,7 +340,7 @@ Lit Solver::pickBranchLit()
 
     // Activity based decision:
     while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
         Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
 #endif
         if (order_heap.empty()){
@@ -608,7 +612,7 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     if (age > 0) {
         double decay = pow(0.95, age);
         activity[var(p)] *= decay;
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
         if (order_heap_extlvl.inHeap(var(p)))
             order_heap_extlvl.increase(var(p));
         if (order_heap_degree.inHeap(var(p)))
@@ -833,7 +837,7 @@ void Solver::removeSatisfied(vec<CRef>& cs)
 
 void Solver::rebuildOrderHeap()
 {
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     order_heap_extlvl.clear();
     order_heap_degree.clear();
     for (Var v = 0; v < nVars(); v++)

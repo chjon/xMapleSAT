@@ -23,6 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "mtl/Vec.h"
 #include "mtl/Heap.h"
+#include "mtl/Multiheap.h"
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
@@ -161,6 +162,9 @@ public:
     // Map from variables to their extension level
     vec<uint64_t> extensionLevel;
 
+#ifdef EXTLVL_ACTIVITY
+    vec<double> extensionLevelActivity; // The activity of each extension level
+#endif
 #ifdef POLARITY_VOTING
     vec<double> group_polarity;   // The preferred polarity of each group.
 #endif
@@ -210,7 +214,7 @@ protected:
 
     struct VarOrderLt {
         const vec<double>&  activity;
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
         const vec<uint64_t>& order_param;
         bool greater_than;
         bool operator () (Var x, Var y) const {
@@ -255,8 +259,12 @@ protected:
     vec<lbool>          bcp_assigns;
 #endif
 #if PRIORITIZE_ER
+#ifdef EXTLVL_ACTIVITY
+    Multiheap<VarOrderLt> order_heap;
+#else
     Heap<VarOrderLt>    order_heap_extlvl;       // A priority queue of variables ordered with respect to the extension level.
     Heap<VarOrderLt>    order_heap_degree;       // A priority queue of variables ordered with respect to the variable degree.
+#endif
 #else
     Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
 #endif
@@ -369,7 +377,7 @@ inline CRef Solver::reason(Var x) const { return vardata[x].reason; }
 inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
 #endif
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
@@ -379,21 +387,33 @@ inline void Solver::varDecayActivity() { var_inc *= (1 / var_decay); }
 inline void Solver::varBumpActivity(Var v) { varBumpActivity(v, var_inc); }
 inline void Solver::varBumpActivity(Var v, double inc) {
     if ( (activity[v] += inc) > 1e100 ) {
+#if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
+        // Clear extension level activity
+        for (int i = 0; i < extensionLevelActivity.size(); i++) {
+            extensionLevelActivity[i] = 0;
+        }
+#endif
         // Rescale:
-        for (int i = 0; i < nVars(); i++)
+        for (int i = 0; i < nVars(); i++) {
             activity[i] *= 1e-100;
-        var_inc *= 1e-100; }
+#if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
+            extensionLevelActivity[extensionLevel[i]] += activity[i];
+#endif
+        }
+        var_inc *= 1e-100;
+    }
 
     // Update order_heap with respect to new activity:
-#if PRIORITIZE_ER
+#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     if (order_heap_extlvl.inHeap(v))
-        order_heap_extlvl.decrease(v); }
+        order_heap_extlvl.decrease(v);
     if (order_heap_degree.inHeap(v))
-        order_heap_degree.decrease(v); }
+        order_heap_degree.decrease(v);
 #else
     if (order_heap.inHeap(v))
-        order_heap.decrease(v); }
+        order_heap.decrease(v);
 #endif
+}
 #endif
 #if ! LBD_BASED_CLAUSE_DELETION
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }

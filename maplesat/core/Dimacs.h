@@ -69,6 +69,9 @@ static void parse_DIMACS_main(B& in, Solver& S) {
                 int var = parseInt(in);
                 int lvl = parseInt(in);
                 S.extensionLevel[var - 1] = lvl;
+#ifdef EXTLVL_ACTIVITY
+                while (lvl >= S.extensionLevelActivity.size()) S.extensionLevelActivity.push(0);
+#endif
 #ifdef POLARITY_VOTING
                 while (lvl >= S.group_polarity.size()) S.group_polarity.push(0);
 #endif
