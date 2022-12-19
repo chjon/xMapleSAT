@@ -110,21 +110,19 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if PRIORITIZE_ER
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB, extensionLevel))
-  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS, extensionLevel))
-  , bcp_order_heap_distance(LitOrderLt(activity_distance, extensionLevel))
-#endif
-  , order_heap_CHB     (VarOrderLt(activity_CHB, extensionLevel))
-  , order_heap_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel))
-  , order_heap_distance(VarOrderLt(activity_distance, extensionLevel))
-#else
 #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
   , bcp_order_heap_CHB     (LitOrderLt(activity_CHB))
   , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS))
   , bcp_order_heap_distance(LitOrderLt(activity_distance))
 #endif
+#if PRIORITIZE_ER
+  , order_heap_extlvl_CHB     (VarOrderLt(activity_CHB, extensionLevel, false))
+  , order_heap_extlvl_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel, false))
+  , order_heap_extlvl_distance(VarOrderLt(activity_distance, extensionLevel, false))
+  , order_heap_degree_CHB     (VarOrderLt(activity_CHB, degree, true))
+  , order_heap_degree_VSIDS   (VarOrderLt(activity_VSIDS, degree, true))
+  , order_heap_degree_distance(VarOrderLt(activity_distance, degree, true))
+#else
   , order_heap_CHB     (VarOrderLt(activity_CHB))
   , order_heap_VSIDS   (VarOrderLt(activity_VSIDS))
   , order_heap_distance(VarOrderLt(activity_distance))
@@ -870,9 +868,9 @@ Var Solver::newVar(bool sign, bool dvar)
 
     picked.push(0);
     conflicted.push(0);
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
+    degree.push(0);
     extensionLevel.push(0);
-    extCovered.push(false);
 #endif
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     bcp_assigns.push(l_Undef);
@@ -916,6 +914,11 @@ bool Solver::addClause_(vec<Lit>& ps)
         else if (value(ps[i]) != l_False && ps[i] != p)
             ps[j++] = p = ps[i];
     ps.shrink(i - j);
+
+#if PRIORITIZE_ER
+    for (int k = 0; k < ps.size(); k++)
+        degree[var(ps[k])]++;
+#endif
 
     if (drup_file && i != j){
 #ifdef BIN_DRUP
@@ -1023,12 +1026,27 @@ void Solver::cancelUntil(int level) {
                     double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
                     double old_activity = activity_CHB[x];
                     activity_CHB[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
+#if PRIORITIZE_ER
+                    if (order_heap_extlvl_CHB.inHeap(x)){
+                        if (activity_CHB[x] > old_activity)
+                            order_heap_extlvl_CHB.decrease(x);
+                        else
+                            order_heap_extlvl_CHB.increase(x);
+                    }
+                    if (order_heap_degree_CHB.inHeap(x)){
+                        if (activity_CHB[x] > old_activity)
+                            order_heap_degree_CHB.decrease(x);
+                        else
+                            order_heap_degree_CHB.increase(x);
+                    }
+#else
                     if (order_heap_CHB.inHeap(x)){
                         if (activity_CHB[x] > old_activity)
                             order_heap_CHB.decrease(x);
                         else
                             order_heap_CHB.increase(x);
                     }
+#endif
                 }
 #ifdef ANTI_EXPLORATION
                 canceled[x] = conflicts;
@@ -1053,7 +1071,14 @@ Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
+#if PRIORITIZE_ER
+    Heap<VarOrderLt>& order_heap = DISTANCE ?
+        (order_heap_extlvl_distance.empty() ? order_heap_degree_distance : order_heap_extlvl_distance) : ((!VSIDS) ?
+        (order_heap_extlvl_CHB     .empty() ? order_heap_degree_CHB      : order_heap_extlvl_CHB     ) :
+        (order_heap_extlvl_VSIDS   .empty() ? order_heap_degree_VSIDS    : order_heap_extlvl_VSIDS   ));
+#else
     Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
+#endif
 
     // Random decision:
     /*if (drand(random_seed) < random_var_freq && !order_heap.empty()){
@@ -1062,12 +1087,43 @@ Lit Solver::pickBranchLit()
             rnd_decisions++; }*/
 
     // Activity based decision:
-    while (next == var_Undef || value(next) != l_Undef || !decision[next])
+    while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
+#if PRIORITIZE_ER
+        Heap<VarOrderLt>& order_heap = DISTANCE ?
+            (order_heap_extlvl_distance.empty() ? order_heap_degree_distance : order_heap_extlvl_distance) : ((!VSIDS) ?
+            (order_heap_extlvl_CHB     .empty() ? order_heap_degree_CHB      : order_heap_extlvl_CHB     ) :
+            (order_heap_extlvl_VSIDS   .empty() ? order_heap_degree_VSIDS    : order_heap_extlvl_VSIDS   ));
+#endif
         if (order_heap.empty())
             return lit_Undef;
         else{
 #ifdef ANTI_EXPLORATION
             if (!VSIDS){
+#if PRIORITIZE_ER
+                Var v = order_heap_extlvl_CHB[0];
+                uint32_t age = conflicts - canceled[v];
+                while (age > 0){
+                    double decay = pow(0.95, age);
+                    activity_CHB[v] *= decay;
+                    if (order_heap_extlvl_CHB.inHeap(v))
+                        order_heap_extlvl_CHB.increase(v);
+                    canceled[v] = conflicts;
+                    v = order_heap_extlvl_CHB[0];
+                    age = conflicts - canceled[v];
+                }
+
+                v = order_heap_degree_CHB[0];
+                age = conflicts - canceled[v];
+                while (age > 0){
+                    double decay = pow(0.95, age);
+                    activity_CHB[v] *= decay;
+                    if (order_heap_degree_CHB.inHeap(v))
+                        order_heap_degree_CHB.increase(v);
+                    canceled[v] = conflicts;
+                    v = order_heap_degree_CHB[0];
+                    age = conflicts - canceled[v];
+                }
+#else
                 Var v = order_heap_CHB[0];
                 uint32_t age = conflicts - canceled[v];
                 while (age > 0){
@@ -1079,10 +1135,12 @@ Lit Solver::pickBranchLit()
                     v = order_heap_CHB[0];
                     age = conflicts - canceled[v];
                 }
+#endif
             }
 #endif
             next = order_heap.removeMin();
         }
+    }
 
     return mkLit(next, polarity[next]);
 }
@@ -1377,8 +1435,15 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
         if (age > 0){
             double decay = pow(0.95, age);
             activity_CHB[var(p)] *= decay;
+#if PRIORITIZE_ER
+            if (order_heap_extlvl_CHB.inHeap(var(p)))
+                order_heap_extlvl_CHB.increase(var(p));
+            if (order_heap_degree_CHB.inHeap(var(p)))
+                order_heap_degree_CHB.increase(var(p));
+#else
             if (order_heap_CHB.inHeap(var(p)))
                 order_heap_CHB.increase(var(p));
+#endif
         }
 #endif
     }
@@ -1656,6 +1721,17 @@ void Solver::safeRemoveSatisfied(vec<CRef>& cs, unsigned valid_mark)
 
 void Solver::rebuildOrderHeap()
 {
+#if PRIORITIZE_ER
+    order_heap_extlvl_CHB.clear(); order_heap_extlvl_VSIDS.clear(); order_heap_extlvl_distance.clear();
+    order_heap_degree_CHB.clear(); order_heap_degree_VSIDS.clear(); order_heap_degree_distance.clear();
+    for (Var v = 0; v < nVars(); v++)
+        if (decision[v] && value(v) == l_Undef) {
+            order_heap_degree_CHB.insert(v); order_heap_degree_VSIDS.insert(v); order_heap_degree_distance.insert(v);
+            if (extensionLevel[v]) {
+                order_heap_extlvl_CHB.insert(v); order_heap_extlvl_VSIDS.insert(v); order_heap_extlvl_distance.insert(v);
+            }
+        }
+#else
     vec<Var> vs;
     for (Var v = 0; v < nVars(); v++)
         if (decision[v] && value(v) == l_Undef)
@@ -1664,6 +1740,7 @@ void Solver::rebuildOrderHeap()
     order_heap_CHB  .build(vs);
     order_heap_VSIDS.build(vs);
     order_heap_distance.build(vs);
+#endif
 }
 
 
@@ -1780,8 +1857,15 @@ bool Solver::collectFirstUIP(CRef confl){
             var_iLevel_inc*=1e-100;
             for(int j=0; j<max_level; j++) level_incs[j]*=1e-100;
         }
+#if PRIORITIZE_ER
+        if (order_heap_extlvl_distance.inHeap(v))
+            order_heap_extlvl_distance.decrease(v);
+        if (order_heap_degree_distance.inHeap(v))
+            order_heap_degree_distance.decrease(v);
+#else
         if (order_heap_distance.inHeap(v))
             order_heap_distance.decrease(v);
+#endif
 
         //        var_iLevel_inc *= (1 / my_var_decay);
     }
@@ -1882,7 +1966,10 @@ lbool Solver::search(int& nof_conflicts)
                 conflicts_VSIDS++;
                 lbd_queue.push(lbd);
                 global_lbd_sum += (lbd > 50 ? 50 : lbd); }
-
+#if PRIORITIZE_ER
+            for (int k = 0; k < learnt_clause.size(); k++)
+                degree[var(learnt_clause[k])]++;
+#endif
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
             }else{

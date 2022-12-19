@@ -199,11 +199,11 @@ public:
 
     vec<uint32_t> picked;
     vec<uint32_t> conflicted;
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
+    // Number of times a variable occurs in a clause
+    vec<uint32_t> degree;
     // Map from variables to their extension level
-    vec<unsigned int> extensionLevel;
-    // Map from variables to whether there is an extension variable defined over it
-    vec<bool> extCovered;
+    vec<uint32_t> extensionLevel;
 #endif
     vec<uint32_t> almost_conflicted;
 #ifdef ANTI_EXPLORATION
@@ -234,45 +234,23 @@ protected:
 
     struct LitOrderLt {
         const vec<double>&  activity;
-#if PRIORITIZE_ER
-        const vec<unsigned int>& extensionLevel;
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-#if PRIORITIZE_ER_LOW
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
-#else
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
-#endif
-            else                                        return activity[x] > activity[y];
-        }
-        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
-            : activity(act)
-            , extensionLevel(extlvl)
-        { }
-#else
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-            return activity[x] > activity[y];
-        }
+        bool operator () (Var x, Var y) const { return activity[x >> 1] > activity[y >> 1]; }
         LitOrderLt(const vec<double>&  act) : activity(act) { }
-#endif
     };
 
     struct VarOrderLt {
         const vec<double>&  activity;
 #if PRIORITIZE_ER
-        const vec<unsigned int>& extensionLevel;
+        const vec<uint32_t>& order_param;
+        bool greater_than;
         bool operator () (Var x, Var y) const {
-#if PRIORITIZE_ER_LOW
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
-#else
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
-#endif
-            else                                        return activity[x] > activity[y];
+            if (order_param[x] != order_param[y]) return greater_than ^ (order_param[x] < order_param[y]);
+            return activity[x] > activity[y];
         }
-        VarOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
+        VarOrderLt(const vec<double>&  act, const vec<uint32_t>& ord, bool gt = false)
             : activity(act)
-            , extensionLevel(extlvl)
+            , order_param(ord)
+            , greater_than(gt)
         { }
 #else
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
@@ -308,8 +286,13 @@ protected:
     Heap<LitOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
     vec<lbool>          bcp_assigns;
 #endif
-    Heap<VarOrderLt>    order_heap_CHB,   // A priority queue of variables ordered with respect to the variable activity.
-    order_heap_VSIDS,order_heap_distance;
+     // A priority queue of variables ordered with respect to the variable activity.
+#if PRIORITIZE_ER
+    Heap<VarOrderLt> order_heap_extlvl_CHB, order_heap_extlvl_VSIDS, order_heap_extlvl_distance;
+    Heap<VarOrderLt> order_heap_degree_CHB, order_heap_degree_VSIDS, order_heap_degree_distance;
+#else
+    Heap<VarOrderLt> order_heap_CHB       , order_heap_VSIDS       , order_heap_distance       ;
+#endif
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -514,16 +497,20 @@ inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
+#if PRIORITIZE_ER
+    Heap<VarOrderLt>& order_heap = DISTANCE ?
+        (order_heap_extlvl_distance.empty() ? order_heap_degree_distance : order_heap_extlvl_distance) : ((!VSIDS) ?
+        (order_heap_extlvl_CHB     .empty() ? order_heap_degree_CHB      : order_heap_extlvl_CHB     ) :
+        (order_heap_extlvl_VSIDS   .empty() ? order_heap_degree_VSIDS    : order_heap_extlvl_VSIDS   ));
+#else
     Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
+#endif
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 inline void Solver::varDecayActivity() {
     var_inc *= (1 / var_decay); }
 
 inline void Solver::varBumpActivity(Var v, double mult) {
-#if BUMP_ER
-    mult *= (extensionLevel[v] + 1);
-#endif
     if ( (activity_VSIDS[v] += var_inc * mult) > 1e100 ) {
         // Rescale:
         for (int i = 0; i < nVars(); i++)
@@ -531,7 +518,13 @@ inline void Solver::varBumpActivity(Var v, double mult) {
         var_inc *= 1e-100; }
 
     // Update order_heap with respect to new activity:
-    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v); }
+#if PRIORITIZE_ER
+    if (order_heap_extlvl_VSIDS.inHeap(v)) order_heap_extlvl_VSIDS.decrease(v);
+    if (order_heap_degree_VSIDS.inHeap(v)) order_heap_degree_VSIDS.decrease(v);
+#else
+    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
+#endif
+}
 
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
 inline void Solver::claBumpActivity (Clause& c) {
@@ -581,10 +574,17 @@ inline void     Solver::setDecisionVar(Var v, bool b)
     else if (!b &&  decision[v]) dec_vars--;
 
     decision[v] = b;
+#if PRIORITIZE_ER
+    if (b && !order_heap_extlvl_CHB.inHeap(v)){
+        order_heap_extlvl_CHB.insert(v); order_heap_extlvl_VSIDS.insert(v); order_heap_extlvl_distance.insert(v);
+        order_heap_degree_CHB.insert(v); order_heap_degree_VSIDS.insert(v); order_heap_degree_distance.insert(v);
+    }
+#else
     if (b && !order_heap_CHB.inHeap(v)){
         order_heap_CHB.insert(v);
         order_heap_VSIDS.insert(v);
         order_heap_distance.insert(v);}
+#endif
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }
