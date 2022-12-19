@@ -25,10 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-SCENARIO("Enforce watcher invariant", "[PropagationManager]") {
+SCENARIO("Enforce watcher invariant", "[PropagationComponent]") {
     GIVEN("A clause") {
         Solver s;
-        PropagationManager& pm = s.propagationManager;
+        PropagationComponent& pc = s.propagationComponent;
         std::tr1::unordered_set<Lit> varsToDelete;
         vec<Lit> ps, actual, expect;
 
@@ -43,96 +43,96 @@ SCENARIO("Enforce watcher invariant", "[PropagationManager]") {
 
         // Ensure watchers are set up correctly
         clause2Vec(actual, c);
-        REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+        REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
 
         WHEN("the asserting literal is at index 0 and the highest-level literal is at index 1") {
             int i_undef = 0, i_max = 1;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the clause does not change and the watchers are correct") {
                 setVec(expect, {mkLit(0), mkLit(1), mkLit(2), mkLit(3), mkLit(4)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the asserting literal is at index 1 and the highest-level literal is at index 0") {
             int i_undef = 1, i_max = 0;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the first two literals in the clause are swapped and the watchers are correct") {
                 setVec(expect, {mkLit(1), mkLit(0), mkLit(2), mkLit(3), mkLit(4)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the asserting literal is at index 0 and the highest-level literal is at index > 1") {
             int i_undef = 0, i_max = 4;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the highest-level literal is moved to index 1 and the watchers are correct") {
                 setVec(expect, {mkLit(0), mkLit(4), mkLit(2), mkLit(3), mkLit(1)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the highest-level literal is at index 1 and the asserting literal is at index > 1") {
             int i_undef = 4, i_max = 1;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the asserting literal is moved to index 0 and the watchers are correct") {
                 setVec(expect, {mkLit(4), mkLit(1), mkLit(2), mkLit(3), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the highest-level literal is at index 0 and the asserting literal is at index > 1") {
             int i_undef = 4, i_max = 0;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the asserting literal is moved to index 0, the highest-level literal is moved to index 1, and the watchers are correct") {
                 setVec(expect, {mkLit(4), mkLit(0), mkLit(2), mkLit(3), mkLit(1)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the asserting literal is at index 1 and the highest-level literal is at index > 1") {
             int i_undef = 1, i_max = 4;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the asserting literal is moved to index 0, the highest-level literal is moved to index 1, and the watchers are correct") {
                 setVec(expect, {mkLit(1), mkLit(4), mkLit(2), mkLit(3), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches, cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches, cr));
             }
         }
 
         WHEN("the asserting literal is at index > 1 and the highest-level literal is at index > 1") {
             int i_undef = 4, i_max = 3;
-            setVariables(pm, i_undef, i_max, originalNumVars);
-            pm.enforceWatcherInvariant(cr, i_undef, i_max);
+            setVariables(pc, i_undef, i_max, originalNumVars);
+            pc.enforceWatcherInvariant(cr, i_undef, i_max);
 
             THEN("the asserting literal is moved to index 0, the highest-level literal is moved to index 1, and the watchers are correct") {
                 setVec(expect, {mkLit(4), mkLit(3), mkLit(2), mkLit(1), mkLit(0)});
                 clause2Vec(actual, c);
                 REQUIRE_THAT(actual, vecEqual(expect));
-                REQUIRE_THAT(actual, watchersCorrect(pm.watches,cr));
+                REQUIRE_THAT(actual, watchersCorrect(pc.watches,cr));
             }
         }
     }

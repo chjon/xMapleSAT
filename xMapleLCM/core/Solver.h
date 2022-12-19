@@ -48,7 +48,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 #include "core/SolverERTypes.h"
-#include "core/PropagationManager.h"
+#include "core/PropagationComponent.h"
 
 // Making internal data structures visible for testing
 #ifdef TESTING
@@ -452,11 +452,11 @@ public:
     double    my_var_decay;
     bool   DISTANCE;
 
-    PropagationManager propagationManager;
+    PropagationComponent propagationComponent;
     SolverER* ser;
 
 private:
-    friend class PropagationManager;
+    friend class PropagationComponent;
     friend class SolverER;
 };
 
@@ -484,7 +484,7 @@ inline void Solver::varBumpActivity(Var v, double mult) {
 
     // Update order_heap with respect to new activity:
     if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
-    propagationManager.increasePriority(v);
+    propagationComponent.increasePriority(v);
 }
 
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }

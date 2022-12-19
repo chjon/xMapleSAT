@@ -153,7 +153,7 @@ Solver::Solver() :
   , my_var_decay       (0.6)
   , DISTANCE           (true)
 
-  , propagationManager(this)
+  , propagationComponent(this)
   , ser (new SolverER(this))
 {}
 
@@ -261,7 +261,7 @@ void Solver::simplifyLearnt(Clause& c)
             //printf("///@@@ uncheckedEnqueue:index = %d. l_Undef\n", i);
             simpleUncheckEnqueue(~c[i]);
             c[j++] = c[i];
-            confl = propagationManager.simplePropagate();
+            confl = propagationComponent.simplePropagate();
             if (confl != CRef_Undef){
                 break;
             }
@@ -373,7 +373,7 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationManager.propagate() != CRef_Undef){
+                    if (propagationComponent.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -504,7 +504,7 @@ bool Solver::simplifyLearnt_core()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationManager.propagate() != CRef_Undef){
+                    if (propagationComponent.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -630,7 +630,7 @@ bool Solver::simplifyLearnt_tier2()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationManager.propagate() != CRef_Undef){
+                    if (propagationComponent.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -681,7 +681,7 @@ bool Solver::simplifyAll()
     ////
     simplified_length_record = original_length_record = 0;
 
-    if (!ok || propagationManager.propagate() != CRef_Undef)
+    if (!ok || propagationComponent.propagate() != CRef_Undef)
         return ok = false;
 
     //// cleanLearnts(also can delete these code), here just for analyzing
@@ -735,7 +735,7 @@ Var Solver::newVar(bool sign, bool dvar)
     var_iLevel_tmp.push(0);
     pathCs.push(0);
 
-    propagationManager.newVar(v);
+    propagationComponent.newVar(v);
     ser->newVar();
 
     return v;
@@ -782,7 +782,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = false;
     else if (ps.size() == 1){
         uncheckedEnqueue(ps[0]);
-        return ok = (propagationManager.propagate() == CRef_Undef);
+        return ok = (propagationComponent.propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -795,7 +795,7 @@ bool Solver::addClause_(vec<Lit>& ps)
 
 void Solver::attachClause(CRef cr) {
     const Clause& c = ca[cr];
-    propagationManager.attachClause(c, cr);
+    propagationComponent.attachClause(c, cr);
     if (c.learnt()) learnts_literals += c.size();
     else            clauses_literals += c.size();
 }
@@ -803,7 +803,7 @@ void Solver::attachClause(CRef cr) {
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
-    propagationManager.detachClause(c, cr, strict);
+    propagationComponent.detachClause(c, cr, strict);
     if (c.learnt()) learnts_literals -= c.size();
     else            clauses_literals -= c.size();
 }
@@ -1097,7 +1097,7 @@ bool Solver::binResMinimize(vec<Lit>& out_learnt)
         seen2[var(out_learnt[i])] = counter;
 
     // Get the list of binary clauses containing 'out_learnt[0]'.
-    const vec<Watcher>& ws = propagationManager.getBinaryWatchers(~out_learnt[0]);
+    const vec<Watcher>& ws = propagationComponent.getBinaryWatchers(~out_learnt[0]);
 
     int to_remove = 0;
     for (int i = 0; i < ws.size(); i++){
@@ -1328,7 +1328,7 @@ bool Solver::simplify()
 {
     assert(decisionLevel() == 0);
 
-    if (!ok || propagationManager.propagate() != CRef_Undef)
+    if (!ok || propagationComponent.propagate() != CRef_Undef)
         return ok = false;
 
     if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
@@ -1460,7 +1460,7 @@ CRef Solver::propagateLits(vec<Lit>& lits) {
         if (value(lit) == l_Undef) {
             newDecisionLevel();
             uncheckedEnqueue(lit);
-            CRef confl = propagationManager.propagate();
+            CRef confl = propagationComponent.propagate();
             if (confl != CRef_Undef) {
                 return confl;
             }
@@ -1516,7 +1516,7 @@ lbool Solver::search(int& nof_conflicts)
 #endif
 
     for (;;){
-        CRef confl = propagationManager.propagate();
+        CRef confl = propagationComponent.propagate();
 
         if (confl != CRef_Undef){
             // CONFLICT
@@ -1912,7 +1912,7 @@ void Solver::relocAll(ClauseAllocator& to)
 {
     // All watchers:
     //
-    propagationManager.relocAll(to);
+    propagationComponent.relocAll(to);
 
     // All reasons:
     //
