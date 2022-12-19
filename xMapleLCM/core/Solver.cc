@@ -111,7 +111,7 @@ Solver::Solver() :
   , ok                 (true)
   , cla_inc            (1)
   , var_inc            (1)
-  , qhead              (0)
+  
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
@@ -174,7 +174,7 @@ void Solver::cancelUntilTrailRecord()
         assigns[x] = l_Undef;
 
     }
-    qhead = trailRecord;
+    propagationComponent.setQueueHead(trailRecord);
     trail.shrink(trail.size() - trailRecord);
 
 }
@@ -870,7 +870,7 @@ void Solver::cancelUntil(int level) {
             if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
                 polarity[x] = sign(trail[c]);
             insertVarOrder(x); }
-        qhead = trail_lim[level];
+        propagationComponent.setQueueHead(trail_lim[level]);
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
     } }

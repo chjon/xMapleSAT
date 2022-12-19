@@ -7,6 +7,7 @@ namespace Minisat {
         : watches_bin(s->ca)
         , watches(s->ca)
         , bcp_order_heap(s->activity_VSIDS)
+        , qhead(0)
         , propagation_budget(-1)
         , propagations(0)
         , s_propagations(0)
@@ -186,22 +187,22 @@ namespace Minisat {
         watches_bin.cleanAll();
 
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        while (solver->qhead < solver->trail.size() || !bcp_order_heap.empty()){
-            if (solver->qhead == solver->trail.size()) {
+        while (qhead < solver->trail.size() || !bcp_order_heap.empty()){
+            if (qhead == solver->trail.size()) {
                 p.x = bcp_order_heap.removeMin();
                 solver->uncheckedEnqueue(p, solver->vardata[var(p)].reason);
                 bcp_assigns[var(p)] = l_Undef;
             }
-            p = solver->trail[solver->qhead++];
+            p = solver->trail[qhead++];
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        for (int i = solver->qhead; i < solver->trail.size(); i++)
+        for (int i = qhead; i < solver->trail.size(); i++)
             bcp_order_heap.insert(solver->trail[i].x);
 
         while (!bcp_order_heap.empty()) {
             p.x = bcp_order_heap.removeMin();
     #else
-        while (solver->qhead < solver->trail.size()){
-            p = solver->trail[solver->qhead++];
+        while (qhead < solver->trail.size()){
+            p = solver->trail[qhead++];
     #endif
             num_props++;
             confl = propagate_single(p);
@@ -212,7 +213,7 @@ namespace Minisat {
 
         propagations += num_props;
         solver->simpDB_props -= num_props;
-        solver->qhead = solver->trail.size();
+        qhead = solver->trail.size();
 
         return confl;
     }
@@ -222,9 +223,9 @@ namespace Minisat {
         int     num_props = 0;
         watches.cleanAll();
         watches_bin.cleanAll();
-        while (solver->qhead < solver->trail.size())
+        while (qhead < solver->trail.size())
         {
-            Lit            p = solver->trail[solver->qhead++];     // 'p' is enqueued fact to propagate.
+            Lit            p = solver->trail[qhead++];     // 'p' is enqueued fact to propagate.
             vec<Watcher>&  ws = watches[p];
             Watcher        *i, *j, *end;
             num_props++;
@@ -300,7 +301,7 @@ namespace Minisat {
                 if (value(first) == l_False)
                 {
                     confl = cr;
-                    solver->qhead = solver->trail.size();
+                    qhead = solver->trail.size();
                     // Copy the remaining watches:
                     while (i < end)
                         *j++ = *i++;

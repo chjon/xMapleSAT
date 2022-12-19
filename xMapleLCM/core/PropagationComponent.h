@@ -107,6 +107,8 @@ namespace Minisat {
         Heap< LitOrderLt<double> > bcp_order_heap; // BCP priority queue
         vec<lbool> bcp_assigns;
 
+        int qhead; // Head of propagation queue (as index into the trail -- no more explicit propagation queue in MiniSat).
+
         //////////////////////////
         // RESOURCE CONSTRAINTS //
         //////////////////////////
@@ -196,6 +198,13 @@ protected:
          * @param to The ClauseAllocator into which to reloc 
          */
         void relocAll(ClauseAllocator& to);
+
+        /**
+         * @brief Set the head of the propagation queue as an index into the solver trail. Used for backtracking.
+         * 
+         * @param i The new head of the propagation queue as an index into the solver trail.
+         */
+        void setQueueHead(int i);
 
         /**
          * @brief Propagate all enqueued facts.
@@ -314,6 +323,8 @@ protected:
     inline void PropagationComponent::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
         for (int i = 0; i < ws.size(); i++) ca.reloc(ws[i].cref, to);
     }
+
+    inline void PropagationComponent::setQueueHead(int i) { qhead = i; }
 
     inline void PropagationComponent::decreasePriority(Var v) {
         // Note: this uses the increase() method because we're using a min-heap as a max-heap
