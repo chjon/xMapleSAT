@@ -43,6 +43,9 @@ namespace Minisat {
     // Forward declarations
     class Solver;
 
+    /**
+     * @brief This class handles literal propagation.
+     */
     class PropagationComponent {
     protected:
 
@@ -103,6 +106,25 @@ namespace Minisat {
 
         Heap< LitOrderLt<double> > bcp_order_heap; // BCP priority queue
         vec<lbool> bcp_assigns;
+
+        //////////////////////////
+        // RESOURCE CONSTRAINTS //
+        //////////////////////////
+
+        int64_t propagation_budget; // -1 means no budget.
+
+public:
+        ////////////////
+        // STATISTICS //
+        ////////////////
+
+        uint64_t propagations  ; // Total number of propagations performed by @code{propagate}
+        uint64_t s_propagations; // Total number of propagations performed by @code{simplePropagate}
+
+protected:
+        ///////////////////////
+        // SOLVER REFERENCES //
+        ///////////////////////
 
         ClauseAllocator& ca;
         Solver* solver;
@@ -227,6 +249,30 @@ namespace Minisat {
          * @param i_max The index of the literal in the clause with the highest decision level
          */
         void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
+
+        //////////////////////////
+        // RESOURCE CONSTRAINTS //
+        //////////////////////////
+
+        /**
+         * @brief Set the propagation budget.
+         * 
+         * @param x The number of times left to propagate.
+         */
+        void setPropBudget(int64_t x);
+
+        /**
+         * @brief Set the solver to ignore the propagation budget. 
+         * 
+         */
+        void budgetOff();
+
+        /**
+         * @brief Check whether the solver can still propagate within the budget.
+         * 
+         * @return false if the solver has exceeded the budget, true otherwise
+         */
+        bool withinBudget() const;
     };
 
     // Explicitly instantiate required templates
@@ -285,6 +331,10 @@ namespace Minisat {
 
     inline const vec<Watcher>& PropagationComponent::getWatchers      (Lit l) const { return watches    [l]; }
     inline const vec<Watcher>& PropagationComponent::getBinaryWatchers(Lit l) const { return watches_bin[l]; }
+
+    inline void PropagationComponent::setPropBudget(int64_t x) { propagation_budget = propagations + x; }
+    inline void PropagationComponent::budgetOff() { propagation_budget = -1; }
+    inline bool PropagationComponent::withinBudget() const { return propagation_budget < 0 || propagations < (uint64_t) propagation_budget; }
 
 } // namespace Minisat
 

@@ -201,7 +201,7 @@ public:
 
     // Statistics: (read-only member variable)
     //
-    uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
+    uint64_t solves, starts, decisions, rnd_decisions, conflicts, conflicts_VSIDS;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
 
     vec<uint32_t> picked;
@@ -296,7 +296,6 @@ protected:
     // Resource contraints:
     //
     int64_t             conflict_budget;    // -1 means no budget.
-    int64_t             propagation_budget; // -1 means no budget.
     bool                asynch_interrupt;
 
     // Main internal methods:
@@ -452,6 +451,7 @@ public:
     double    my_var_decay;
     bool   DISTANCE;
 
+public:
     PropagationComponent propagationComponent;
     SolverER* ser;
 
@@ -537,14 +537,16 @@ inline void     Solver::setDecisionVar(Var v, bool b)
         order_heap_distance.insert(v);}
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
-inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
 inline void     Solver::clearInterrupt(){ asynch_interrupt = false; }
-inline void     Solver::budgetOff(){ conflict_budget = propagation_budget = -1; }
+inline void     Solver::budgetOff(){ conflict_budget = -1;
+    propagationComponent.budgetOff();
+}
 inline bool     Solver::withinBudget() const {
     return !asynch_interrupt &&
             (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&
-            (propagation_budget < 0 || propagations < (uint64_t)propagation_budget); }
+            propagationComponent.withinBudget();
+}
 
 // FIXME: after the introduction of asynchronous interrruptions the solve-versions that return a
 // pure bool do not give a safe interface. Either interrupts must be possible to turn off here, or

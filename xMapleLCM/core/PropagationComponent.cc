@@ -7,6 +7,9 @@ namespace Minisat {
         : watches_bin(s->ca)
         , watches(s->ca)
         , bcp_order_heap(s->activity_VSIDS)
+        , propagation_budget(-1)
+        , propagations(0)
+        , s_propagations(0)
         , ca(s->ca)
         , solver(s)
     {}
@@ -207,7 +210,7 @@ namespace Minisat {
             }
         }
 
-        solver->propagations += num_props;
+        propagations += num_props;
         solver->simpDB_props -= num_props;
         solver->qhead = solver->trail.size();
 
@@ -311,7 +314,7 @@ namespace Minisat {
             ws.shrink(i - j);
         }
 
-        solver->s_propagations += num_props;
+        s_propagations += num_props;
 
         return confl;
     }

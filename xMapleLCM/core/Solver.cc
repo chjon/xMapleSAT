@@ -105,7 +105,7 @@ Solver::Solver() :
 
   // Statistics: (formerly in 'SolverStats')
   //
-  , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
+  , solves(0), starts(0), decisions(0), rnd_decisions(0), conflicts(0), conflicts_VSIDS(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
 
   , ok                 (true)
@@ -137,12 +137,10 @@ Solver::Solver() :
   // Resource constraints:
   //
   , conflict_budget    (-1)
-  , propagation_budget (-1)
   , asynch_interrupt   (false)
 
   // simplfiy
   , nbSimplifyAll(0)
-  , s_propagations(0)
 
   // simplifyAll adjust occasion
   , curSimplify(1)
@@ -1768,11 +1766,11 @@ lbool Solver::solve_()
     int curr_restarts = 0;
     uint64_t curr_props = 0;
     while (status == l_Undef && withinBudget()){
-        if (propagations - curr_props >  VSIDS_props_limit){
-            curr_props = propagations;
+        if (propagationComponent.propagations - curr_props >  VSIDS_props_limit){
+            curr_props = propagationComponent.propagations;
             switch_mode = true;
             VSIDS_props_limit = VSIDS_props_limit + VSIDS_props_limit/10;
-        }     
+        }
         if (VSIDS){
             int weighted = INT32_MAX;
             status = search(weighted);
