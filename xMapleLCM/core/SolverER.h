@@ -384,15 +384,6 @@ protected:
      */
     CRef findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs);
 
-    /**
-     * @brief Move undefined literal to index 0, ensuring that watcher invariants are satisfied
-     * 
-     * @param cr The CRef of the asserting clause
-     * @param i_undef The index of the undefined literal in the clause
-     * @param i_max The index of the literal in the clause with the highest decision level
-     */
-    void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
-
     /////////////////////////////////
     // HELPERS FOR CLAUSE DELETION //
     /////////////////////////////////
@@ -479,7 +470,9 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
 inline void SolverER::newVar() {
+#if PRIORITIZE_ER
     extensionLevel.push(0);
+#endif
 }
 
 // EXTENDED RESOLUTION - statistics

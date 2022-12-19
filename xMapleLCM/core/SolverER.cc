@@ -278,7 +278,7 @@ namespace Minisat {
             assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
             
             // Update extension level
-#if PRIORITIZE_ER || BUMP_ER
+#if PRIORITIZE_ER
             extensionLevel[var(x)] = 1 + std::max(extensionLevel[var(a)], extensionLevel[var(b)]);
 #endif
 
@@ -428,34 +428,6 @@ namespace Minisat {
         return CRef_Undef;
     }
 
-    void SolverER::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
-        // Move unassigned literal to c[0]
-        Clause& c = solver->ca[cr];
-        Lit x = c[i_undef], max = c[i_max];
-        if (c.size() == 2) {
-            // Don't need to touch watchers for binary clauses
-            if (value(c[0]) == l_False) std::swap(c[0], c[1]);
-        } else {
-            // Swap unassigned literal to index 0 and highest-level literal to index 1,
-            // replacing watchers as necessary
-            OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws = solver->watches;
-            Lit c0 = c[0], c1 = c[1];
-            if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
-
-            if (i_max > 1) {
-                remove(ws[~c[1]], Solver::Watcher(cr, c0));
-                std::swap(c[1], c[i_max]);
-                ws[~max].push(Solver::Watcher(cr, x));
-            }
-
-            if (i_undef > 1) {
-                remove(ws[~c[0]], Solver::Watcher(cr, c1));
-                std::swap(c[0], c[i_undef]);
-                ws[~x].push(Solver::Watcher(cr, max));
-            }
-        }
-    }
-
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
         if (p(clause)) {
@@ -471,7 +443,7 @@ namespace Minisat {
                         int i_undef = -1, i_max = -1;
                         CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
-                        enforceWatcherInvariant(cr, i_undef, i_max);
+                        solver->propagationManager.enforceWatcherInvariant(cr, i_undef, i_max);
                         Clause& c = solver->ca[cr];
                         solver->uncheckedEnqueue(c[0], cr);
                     }

@@ -47,9 +47,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef PRIORITIZE_ER_BINARY
     #define PRIORITIZE_ER_BINARY false
 #endif
-#ifndef BUMP_ER
-    #define BUMP_ER false
-#endif
 
 // Define BCP-prioritization mode
 #define BCP_PRIORITY_IMMEDIATE    0 // Immediate propagation

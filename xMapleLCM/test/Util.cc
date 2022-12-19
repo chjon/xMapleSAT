@@ -22,7 +22,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <tr1/unordered_map>
 #include "catch.hpp"
 #include "Util.h"
-#include <core/SolverER.h>
+
+// Required for explicit template initialization
+#include "core/SolverER.h"
+#include "core/PropagationManager.h"
 
 namespace Minisat {
 
@@ -53,6 +56,16 @@ template <typename T> void setVec(vec<T>& v, const std::tr1::unordered_set<T>& e
     for (const auto element : elements) v.push(element);
 }
 template void setVec(vec<Lit>&, const std::tr1::unordered_set<Lit>&);
+
+template <typename T> void setVariables(T& t, int i_undef, int i_max, int numVars) {
+    t.test_value.clear();
+    for (int i = 0; i < numVars; i++)
+        if (i != i_undef && i != i_max)
+            t.set_value(i, l_False, i);
+    t.set_value(i_max, l_False, numVars);
+}
+template void setVariables(PropagationManager&, int, int, int);
+template void setVariables(SolverER          &, int, int, int);
 
 ///////////////////////////
 // Vector prefix matcher //
@@ -154,7 +167,7 @@ std::string ExtDefUnique::describe() const {
 // Watcher correctness matcher //
 /////////////////////////////////
 
-WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr) { return WatchersCorrect(ws, cr); }
+WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws, CRef cr) { return WatchersCorrect(ws, cr); }
 
 bool WatchersCorrect::match(const Minisat::vec<Lit>& c) const {
     m_failure = 0;
@@ -169,8 +182,8 @@ bool WatchersCorrect::match(const Minisat::vec<Lit>& c) const {
         if (m_ws[~c[i]].size() != 0) m_failure |= FailureCase::EXPECT_ZERO_OTHER;
     }
 
-    if (!find(m_ws[~c[0]], Solver::Watcher(m_cr, c[1]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH0;
-    if (!find(m_ws[~c[1]], Solver::Watcher(m_cr, c[0]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH1;
+    if (!find(m_ws[~c[0]], Watcher(m_cr, c[1]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH0;
+    if (!find(m_ws[~c[1]], Watcher(m_cr, c[0]))) m_failure |= FailureCase::EXPECT_FOUND_WATCH1;
 
     return m_failure == 0;
 }

@@ -36,6 +36,7 @@ void setLitVec(vec<Lit>& v, const std::initializer_list<int>& elements);
 void clause2Vec(vec<Lit>& v, const Clause& c);
 template <typename T> void setVec(vec<T>& v, const std::initializer_list<T>& elements);
 template <typename T> void setVec(vec<T>& v, const std::tr1::unordered_set<T>& c);
+template <typename T> void setVariables(T& t, int i_undef, int i_max, int numVars);
 
 // Matchers
 class VecPrefix;
@@ -86,10 +87,10 @@ public:
 };
 
 // Watcher correctness matcher
-WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr);
+WatchersCorrect watchersCorrect(Minisat::OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws, CRef cr);
 class WatchersCorrect : public Catch::MatcherBase<Minisat::vec<Lit>> {
 public:
-    WatchersCorrect(Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws, CRef cr) : m_ws(ws), m_cr(cr) {}
+    WatchersCorrect(Minisat::OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws, CRef cr) : m_ws(ws), m_cr(cr) {}
     virtual bool match(const Minisat::vec<Lit>&) const override;
     virtual std::string describe() const override;
 private:
@@ -103,7 +104,7 @@ private:
         EXPECT_ZERO_OTHER    = 1 << 7,
     };
 
-    Minisat::OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& m_ws;
+    Minisat::OccLists<Lit, vec<Watcher>, WatcherDeleted>& m_ws;
     const CRef m_cr;
     mutable int m_failure = 0;
 };

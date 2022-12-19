@@ -48,6 +48,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 #include "core/SolverERTypes.h"
+#include "core/PropagationManager.h"
 
 // Making internal data structures visible for testing
 #ifdef TESTING
@@ -141,8 +142,6 @@ public:
     //
     lbool   value      (Var x) const;       // The current value of a variable.
     lbool   value      (Lit p) const;       // The current value of a literal.
-    lbool   bcpValue  (Var x) const;       // The queued value of a variable.
-    lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nAssigns   ()      const;       // The current number of assigned literals.
@@ -200,8 +199,6 @@ public:
 
     uint64_t       VSIDS_props_limit;
 
-    SolverER* ser;
-
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
@@ -220,47 +217,6 @@ protected:
     //
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
-
-    struct Watcher {
-        CRef cref;
-        Lit  blocker;
-        Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
-        bool operator==(const Watcher& w) const { return cref == w.cref; }
-        bool operator!=(const Watcher& w) const { return cref != w.cref; }
-    };
-
-    struct WatcherDeleted
-    {
-        const ClauseAllocator& ca;
-        WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
-        bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
-    };
-
-    struct LitOrderLt {
-        const vec<double>&  activity;
-#if PRIORITIZE_ER
-        const vec<unsigned int>& extensionLevel;
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-#if PRIORITIZE_ER_LOW
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] < extensionLevel[y];
-#else
-            if (extensionLevel[x] != extensionLevel[y]) return extensionLevel[x] > extensionLevel[y];
-#endif
-            else                                        return activity[x] > activity[y];
-        }
-        LitOrderLt(const vec<double>&  act, const vec<unsigned int>& extlvl)
-            : activity(act)
-            , extensionLevel(extlvl)
-        { }
-#else
-        bool operator () (Var x, Var y) const {
-            x >>= 1; y >>= 1;
-            return activity[x] > activity[y];
-        }
-        LitOrderLt(const vec<double>&  act) : activity(act) { }
-#endif
-    };
 
     struct VarOrderLt {
         const vec<double>&  activity;
@@ -295,9 +251,6 @@ protected:
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.
     activity_VSIDS,activity_distance;
     double              var_inc;          // Amount to bump next variable with.
-    OccLists<Lit, vec<Watcher>, WatcherDeleted>
-    watches_bin,      // Watches for binary clauses only.
-    watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
     vec<lbool>          assigns;          // The current assignments.
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
@@ -308,8 +261,6 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-    Heap<LitOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
-    vec<lbool>          bcp_assigns;
     Heap<VarOrderLt>
                         order_heap_CHB, // A priority queue of variables ordered with respect to the variable activity.
                         order_heap_VSIDS,
@@ -354,9 +305,7 @@ protected:
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
-    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
-    CRef     propagate_single (Heap<LitOrderLt>& bcp_order_heap, Lit p);
-    CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
+    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.                                                 // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
@@ -476,7 +425,6 @@ public:
     void	litsEnqueue(int cutP, Clause& c);
     void	cancelUntilTrailRecord();
     void	simpleUncheckEnqueue(Lit p, CRef from = CRef_Undef);
-    CRef    simplePropagate();
     uint64_t nbSimplifyAll;
     uint64_t simplified_length_record, original_length_record;
     uint64_t s_propagations;
@@ -504,7 +452,11 @@ public:
     double    my_var_decay;
     bool   DISTANCE;
 
+    PropagationManager propagationManager;
+    SolverER* ser;
+
 private:
+    friend class PropagationManager;
     friend class SolverER;
 };
 
@@ -531,7 +483,9 @@ inline void Solver::varBumpActivity(Var v, double mult) {
         var_inc *= 1e-100; }
 
     // Update order_heap with respect to new activity:
-    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v); }
+    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
+    propagationManager.increasePriority(v);
+}
 
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
 inline void Solver::claBumpActivity (Clause& c) {
@@ -563,8 +517,6 @@ inline int      Solver::decisionLevel ()      const   { return trail_lim.size();
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
 inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
-inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
-inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
