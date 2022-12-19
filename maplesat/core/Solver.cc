@@ -118,9 +118,6 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-  , bcp_order_heap     (LitOrderLt(activity))
-#endif
 #if PRIORITIZE_ER
 #ifdef EXTLVL_ACTIVITY
   , order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
@@ -178,9 +175,6 @@ Var Solver::newVar(bool sign, bool dvar)
     degree.push(0);
     extensionLevel.push(0);
 #endif
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    bcp_assigns.push(l_Undef);
-#endif
 #if ALMOST_CONFLICT
     almost_conflicted.push(0);
 #endif
@@ -221,7 +215,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = false;
     else if (ps.size() == 1){
         uncheckedEnqueue(ps[0]);
-        return ok = (propagate() == CRef_Undef);
+        return ok = (propagationManager->propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -633,136 +627,6 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     trail.push_(p);
 }
 
-inline CRef Solver::propagate_single (Lit p) {
-        CRef confl = CRef_Undef;
-        vec<Watcher>&  ws  = watches[p];
-        Watcher        *i, *j, *end;
-
-        for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
-            // Try to avoid inspecting the clause:
-            Lit blocker = i->blocker;
-            if (value(blocker) == l_True){
-                *j++ = *i++; continue; }
-
-            // Make sure the false literal is data[1]:
-            CRef     cr        = i->cref;
-            Clause&  c         = ca[cr];
-            Lit      false_lit = ~p;
-            if (c[0] == false_lit)
-                c[0] = c[1], c[1] = false_lit;
-            assert(c[1] == false_lit);
-            i++;
-
-            // If 0th watch is true, then clause is already satisfied.
-            Lit     first = c[0];
-            Watcher w     = Watcher(cr, first);
-            if (first != blocker && value(first) == l_True){
-                *j++ = w; continue; }
-
-            // Look for new watch:
-            for (int k = 2; k < c.size(); k++)
-                if (value(c[k]) != l_False){
-                    c[1] = c[k]; c[k] = false_lit;
-                    watches[~c[1]].push(w);
-                    goto NextClause; }
-
-            // Did not find watch -- clause is unit under assignment:
-            *j++ = w;
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-            if (value(first) == l_False || bcpValue(first) == l_False){
-                // Found a conflict!
-                // Make sure conflicting literal is on the trail
-                if (value(first) == l_Undef)
-                    uncheckedEnqueue(~first, vardata[var(first)].reason);
-
-                // Clear the propagation queue
-                for (int k = 0; k < bcp_order_heap.size(); k++) {
-                    Lit p; p.x = bcp_order_heap[k];
-                    bcp_assigns[var(p)] = l_Undef;
-                }
-                bcp_order_heap.clear();
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-            if (value(first) == l_False) {
-                bcp_order_heap.clear();
-#else
-            if (value(first) == l_False){
-#endif
-                confl = cr;
-                // Copy the remaining watches:
-                while (i < end)
-                    *j++ = *i++;
-            } else {
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-                // Queue literal for propagation
-                if (bcpValue(first) == l_Undef) {
-                    bcp_assigns[var(first)] = lbool(!sign(first));
-                    vardata[var(first)].reason = cr;
-                    bcp_order_heap.insert(first.x);
-                }
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-                bcp_order_heap.insert(first.x);
-                uncheckedEnqueue(first, cr);
-#else
-                uncheckedEnqueue(first, cr);
-#endif
-            }
-
-        NextClause:;
-        }
-        ws.shrink(i - j);
-        return confl;
-}
-
-/*_________________________________________________________________________________________________
-|
-|  propagate : [void]  ->  [Clause*]
-|  
-|  Description:
-|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
-|    otherwise CRef_Undef.
-|  
-|    Post-conditions:
-|      * the propagation queue is empty, even if there was a conflict.
-|________________________________________________________________________________________________@*/
-CRef Solver::propagate()
-{
-    CRef    confl     = CRef_Undef;
-    int     num_props = 0;
-    Lit     p         = lit_Undef;
-    watches.cleanAll();
-
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    while (qhead < trail.size() || !bcp_order_heap.empty()){
-        if (qhead == trail.size()) {
-            p.x = bcp_order_heap.removeMin();
-            uncheckedEnqueue(p, vardata[var(p)].reason);
-            bcp_assigns[var(p)] = l_Undef;
-        }
-        p = trail[qhead++];
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-    for (int i = qhead; i < trail.size(); i++)
-        bcp_order_heap.insert(trail[i].x);
-
-    while (!bcp_order_heap.empty()) {
-        p.x = bcp_order_heap.removeMin();
-#else
-    while (qhead < trail.size()){
-        p = trail[qhead++];
-#endif
-        num_props++;
-        confl = propagate_single(p);
-        if (confl != CRef_Undef) {
-            break;
-        }
-    }
-
-    propagations += num_props;
-    simpDB_props -= num_props;
-    qhead = trail.size();
-
-    return confl;
-}
-
 int min(int a, int b) {
     return a < b ? a : b;
 }
@@ -867,7 +731,7 @@ bool Solver::simplify()
 {
     assert(decisionLevel() == 0);
 
-    if (!ok || propagate() != CRef_Undef)
+    if (!ok || propagationManager->propagate() != CRef_Undef)
         return ok = false;
 
     if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
@@ -908,7 +772,7 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     for (;;){
-        CRef confl = propagate();
+        CRef confl = propagationManager->propagate();
 
 #if BRANCHING_HEURISTIC == CHB
         double multiplier = confl == CRef_Undef ? reward_multiplier : 1.0;

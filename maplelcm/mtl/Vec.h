@@ -23,6 +23,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <assert.h>
 #include <new>
+#include <iostream>
 
 #include "mtl/IntTypes.h"
 #include "mtl/XAlloc.h"
@@ -83,12 +84,21 @@ public:
     T&       last  (void)              { return data[sz-1]; }
 
     // Vector interface:
-    const T& operator [] (int index) const { return data[index]; }
-    T&       operator [] (int index)       { return data[index]; }
+    const T& operator [] (int index) const { assert(0 <= index && index <= sz); return data[index]; }
+    T&       operator [] (int index)       { assert(0 <= index && index <= sz); return data[index]; }
 
     // Duplicatation (preferred instead):
     void copyTo(vec<T>& copy) const { copy.clear(); copy.growTo(sz); for (int i = 0; i < sz; i++) copy[i] = data[i]; }
     void moveTo(vec<T>& dest) { dest.clear(true); dest.data = data; dest.sz = sz; dest.cap = cap; data = NULL; sz = 0; cap = 0; }
+
+    friend std::ostream &operator<<(std::ostream &os, const vec<T>& v) { 
+        os << "[";
+        for (int i = 0; i < v.size(); i++) {
+            os << v[i];
+            if (i + 1 < v.size()) os << ",";
+        }
+        return os << "]";
+    }
 };
 
 

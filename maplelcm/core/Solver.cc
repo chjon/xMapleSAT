@@ -8,7 +8,9 @@ Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI,
 Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
 
 Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
- 
+
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -59,7 +61,7 @@ static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the 
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
-
+static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
 //=================================================================================================
 // Constructor/Destructor:
@@ -97,6 +99,9 @@ Solver::Solver() :
   , learntsize_adjust_start_confl (100)
   , learntsize_adjust_inc         (1.5)
 
+  , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
+
+
   // Statistics: (formerly in 'SolverStats')
   //
   , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0), conflicts_VSIDS(0)
@@ -105,16 +110,9 @@ Solver::Solver() :
   , ok                 (true)
   , cla_inc            (1)
   , var_inc            (1)
-  , watches_bin        (WatcherDeleted(ca))
-  , watches            (WatcherDeleted(ca))
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-  , bcp_order_heap_CHB     (LitOrderLt(activity_CHB))
-  , bcp_order_heap_VSIDS   (LitOrderLt(activity_VSIDS))
-  , bcp_order_heap_distance(LitOrderLt(activity_distance))
-#endif
 #if PRIORITIZE_ER
   , order_heap_extlvl_CHB     (VarOrderLt(activity_CHB, extensionLevel, false))
   , order_heap_extlvl_VSIDS   (VarOrderLt(activity_VSIDS, extensionLevel, false))
@@ -157,154 +155,10 @@ Solver::Solver() :
   , my_var_decay       (0.6)
   , DISTANCE           (true)
 
+  , propagationManager(this)
 {}
 
-
-Solver::~Solver()
-{
-}
-
-
-// simplify All
-//
-CRef Solver::simplePropagate()
-{
-    CRef    confl = CRef_Undef;
-    int     num_props = 0;
-    watches.cleanAll();
-    watches_bin.cleanAll();
-    while (qhead < trail.size())
-    {
-        Lit            p = trail[qhead++];     // 'p' is enqueued fact to propagate.
-        vec<Watcher>&  ws = watches[p];
-        Watcher        *i, *j, *end;
-        num_props++;
-
-
-        // First, Propagate binary clauses
-        vec<Watcher>&  wbin = watches_bin[p];
-
-        for (int k = 0; k<wbin.size(); k++)
-        {
-
-            Lit imp = wbin[k].blocker;
-
-            if (value(imp) == l_False)
-            {
-                return wbin[k].cref;
-            }
-
-            if (value(imp) == l_Undef)
-            {
-                simpleUncheckEnqueue(imp, wbin[k].cref);
-            }
-        }
-        for (i = j = (Watcher*)ws, end = i + ws.size(); i != end;)
-        {
-            // Try to avoid inspecting the clause:
-            Lit blocker = i->blocker;
-            if (value(blocker) == l_True)
-            {
-                *j++ = *i++; continue;
-            }
-
-            // Make sure the false literal is data[1]:
-            CRef     cr = i->cref;
-            Clause&  c = ca[cr];
-            Lit      false_lit = ~p;
-            if (c[0] == false_lit)
-                c[0] = c[1], c[1] = false_lit;
-            assert(c[1] == false_lit);
-            //  i++;
-
-            // If 0th watch is true, then clause is already satisfied.
-            // However, 0th watch is not the blocker, make it blocker using a new watcher w
-            // why not simply do i->blocker=first in this case?
-            Lit     first = c[0];
-            //  Watcher w     = Watcher(cr, first);
-            if (first != blocker && value(first) == l_True)
-            {
-                i->blocker = first;
-                *j++ = *i++; continue;
-            }
-
-            // Look for new watch:
-            //if (incremental)
-            //{ // ----------------- INCREMENTAL MODE
-            //	int choosenPos = -1;
-            //	for (int k = 2; k < c.size(); k++)
-            //	{
-            //		if (value(c[k]) != l_False)
-            //		{
-            //			if (decisionLevel()>assumptions.size())
-            //			{
-            //				choosenPos = k;
-            //				break;
-            //			}
-            //			else
-            //			{
-            //				choosenPos = k;
-
-            //				if (value(c[k]) == l_True || !isSelector(var(c[k]))) {
-            //					break;
-            //				}
-            //			}
-
-            //		}
-            //	}
-            //	if (choosenPos != -1)
-            //	{
-            //		// watcher i is abandonned using i++, because cr watches now ~c[k] instead of p
-            //		// the blocker is first in the watcher. However,
-            //		// the blocker in the corresponding watcher in ~first is not c[1]
-            //		Watcher w = Watcher(cr, first); i++;
-            //		c[1] = c[choosenPos]; c[choosenPos] = false_lit;
-            //		watches[~c[1]].push(w);
-            //		goto NextClause;
-            //	}
-            //}
-            else
-            {  // ----------------- DEFAULT  MODE (NOT INCREMENTAL)
-                for (int k = 2; k < c.size(); k++)
-                {
-
-                    if (value(c[k]) != l_False)
-                    {
-                        // watcher i is abandonned using i++, because cr watches now ~c[k] instead of p
-                        // the blocker is first in the watcher. However,
-                        // the blocker in the corresponding watcher in ~first is not c[1]
-                        Watcher w = Watcher(cr, first); i++;
-                        c[1] = c[k]; c[k] = false_lit;
-                        watches[~c[1]].push(w);
-                        goto NextClause;
-                    }
-                }
-            }
-
-            // Did not find watch -- clause is unit under assignment:
-            i->blocker = first;
-            *j++ = *i++;
-            if (value(first) == l_False)
-            {
-                confl = cr;
-                qhead = trail.size();
-                // Copy the remaining watches:
-                while (i < end)
-                    *j++ = *i++;
-            }
-            else
-            {
-                simpleUncheckEnqueue(first, cr);
-            }
-NextClause:;
-        }
-        ws.shrink(i - j);
-    }
-
-    s_propagations += num_props;
-
-    return confl;
-}
+Solver::~Solver() {}
 
 void Solver::simpleUncheckEnqueue(Lit p, CRef from){
     assert(value(p) == l_Undef);
@@ -406,7 +260,7 @@ void Solver::simplifyLearnt(Clause& c)
             //printf("///@@@ uncheckedEnqueue:index = %d. l_Undef\n", i);
             simpleUncheckEnqueue(~c[i]);
             c[j++] = c[i];
-            confl = simplePropagate();
+            confl = propagationManager.simplePropagate();
             if (confl != CRef_Undef){
                 break;
             }
@@ -518,7 +372,7 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagate() != CRef_Undef){
+                    if (propagationManager.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -629,7 +483,6 @@ bool Solver::simplifyLearnt_core()
                 // afterSize = c.size();
                 
                 if(drup_file && saved_size !=c.size()){
-
 #ifdef BIN_DRUP
                     binDRUP('a', c , drup_file);
                     //                    binDRUP('d', add_oc, drup_file);
@@ -650,7 +503,7 @@ bool Solver::simplifyLearnt_core()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagate() != CRef_Undef){
+                    if (propagationManager.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -776,7 +629,7 @@ bool Solver::simplifyLearnt_tier2()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagate() != CRef_Undef){
+                    if (propagationManager.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -827,7 +680,7 @@ bool Solver::simplifyAll()
     ////
     simplified_length_record = original_length_record = 0;
 
-    if (!ok || propagate() != CRef_Undef)
+    if (!ok || propagationManager.propagate() != CRef_Undef)
         return ok = false;
 
     //// cleanLearnts(also can delete these code), here just for analyzing
@@ -857,10 +710,6 @@ bool Solver::simplifyAll()
 Var Solver::newVar(bool sign, bool dvar)
 {
     int v = nVars();
-    watches_bin.init(mkLit(v, false));
-    watches_bin.init(mkLit(v, true ));
-    watches  .init(mkLit(v, false));
-    watches  .init(mkLit(v, true ));
     assigns  .push(l_Undef);
     vardata  .push(mkVarData(CRef_Undef, 0));
     activity_CHB  .push(0);
@@ -871,9 +720,6 @@ Var Solver::newVar(bool sign, bool dvar)
 #if PRIORITIZE_ER
     degree.push(0);
     extensionLevel.push(0);
-#endif
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    bcp_assigns.push(l_Undef);
 #endif
     almost_conflicted.push(0);
 #ifdef ANTI_EXPLORATION
@@ -891,6 +737,9 @@ Var Solver::newVar(bool sign, bool dvar)
     var_iLevel.push(0);
     var_iLevel_tmp.push(0);
     pathCs.push(0);
+
+    propagationManager.newVar(v);
+
     return v;
 }
 
@@ -940,7 +789,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = false;
     else if (ps.size() == 1){
         uncheckedEnqueue(ps[0]);
-        return ok = (propagate() == CRef_Undef);
+        return ok = (propagationManager.propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -953,30 +802,18 @@ bool Solver::addClause_(vec<Lit>& ps)
 
 void Solver::attachClause(CRef cr) {
     const Clause& c = ca[cr];
-    assert(c.size() > 1);
-    OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = c.size() == 2 ? watches_bin : watches;
-    ws[~c[0]].push(Watcher(cr, c[1]));
-    ws[~c[1]].push(Watcher(cr, c[0]));
+    propagationManager.attachClause(c, cr);
     if (c.learnt()) learnts_literals += c.size();
-    else            clauses_literals += c.size(); }
+    else            clauses_literals += c.size();
+}
 
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
-    assert(c.size() > 1);
-    OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = c.size() == 2 ? watches_bin : watches;
-    
-    if (strict){
-        remove(ws[~c[0]], Watcher(cr, c[1]));
-        remove(ws[~c[1]], Watcher(cr, c[0]));
-    }else{
-        // Lazy detaching: (NOTE! Must clean all watcher lists before garbage collecting this clause)
-        ws.smudge(~c[0]);
-        ws.smudge(~c[1]);
-    }
-
+    propagationManager.detachClause(c, cr, strict);
     if (c.learnt()) learnts_literals -= c.size();
-    else            clauses_literals -= c.size(); }
+    else            clauses_literals -= c.size();
+}
 
 
 void Solver::removeClause(CRef cr) {
@@ -1322,7 +1159,7 @@ bool Solver::binResMinimize(vec<Lit>& out_learnt)
         seen2[var(out_learnt[i])] = counter;
 
     // Get the list of binary clauses containing 'out_learnt[0]'.
-    const vec<Watcher>& ws = watches_bin[~out_learnt[0]];
+    const vec<Watcher>& ws = propagationManager.getBinaryWatchers(~out_learnt[0]);
 
     int to_remove = 0;
     for (int i = 0; i < ws.size(); i++){
@@ -1453,190 +1290,6 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     trail.push_(p);
 }
 
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-inline CRef Solver::propagate_single (Lit p) {
-#else
-inline CRef Solver::propagate_single (Heap<LitOrderLt>& bcp_order_heap, Lit p) {
-#endif
-        CRef confl = CRef_Undef;
-        vec<Watcher>&  ws  = watches[p];
-        Watcher        *i, *j, *end;
-
-        vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
-        for (int k = 0; k < ws_bin.size(); k++){
-            Lit the_other = ws_bin[k].blocker;
-            if (value(the_other) == l_True) {
-                continue;
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-            } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
-                // Found a conflict!
-                // Make sure conflicting literal is on the trail
-                if (value(the_other) == l_Undef)
-                    uncheckedEnqueue(~the_other, vardata[var(the_other)].reason);
-
-                // Clear the propagation queue
-                for (int k = 0; k < bcp_order_heap.size(); k++)
-                    bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
-                bcp_order_heap.clear();
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-            } else if (value(the_other) == l_False) {
-                bcp_order_heap.clear();
-#else
-            } else if (value(the_other) == l_False) {
-#endif
-                return ws_bin[k].cref;
-            } else {
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-                // Queue literal for propagation
-                if (bcpValue(the_other) == l_Undef) {
-                    bcp_assigns[var(the_other)] = lbool(!sign(the_other));
-                    vardata[var(the_other)].reason = ws_bin[k].cref;
-                    bcp_order_heap.insert(the_other.x);
-                }
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-                bcp_order_heap.insert(the_other.x);
-                uncheckedEnqueue(the_other, ws_bin[k].cref);
-#else
-                uncheckedEnqueue(the_other, ws_bin[k].cref);
-#endif
-            }
-        }
-
-        for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
-            // Try to avoid inspecting the clause:
-            Lit blocker = i->blocker;
-            if (value(blocker) == l_True){
-                *j++ = *i++; continue; }
-
-            // Make sure the false literal is data[1]:
-            CRef     cr        = i->cref;
-            Clause&  c         = ca[cr];
-            Lit      false_lit = ~p;
-            if (c[0] == false_lit)
-                c[0] = c[1], c[1] = false_lit;
-            assert(c[1] == false_lit);
-            i++;
-
-            // If 0th watch is true, then clause is already satisfied.
-            Lit     first = c[0];
-            Watcher w     = Watcher(cr, first);
-            if (first != blocker && value(first) == l_True){
-                *j++ = w; continue; }
-
-            // Look for new watch:
-            for (int k = 2; k < c.size(); k++)
-                if (value(c[k]) != l_False){
-                    c[1] = c[k]; c[k] = false_lit;
-                    watches[~c[1]].push(w);
-                    goto NextClause; }
-
-            // Did not find watch -- clause is unit under assignment:
-            *j++ = w;
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-            if (value(first) == l_False || bcpValue(first) == l_False){
-                // Found a conflict!
-                // Make sure conflicting literal is on the trail
-                if (value(first) == l_Undef)
-                    uncheckedEnqueue(~first, vardata[var(first)].reason);
-
-                // Clear the propagation queue
-                for (int k = 0; k < bcp_order_heap.size(); k++) {
-                    Lit p; p.x = bcp_order_heap[k];
-                    bcp_assigns[var(p)] = l_Undef;
-                }
-                bcp_order_heap.clear();
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-            if (value(first) == l_False) {
-                bcp_order_heap.clear();
-#else
-            if (value(first) == l_False){
-#endif
-                confl = cr;
-                // Copy the remaining watches:
-                while (i < end)
-                    *j++ = *i++;
-            } else {
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-                // Queue literal for propagation
-                if (bcpValue(first) == l_Undef) {
-                    bcp_assigns[var(first)] = lbool(!sign(first));
-                    vardata[var(first)].reason = cr;
-                    bcp_order_heap.insert(first.x);
-                }
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-                bcp_order_heap.insert(first.x);
-                uncheckedEnqueue(first, cr);
-#else
-                uncheckedEnqueue(first, cr);
-#endif
-            }
-
-NextClause:;
-        }
-        ws.shrink(i - j);
-        return confl;
-}
-
-/*_________________________________________________________________________________________________
-|
-|  propagate : [void]  ->  [Clause*]
-|  
-|  Description:
-|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
-|    otherwise CRef_Undef.
-|  
-|    Post-conditions:
-|      * the propagation queue is empty, even if there was a conflict.
-|________________________________________________________________________________________________@*/
-CRef Solver::propagate()
-{
-    CRef    confl     = CRef_Undef;
-    int     num_props = 0;
-    Lit     p         = lit_Undef;
-    watches.cleanAll();
-    watches_bin.cleanAll();
-
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-    Heap<LitOrderLt>& bcp_order_heap = DISTANCE ? bcp_order_heap_distance : ((!VSIDS)? bcp_order_heap_CHB : bcp_order_heap_VSIDS);
-#endif
-
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    while (qhead < trail.size() || !bcp_order_heap.empty()){
-        if (qhead == trail.size()) {
-            p.x = bcp_order_heap.removeMin();
-            uncheckedEnqueue(p, vardata[var(p)].reason);
-            bcp_assigns[var(p)] = l_Undef;
-        }
-        p = trail[qhead++];
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-    for (int i = qhead; i < trail.size(); i++)
-        bcp_order_heap.insert(trail[i].x);
-
-    while (!bcp_order_heap.empty()) {
-        p.x = bcp_order_heap.removeMin();
-#else
-    while (qhead < trail.size()){
-        p = trail[qhead++];
-#endif
-        num_props++;
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        confl = propagate_single(p);
-#else
-        confl = propagate_single(bcp_order_heap, p);
-#endif
-        if (confl != CRef_Undef) {
-            break;
-        }
-    }
-
-    propagations += num_props;
-    simpDB_props -= num_props;
-    qhead = trail.size();
-
-    return confl;
-}
-
-
 /*_________________________________________________________________________________________________
 |
 |  reduceDB : ()  ->  [void]
@@ -1756,7 +1409,7 @@ bool Solver::simplify()
 {
     assert(decisionLevel() == 0);
 
-    if (!ok || propagate() != CRef_Undef)
+    if (!ok || propagationManager.propagate() != CRef_Undef)
         return ok = false;
 
     if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
@@ -1893,7 +1546,7 @@ CRef Solver::propagateLits(vec<Lit>& lits) {
         if (value(lit) == l_Undef) {
             newDecisionLevel();
             uncheckedEnqueue(lit);
-            CRef confl = propagate();
+            CRef confl = propagationManager.propagate();
             if (confl != CRef_Undef) {
                 return confl;
             }
@@ -1924,7 +1577,7 @@ lbool Solver::search(int& nof_conflicts)
 
     // simplify
     //
-    if (conflicts >= static_cast<unsigned int>(curSimplify * nbconfbeforesimplify)){
+    if (conflicts >= static_cast<uint64_t>(curSimplify * nbconfbeforesimplify)){
         //        printf("c ### simplifyAll on conflict : %lld\n", conflicts);
         //printf("nbClauses: %d, nbLearnts_core: %d, nbLearnts_tier2: %d, nbLearnts_local: %d, nbLearnts: %d\n",
         //	clauses.size(), learnts_core.size(), learnts_tier2.size(), learnts_local.size(),
@@ -1938,7 +1591,7 @@ lbool Solver::search(int& nof_conflicts)
     }
 
     for (;;){
-        CRef confl = propagate();
+        CRef confl = propagationManager.propagate();
 
         if (confl != CRef_Undef){
             // CONFLICT
@@ -2118,13 +1771,13 @@ static double luby(double y, int x){
 }
 
 static bool switch_mode = false;
-static void SIGALRM_switch(int signum) { switch_mode = true; }
+//static void SIGALRM_switch(int signum) { switch_mode = true; }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
-    signal(SIGALRM, SIGALRM_switch);
-    alarm(2500);
+    //signal(SIGALRM, SIGALRM_switch);
+    //alarm(2500);
 
     model.clear();
     conflict.clear();
@@ -2154,7 +1807,13 @@ lbool Solver::solve_()
 
     // Search:
     int curr_restarts = 0;
+    uint64_t curr_props = 0;
     while (status == l_Undef && withinBudget()){
+        if (propagations - curr_props >  VSIDS_props_limit){
+            curr_props = propagations;
+            switch_mode = true;
+            VSIDS_props_limit = VSIDS_props_limit + VSIDS_props_limit/10;
+        }     
         if (VSIDS){
             int weighted = INT32_MAX;
             status = search(weighted);
@@ -2163,9 +1822,15 @@ lbool Solver::solve_()
             curr_restarts++;
             status = search(nof_conflicts);
         }
-        if (!VSIDS && switch_mode){
-            VSIDS = true;
-            printf("c Switched to VSIDS.\n");
+        if (switch_mode){ 
+            switch_mode = false;
+            VSIDS = !VSIDS;
+            if (VSIDS){
+                printf("c Switched to VSIDS.\n");
+            }
+            else{
+               printf("c Switched to LRB.\n");
+            }
             fflush(stdout);
             picked.clear();
             conflicted.clear();
@@ -2173,6 +1838,15 @@ lbool Solver::solve_()
 #ifdef ANTI_EXPLORATION
             canceled.clear();
 #endif
+            // Instead of clearing, set vectors to 0
+            for (int i = 0; i < nVars(); i++) {
+                picked.push(0);
+                conflicted.push(0);
+                almost_conflicted.push(0);
+    #ifdef ANTI_EXPLORATION
+                canceled.push(0);
+    #endif
+            }
         }
     }
 
@@ -2279,20 +1953,7 @@ void Solver::relocAll(ClauseAllocator& to)
 {
     // All watchers:
     //
-    // for (int i = 0; i < watches.size(); i++)
-    watches.cleanAll();
-    watches_bin.cleanAll();
-    for (int v = 0; v < nVars(); v++)
-        for (int s = 0; s < 2; s++){
-            Lit p = mkLit(v, s);
-            // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
-            vec<Watcher>& ws = watches[p];
-            for (int j = 0; j < ws.size(); j++)
-                ca.reloc(ws[j].cref, to);
-            vec<Watcher>& ws_bin = watches_bin[p];
-            for (int j = 0; j < ws_bin.size(); j++)
-                ca.reloc(ws_bin[j].cref, to);
-        }
+    propagationManager.relocAll(to);
 
     // All reasons:
     //

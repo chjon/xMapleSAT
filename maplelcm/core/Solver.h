@@ -6,10 +6,11 @@ Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
  
 Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
 Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
- 
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
- 
- 
+
+Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search 
+
+xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -46,7 +47,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
-
+#include "core/PropagationManager.h"
 
 // Don't change the actual numbers.
 #define LOCAL 0
@@ -133,10 +134,6 @@ public:
     //
     lbool   value      (Var x) const;       // The current value of a variable.
     lbool   value      (Lit p) const;       // The current value of a literal.
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    lbool   bcpValue  (Var x) const;       // The queued value of a variable.
-    lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
-#endif
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nAssigns   ()      const;       // The current number of assigned literals.
@@ -192,6 +189,8 @@ public:
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
 
+    uint64_t       VSIDS_props_limit;
+
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
@@ -216,27 +215,6 @@ protected:
     //
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
-
-    struct Watcher {
-        CRef cref;
-        Lit  blocker;
-        Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
-        bool operator==(const Watcher& w) const { return cref == w.cref; }
-        bool operator!=(const Watcher& w) const { return cref != w.cref; }
-    };
-
-    struct WatcherDeleted
-    {
-        const ClauseAllocator& ca;
-        WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
-        bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
-    };
-
-    struct LitOrderLt {
-        const vec<double>&  activity;
-        bool operator () (Var x, Var y) const { return activity[x >> 1] > activity[y >> 1]; }
-        LitOrderLt(const vec<double>&  act) : activity(act) { }
-    };
 
     struct VarOrderLt {
         const vec<double>&  activity;
@@ -269,9 +247,6 @@ protected:
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.
     activity_VSIDS,activity_distance;
     double              var_inc;          // Amount to bump next variable with.
-    OccLists<Lit, vec<Watcher>, WatcherDeleted>
-    watches_bin,      // Watches for binary clauses only.
-    watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
     vec<lbool>          assigns;          // The current assignments.
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
@@ -282,10 +257,7 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-    Heap<LitOrderLt>    bcp_order_heap_CHB, bcp_order_heap_VSIDS, bcp_order_heap_distance;
-    vec<lbool>          bcp_assigns;
-#endif
+
      // A priority queue of variables ordered with respect to the variable activity.
 #if PRIORITIZE_ER
     Heap<VarOrderLt> order_heap_extlvl_CHB, order_heap_extlvl_VSIDS, order_heap_extlvl_distance;
@@ -333,13 +305,7 @@ protected:
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
-    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-    CRef     propagate_single (Lit p);
-#else
-    CRef     propagate_single (Heap<LitOrderLt>& bcp_order_heap, Lit p);
-#endif
-    CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
+    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.                                                 // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
@@ -459,7 +425,6 @@ public:
     void	litsEnqueue(int cutP, Clause& c);
     void	cancelUntilTrailRecord();
     void	simpleUncheckEnqueue(Lit p, CRef from = CRef_Undef);
-    CRef    simplePropagate();
     uint64_t nbSimplifyAll;
     uint64_t simplified_length_record, original_length_record;
     uint64_t s_propagations;
@@ -486,6 +451,11 @@ public:
     vec<Lit> involved_lits;
     double    my_var_decay;
     bool   DISTANCE;
+
+    PropagationManager propagationManager;
+
+private:
+    friend class PropagationManager;
 };
 
 
@@ -524,6 +494,7 @@ inline void Solver::varBumpActivity(Var v, double mult) {
 #else
     if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
 #endif
+    propagationManager.increasePriority(v);
 }
 
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
@@ -556,10 +527,6 @@ inline int      Solver::decisionLevel ()      const   { return trail_lim.size();
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
 inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
-inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
-#endif
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
