@@ -1,4 +1,4 @@
-#include "core/BranchingComponent.h"
+#include "core/BranchingHeuristicManager.h"
 #include "core/SolverERTypes.h"
 #include "core/Solver.h"
 
@@ -24,7 +24,7 @@ static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the 
 // Heuristic selection
 static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
-BranchingComponent::BranchingComponent(Solver* s)
+BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
 #if PRIORITIZE_ER
     : order_heap_VSIDS   (VarOrderLt(activity_VSIDS,    ser->extensionLevel))
     , order_heap_CHB     (VarOrderLt(activity_CHB,      ser->extensionLevel))
@@ -82,13 +82,13 @@ BranchingComponent::BranchingComponent(Solver* s)
     , randomNumberGenerator(s->randomNumberGenerator)
     , variableDatabase(s->variableDatabase)
     , ca(s->ca)
-    , propagationComponent(s->propagationComponent)
+    , unitPropagator(s->unitPropagator)
     , solver(s)
 {}
 
-BranchingComponent::~BranchingComponent() {}
+BranchingHeuristicManager::~BranchingHeuristicManager() {}
 
-void BranchingComponent::newVar(Var v, bool sign, bool dvar) {
+void BranchingHeuristicManager::newVar(Var v, bool sign, bool dvar) {
     // VSIDS
     activity_VSIDS   .push(rnd_init_act ? randomNumberGenerator.drand() * 0.00001 : 0);
 
@@ -115,7 +115,7 @@ void BranchingComponent::newVar(Var v, bool sign, bool dvar) {
     setDecisionVar(v, dvar);
 }
 
-Lit BranchingComponent::pickBranchLit() {
+Lit BranchingHeuristicManager::pickBranchLit() {
     // Update statistics
     decisions++;
 
@@ -156,7 +156,7 @@ Lit BranchingComponent::pickBranchLit() {
     return mkLit(next, polarity[next]);
 }
 
-void BranchingComponent::rebuildOrderHeap() {
+void BranchingHeuristicManager::rebuildOrderHeap() {
     vec<Var> vs;
     for (Var v = 0; v < variableDatabase.nVars(); v++)
         if (decision[v] && variableDatabase.value(v) == l_Undef)
@@ -167,7 +167,7 @@ void BranchingComponent::rebuildOrderHeap() {
     order_heap_distance.build(vs);
 }
 
-inline void BranchingComponent::collectFirstUIPConflictClause(int& minLevel, CRef confl) {
+inline void BranchingHeuristicManager::collectFirstUIPConflictClause(int& minLevel, CRef confl) {
     Clause& c = ca[confl];
     for (int i = 0; i < c.size(); i++) {
         Var v = var(c[i]);
@@ -183,7 +183,7 @@ inline void BranchingComponent::collectFirstUIPConflictClause(int& minLevel, CRe
     }
 }
 
-inline void BranchingComponent::collectFirstUIPReasonClause(int& minLevel, CRef confl, int reasonVarLevel) {
+inline void BranchingHeuristicManager::collectFirstUIPReasonClause(int& minLevel, CRef confl, int reasonVarLevel) {
     Clause& rc = ca[confl];
     // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
     if (rc.size() == 2 && variableDatabase.value(rc[0]) == l_False) {
@@ -213,7 +213,7 @@ inline void BranchingComponent::collectFirstUIPReasonClause(int& minLevel, CRef 
 // it is initialized to 0 at the beginning and reset to 0 after the function execution
 
 // Assumes that the trail is in the conflicting state due to confl
-void BranchingComponent::collectFirstUIP(CRef confl) {
+void BranchingHeuristicManager::collectFirstUIP(CRef confl) {
     involved_lits.clear();
     
     int minLevel = solver->decisionLevel();
@@ -247,7 +247,7 @@ void BranchingComponent::collectFirstUIP(CRef confl) {
     bumpActivityDistance(involved_lits, maxLevel);
 }
 
-void BranchingComponent::handleEventLearnedClause(const vec<Lit>& out_learnt, const int out_btlevel) {
+void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& out_learnt, const int out_btlevel) {
     if (m_VSIDS) {
         for (int i = 0; i < conflictLits.size(); i++){
             Var v = var(conflictLits[i]);
@@ -277,7 +277,7 @@ void BranchingComponent::handleEventLearnedClause(const vec<Lit>& out_learnt, co
     for (int j = 0; j < solver->analyze_toclear.size(); j++) solver->seen[var(solver->analyze_toclear[j])] = 0;    // ('seen[]' is now cleared)
 }
 
-void BranchingComponent::prioritize(const std::vector<ExtDef>& defs, double scaleFactor) {
+void BranchingHeuristicManager::prioritize(const std::vector<ExtDef>& defs, double scaleFactor) {
     // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
     const double desiredActivityCHB   = activity_CHB  [order_heap_CHB  [0]] * scaleFactor;
     const double desiredActivityVSIDS = activity_VSIDS[order_heap_VSIDS[0]] * scaleFactor;

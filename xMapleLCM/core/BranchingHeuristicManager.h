@@ -27,8 +27,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Minisat_BranchingComponent_h
-#define Minisat_BranchingComponent_h
+#ifndef Minisat_BranchingHeuristicManager_h
+#define Minisat_BranchingHeuristicManager_h
 
 #define ANTI_EXPLORATION
 
@@ -37,7 +37,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverERTypes.h"
 #include "core/RandomNumberGenerator.h"
 #include "core/VariableDatabase.h"
-#include "core/PropagationComponent.h"
+#include "core/UnitPropagator.h"
 #include "mtl/Heap.h"
 
 namespace Minisat {
@@ -48,7 +48,7 @@ namespace Minisat {
      * @brief This class handles variable branching.
      * 
      */
-    class BranchingComponent {
+    class BranchingHeuristicManager {
     public:
     protected:
         // Comparator for priority queue
@@ -155,23 +155,23 @@ namespace Minisat {
         RandomNumberGenerator& randomNumberGenerator;
         VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
-        PropagationComponent& propagationComponent;
+        UnitPropagator& unitPropagator;
         Solver* solver;
 
     public:
 
         /**
-         * @brief Construct a new BranchingComponent object
+         * @brief Construct a new BranchingHeuristicManager object
          * 
          * @param s Pointer to main solver object - must not be nullptr
          */
-        BranchingComponent(Solver* s);
+        BranchingHeuristicManager(Solver* s);
 
         /**
-         * @brief Destroy the BranchingComponent object
+         * @brief Destroy the BranchingHeuristicManager object
          * 
          */
-        ~BranchingComponent();
+        ~BranchingHeuristicManager();
 
         /**
          * @brief Set up internal data structures for a new variable
@@ -298,15 +298,15 @@ namespace Minisat {
         void collectFirstUIPReasonClause  (int& minLevel, CRef confl, int reasonVarLevel);
     };
 
-    inline void BranchingComponent::insertVarOrder(Var x) {
+    inline void BranchingHeuristicManager::insertVarOrder(Var x) {
         //    Heap<VarOrderLt>& order_heap = m_VSIDS ? order_heap_VSIDS : order_heap_CHB;
         auto& order_heap = m_DISTANCE ? order_heap_distance : ((!m_VSIDS) ? order_heap_CHB:order_heap_VSIDS);
         if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x);
     }
 
-    inline void BranchingComponent::decayActivityVSIDS() { if (m_VSIDS) var_inc *= (1 / var_decay); }
+    inline void BranchingHeuristicManager::decayActivityVSIDS() { if (m_VSIDS) var_inc *= (1 / var_decay); }
 
-    inline void BranchingComponent::bumpActivityVSIDS(Var v, double mult) {
+    inline void BranchingHeuristicManager::bumpActivityVSIDS(Var v, double mult) {
         if ((activity_VSIDS[v] += var_inc * mult) > 1e100) {
             // Rescale:
             for (int i = 0; i < variableDatabase.nVars(); i++)
@@ -316,10 +316,10 @@ namespace Minisat {
 
         // Update order_heap with respect to new activity:
         if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
-        propagationComponent.increasePriority(v);
+        unitPropagator.increasePriority(v);
     }
 
-    inline void BranchingComponent::clearCHBStats() {
+    inline void BranchingHeuristicManager::clearCHBStats() {
         // Instead of clearing, set vectors to 0
         for (int i = 0; i < variableDatabase.nVars(); i++) {
             picked           [i] = 0;
@@ -331,7 +331,7 @@ namespace Minisat {
         }
     }
 
-    inline void BranchingComponent::bumpActivityDistance(vec<Lit>& involved_lits, int max_level) {
+    inline void BranchingHeuristicManager::bumpActivityDistance(vec<Lit>& involved_lits, int max_level) {
         double inc=var_iLevel_inc;
         vec<int> level_incs; level_incs.clear();
         for(int i = 0; i < max_level; i++){
@@ -362,7 +362,7 @@ namespace Minisat {
 
     }
 
-    inline void BranchingComponent::setBranchingHeuristic(BranchingHeuristic branchingHeuristic) {
+    inline void BranchingHeuristicManager::setBranchingHeuristic(BranchingHeuristic branchingHeuristic) {
         switch (branchingHeuristic) {
             case BranchingHeuristic::VSIDS: { m_VSIDS = true;  } break;
             case BranchingHeuristic::CHB:   { m_VSIDS = false; } break;
@@ -370,8 +370,8 @@ namespace Minisat {
         }
     }
 
-    inline void BranchingComponent::setPolarity   (Var v, bool b) { polarity[v] = b; }
-    inline void BranchingComponent::setDecisionVar(Var v, bool b) {
+    inline void BranchingHeuristicManager::setPolarity   (Var v, bool b) { polarity[v] = b; }
+    inline void BranchingHeuristicManager::setDecisionVar(Var v, bool b) {
         if      ( b && !decision[v]) dec_vars++;
         else if (!b &&  decision[v]) dec_vars--;
 
@@ -381,7 +381,7 @@ namespace Minisat {
         if (b && !order_heap_distance.inHeap(v)) order_heap_distance.insert(v);
     }
 
-    inline void BranchingComponent::handleEventLitAssigned(Lit l, uint64_t conflicts) {
+    inline void BranchingHeuristicManager::handleEventLitAssigned(Lit l, uint64_t conflicts) {
         const Var v = var(l);
 
         // CHB
@@ -401,7 +401,7 @@ namespace Minisat {
         }
     }
 
-    inline void BranchingComponent::handleEventLitUnassigned(Lit l, uint64_t conflicts, bool assignedAtLastLevel) {
+    inline void BranchingHeuristicManager::handleEventLitUnassigned(Lit l, uint64_t conflicts, bool assignedAtLastLevel) {
         const Var v = var(l);
 
         // CHB
@@ -429,7 +429,7 @@ namespace Minisat {
         insertVarOrder(v);
     }
 
-    inline void BranchingComponent::handleEventConflicted(uint64_t conflicts) {
+    inline void BranchingHeuristicManager::handleEventConflicted(uint64_t conflicts) {
         if (m_VSIDS) {
             if (--timer == 0 && var_decay < 0.95) {
                 timer = 5000;
@@ -447,7 +447,7 @@ namespace Minisat {
         else m_DISTANCE = 1;
     }
 
-    inline void BranchingComponent::handleEventLitInConflictGraph(Lit q) {
+    inline void BranchingHeuristicManager::handleEventLitInConflictGraph(Lit q) {
         if (m_VSIDS) {
             bumpActivityVSIDS(var(q), .5);
             conflictLits.push(q);
@@ -456,7 +456,7 @@ namespace Minisat {
         }
     }
 
-    inline void BranchingComponent::handleEventRestarted(uint64_t propagations) {
+    inline void BranchingHeuristicManager::handleEventRestarted(uint64_t propagations) {
         // Switch branching heuristics
         if (switch_mode) { 
             switch_mode = false;
@@ -475,9 +475,9 @@ namespace Minisat {
         }
     }
 
-    inline const vec<double>& BranchingComponent::getActivityVSIDS() const { return activity_VSIDS; }
-    inline BranchingHeuristic BranchingComponent::currentBranchingHeuristic() const { return m_VSIDS ? BranchingHeuristic::VSIDS : BranchingHeuristic::CHB; }
-    inline bool BranchingComponent::distanceBranchingEnabled() const { return m_DISTANCE; }
+    inline const vec<double>& BranchingHeuristicManager::getActivityVSIDS() const { return activity_VSIDS; }
+    inline BranchingHeuristic BranchingHeuristicManager::currentBranchingHeuristic() const { return m_VSIDS ? BranchingHeuristic::VSIDS : BranchingHeuristic::CHB; }
+    inline bool BranchingHeuristicManager::distanceBranchingEnabled() const { return m_DISTANCE; }
 } // namespace Minisat
 
 #endif

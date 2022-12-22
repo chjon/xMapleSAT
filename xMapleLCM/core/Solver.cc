@@ -116,8 +116,8 @@ Solver::Solver() :
   , nbconfbeforesimplify(1000)
   , incSimplify(1000)
 
-  , branchingComponent(this)
-  , propagationComponent(this)
+  , branchingHeuristicManager(this)
+  , unitPropagator(this)
   , ser (new SolverER(this))
 {}
 
@@ -138,7 +138,7 @@ void Solver::cancelUntilTrailRecord() {
         variableDatabase.setVar(x, l_Undef);
     }
 
-    propagationComponent.setQueueHead(trailRecord);
+    unitPropagator.setQueueHead(trailRecord);
     trail.shrink(trail.size() - trailRecord);
 }
 
@@ -218,7 +218,7 @@ void Solver::simplifyLearnt(Clause& c)
             //printf("///@@@ uncheckedEnqueue:index = %d. l_Undef\n", i);
             simpleUncheckEnqueue(~c[i]);
             c[j++] = c[i];
-            confl = propagationComponent.simplePropagate();
+            confl = unitPropagator.simplePropagate();
             if (confl != CRef_Undef){
                 break;
             }
@@ -330,7 +330,7 @@ bool Solver::simplifyLearnt_x(vec<CRef>& learnts_x)
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationComponent.propagate() != CRef_Undef){
+                    if (unitPropagator.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -461,7 +461,7 @@ bool Solver::simplifyLearnt_core()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationComponent.propagate() != CRef_Undef){
+                    if (unitPropagator.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -587,7 +587,7 @@ bool Solver::simplifyLearnt_tier2()
                 if (c.size() == 1){
                     // when unit clause occur, enqueue and propagate
                     uncheckedEnqueue(c[0]);
-                    if (propagationComponent.propagate() != CRef_Undef){
+                    if (unitPropagator.propagate() != CRef_Undef){
                         ok = false;
                         return false;
                     }
@@ -638,7 +638,7 @@ bool Solver::simplifyAll()
     ////
     simplified_length_record = original_length_record = 0;
 
-    if (!ok || propagationComponent.propagate() != CRef_Undef)
+    if (!ok || unitPropagator.propagate() != CRef_Undef)
         return ok = false;
 
     //// cleanLearnts(also can delete these code), here just for analyzing
@@ -673,8 +673,8 @@ Var Solver::newVar(bool sign, bool dvar) {
     seen2.push(0);
     trail.capacity(v+1);
 
-    branchingComponent  .newVar(v, sign, dvar);
-    propagationComponent.newVar(v);
+    branchingHeuristicManager  .newVar(v, sign, dvar);
+    unitPropagator.newVar(v);
     ser->newVar();
 
     return v;
@@ -721,7 +721,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = false;
     else if (ps.size() == 1){
         uncheckedEnqueue(ps[0]);
-        return ok = (propagationComponent.propagate() == CRef_Undef);
+        return ok = (unitPropagator.propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -734,7 +734,7 @@ bool Solver::addClause_(vec<Lit>& ps)
 
 void Solver::attachClause(CRef cr) {
     const Clause& c = ca[cr];
-    propagationComponent.attachClause(c, cr);
+    unitPropagator.attachClause(c, cr);
     if (c.learnt()) learnts_literals += c.size();
     else            clauses_literals += c.size();
 }
@@ -742,7 +742,7 @@ void Solver::attachClause(CRef cr) {
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
-    propagationComponent.detachClause(c, cr, strict);
+    unitPropagator.detachClause(c, cr, strict);
     if (c.learnt()) learnts_literals -= c.size();
     else            clauses_literals -= c.size();
 }
@@ -791,11 +791,11 @@ void Solver::cancelUntil(int level) {
     for (int c = trail.size()-1; c >= trail_lim[level]; c--){
         Var      x  = var(trail[c]);
         variableDatabase.setVar(x, l_Undef);
-        branchingComponent.handleEventLitUnassigned(trail[c], conflicts, c > trail_lim.last());
+        branchingHeuristicManager.handleEventLitUnassigned(trail[c], conflicts, c > trail_lim.last());
     }
 
     // Update the propagation queue
-    propagationComponent.setQueueHead(trail_lim[level]);
+    unitPropagator.setQueueHead(trail_lim[level]);
 
     // Update the assignment trail
     trail.shrink(trail.size() - trail_lim[level]);
@@ -870,7 +870,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& ou
             Lit q = c[j];
 
             if (!seen[var(q)] && level(var(q)) > 0) {
-                branchingComponent.handleEventLitInConflictGraph(q);
+                branchingHeuristicManager.handleEventLitInConflictGraph(q);
                 seen[var(q)] = 1;
                 if (level(var(q)) >= decisionLevel()) {
                     pathC++;
@@ -957,7 +957,7 @@ bool Solver::binResMinimize(vec<Lit>& out_learnt) {
         seen2[var(out_learnt[i])] = counter;
 
     // Get the list of binary clauses containing 'out_learnt[0]'.
-    const vec<Watcher>& ws = propagationComponent.getBinaryWatchers(~out_learnt[0]);
+    const vec<Watcher>& ws = unitPropagator.getBinaryWatchers(~out_learnt[0]);
 
     int to_remove = 0;
     for (int i = 0; i < ws.size(); i++){
@@ -1059,7 +1059,7 @@ void Solver::uncheckedEnqueue(Lit p, CRef from) {
     assert(value(p) == l_Undef);
     Var x = var(p);
     variableDatabase.setVar(x, lbool(!sign(p)));
-    branchingComponent.handleEventLitAssigned(p, conflicts); // Update heuristic
+    branchingHeuristicManager.handleEventLitAssigned(p, conflicts); // Update heuristic
     vardata[x] = mkVarData(from, decisionLevel());
     trail.push_(p);
 }
@@ -1155,7 +1155,7 @@ bool Solver::simplify()
 {
     assert(decisionLevel() == 0);
 
-    if (!ok || propagationComponent.propagate() != CRef_Undef)
+    if (!ok || unitPropagator.propagate() != CRef_Undef)
         return ok = false;
 
     if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
@@ -1170,7 +1170,7 @@ bool Solver::simplify()
         ser->removeSatisfied();
     }
     checkGarbage();
-    branchingComponent.rebuildOrderHeap();
+    branchingHeuristicManager.rebuildOrderHeap();
 
     simpDB_assigns = nAssigns();
     simpDB_props   = clauses_literals + learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
@@ -1187,7 +1187,7 @@ CRef Solver::propagateLits(vec<Lit>& lits) {
         if (value(lit) == l_Undef) {
             newDecisionLevel();
             uncheckedEnqueue(lit);
-            CRef confl = propagationComponent.propagate();
+            CRef confl = unitPropagator.propagate();
             if (confl != CRef_Undef) {
                 return confl;
             }
@@ -1242,26 +1242,26 @@ lbool Solver::search(int& nof_conflicts) {
 #endif
 
     for (;;){
-        CRef confl = propagationComponent.propagate();
+        CRef confl = unitPropagator.propagate();
 
         if (confl != CRef_Undef){
             // CONFLICT
             conflicts++; nof_conflicts--;
-            branchingComponent.handleEventConflicted(conflicts);
+            branchingHeuristicManager.handleEventConflicted(conflicts);
 
             if (conflicts == 100000 && learnts_core.size() < 100) core_lbd_cut = 5;
             if (decisionLevel() == 0) return l_False;
 
-            if (branchingComponent.currentBranchingHeuristic() == BranchingHeuristic::VSIDS &&
-                branchingComponent.distanceBranchingEnabled()
+            if (branchingHeuristicManager.currentBranchingHeuristic() == BranchingHeuristic::VSIDS &&
+                branchingHeuristicManager.distanceBranchingEnabled()
             ) {
-                branchingComponent.collectFirstUIP(confl);
+                branchingHeuristicManager.collectFirstUIP(confl);
             }
 
             // Generate learnt clause
             learnt_clause.clear();
             analyze(confl, learnt_clause, backtrack_level, lbd);
-            branchingComponent.handleEventLearnedClause(learnt_clause, backtrack_level);
+            branchingHeuristicManager.handleEventLearnedClause(learnt_clause, backtrack_level);
 
             cancelUntil(backtrack_level);
 
@@ -1272,7 +1272,7 @@ lbool Solver::search(int& nof_conflicts) {
 #endif
 
             lbd--;
-            if (branchingComponent.currentBranchingHeuristic() == BranchingHeuristic::VSIDS){
+            if (branchingHeuristicManager.currentBranchingHeuristic() == BranchingHeuristic::VSIDS){
                 cached = false;
                 lbd_queue.push(lbd);
                 global_lbd_sum += (lbd > 50 ? 50 : lbd);
@@ -1318,7 +1318,7 @@ lbool Solver::search(int& nof_conflicts) {
             }
 
             // Update activities
-            branchingComponent.decayActivityVSIDS();
+            branchingHeuristicManager.decayActivityVSIDS();
             claDecayActivity();
 
             /*if (--learntsize_adjust_cnt == 0){
@@ -1329,7 +1329,7 @@ lbool Solver::search(int& nof_conflicts) {
                 if (verbosity >= 1)
                     printf("c | %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n",
                            (int)conflicts,
-                           (int)branchingComponent.dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]), nClauses(), (int)clauses_literals,
+                           (int)branchingHeuristicManager.dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]), nClauses(), (int)clauses_literals,
                            (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), progressEstimate()*100);
             }*/
 
@@ -1352,10 +1352,10 @@ lbool Solver::search(int& nof_conflicts) {
         } else {
             // NO CONFLICT
             bool restart = false;
-            if (branchingComponent.currentBranchingHeuristic() == BranchingHeuristic::CHB)
+            if (branchingHeuristicManager.currentBranchingHeuristic() == BranchingHeuristic::CHB)
                 restart = nof_conflicts <= 0;
             else if (!cached){
-                restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > global_lbd_sum / branchingComponent.conflicts_VSIDS);
+                restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > global_lbd_sum / branchingHeuristicManager.conflicts_VSIDS);
                 cached = true;
             }
             if (restart || !withinBudget()){
@@ -1384,7 +1384,7 @@ lbool Solver::search(int& nof_conflicts) {
             Lit next = lit_Undef;
             {
                 // New variable decision:
-                next = branchingComponent.pickBranchLit();
+                next = branchingHeuristicManager.pickBranchLit();
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
@@ -1470,18 +1470,18 @@ lbool Solver::solve_()
     ser->originalNumVars = variableDatabase.nVars();
 
     // Warmup period: search with VSIDS
-    branchingComponent.setBranchingHeuristic(BranchingHeuristic::VSIDS);
+    branchingHeuristicManager.setBranchingHeuristic(BranchingHeuristic::VSIDS);
     int init = 10000;
     while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
-    branchingComponent.setBranchingHeuristic(BranchingHeuristic::CHB);
+    branchingHeuristicManager.setBranchingHeuristic(BranchingHeuristic::CHB);
 
     // Search:
     int curr_restarts = 0;
     while (status == l_Undef && withinBudget()) {
         // Periodically switch branching heuristic
-        branchingComponent.handleEventRestarted(propagationComponent.propagations);
-        if (branchingComponent.currentBranchingHeuristic() == BranchingHeuristic::VSIDS) {
+        branchingHeuristicManager.handleEventRestarted(unitPropagator.propagations);
+        if (branchingHeuristicManager.currentBranchingHeuristic() == BranchingHeuristic::VSIDS) {
             int weighted = INT32_MAX;
             status = search(weighted);
         } else {
@@ -1594,7 +1594,7 @@ void Solver::relocAll(ClauseAllocator& to)
 {
     // All watchers:
     //
-    propagationComponent.relocAll(to);
+    unitPropagator.relocAll(to);
 
     // All reasons:
     //

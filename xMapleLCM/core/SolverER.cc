@@ -304,7 +304,7 @@ namespace Minisat {
         }
 
         // Prioritize new variables
-        solver->branchingComponent.prioritize(*extVarDefBuffer, ext_prio_act);
+        solver->branchingHeuristicManager.prioritize(*extVarDefBuffer, ext_prio_act);
 
         // Update stats and clean up
         total_ext_vars += extVarDefBuffer->size();
@@ -427,7 +427,7 @@ namespace Minisat {
                         int i_undef = -1, i_max = -1;
                         CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
-                        solver->propagationComponent.enforceWatcherInvariant(cr, i_undef, i_max);
+                        solver->unitPropagator.enforceWatcherInvariant(cr, i_undef, i_max);
                         Clause& c = solver->ca[cr];
                         solver->uncheckedEnqueue(c[0], cr);
                     }

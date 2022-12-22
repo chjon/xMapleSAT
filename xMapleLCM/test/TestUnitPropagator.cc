@@ -25,10 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-SCENARIO("Enforce watcher invariant", "[PropagationComponent]") {
+SCENARIO("Enforce watcher invariant", "[UnitPropagator]") {
     GIVEN("A clause") {
         Solver s;
-        PropagationComponent& pc = s.propagationComponent;
+        UnitPropagator& pc = s.unitPropagator;
         std::tr1::unordered_set<Lit> varsToDelete;
         vec<Lit> ps, actual, expect;
 

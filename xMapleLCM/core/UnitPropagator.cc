@@ -1,12 +1,12 @@
-#include <core/PropagationComponent.h>
+#include <core/UnitPropagator.h>
 #include <core/Solver.h>
 
 namespace Minisat {
 
-    PropagationComponent::PropagationComponent(Solver* s)
+    UnitPropagator::UnitPropagator(Solver* s)
         : watches_bin(s->ca)
         , watches(s->ca)
-        , bcp_order_heap(s->branchingComponent.getActivityVSIDS())
+        , bcp_order_heap(s->branchingHeuristicManager.getActivityVSIDS())
         , qhead(0)
         , propagation_budget(-1)
         , propagations(0)
@@ -16,11 +16,11 @@ namespace Minisat {
         , solver(s)
     {}
 
-    PropagationComponent::~PropagationComponent() {
+    UnitPropagator::~UnitPropagator() {
         solver = nullptr;
     }
 
-    void PropagationComponent::relocAll(ClauseAllocator& to) {
+    void UnitPropagator::relocAll(ClauseAllocator& to) {
         // Clean watchers
         watches_bin.cleanAll();
         watches.cleanAll();
@@ -35,7 +35,7 @@ namespace Minisat {
         }
     }
 
-    inline CRef PropagationComponent::propagate_single(Lit p) {
+    inline CRef UnitPropagator::propagate_single(Lit p) {
         CRef confl = CRef_Undef;
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
@@ -166,7 +166,7 @@ namespace Minisat {
     |    Post-conditions:
     |      * the propagation queue is empty, even if there was a conflict.
     |________________________________________________________________________________________________@*/
-    CRef PropagationComponent::propagate() {
+    CRef UnitPropagator::propagate() {
         CRef    confl     = CRef_Undef;
         int     num_props = 0;
         Lit     p         = lit_Undef;
@@ -205,7 +205,7 @@ namespace Minisat {
         return confl;
     }
 
-    CRef PropagationComponent::simplePropagate() {
+    CRef UnitPropagator::simplePropagate() {
         CRef    confl = CRef_Undef;
         int     num_props = 0;
         watches.cleanAll();
@@ -307,7 +307,7 @@ namespace Minisat {
         return confl;
     }
 
-    void PropagationComponent::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
+    void UnitPropagator::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
         // Move unassigned literal to c[0]
         Clause& c = ca[cr];
         Lit x = c[i_undef], max = c[i_max];

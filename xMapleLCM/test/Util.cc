@@ -25,7 +25,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 // Required for explicit template initialization
 #include "core/SolverER.h"
-#include "core/PropagationComponent.h"
+#include "core/UnitPropagator.h"
 
 namespace Minisat {
 
@@ -64,7 +64,7 @@ template <typename T> void setVariables(T& t, int i_undef, int i_max, int numVar
             t.set_value(i, l_False, i);
     t.set_value(i_max, l_False, numVars);
 }
-template void setVariables(PropagationComponent&, int, int, int);
+template void setVariables(UnitPropagator&, int, int, int);
 template void setVariables(SolverER          &, int, int, int);
 
 ///////////////////////////

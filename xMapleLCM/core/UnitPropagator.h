@@ -27,8 +27,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Minisat_PropagationComponent_h
-#define Minisat_PropagationComponent_h
+#ifndef Minisat_UnitPropagator_h
+#define Minisat_UnitPropagator_h
 
 #include <core/SolverTypes.h>
 #include <core/VariableDatabase.h>
@@ -47,7 +47,7 @@ namespace Minisat {
     /**
      * @brief This class handles literal propagation.
      */
-    class PropagationComponent {
+    class UnitPropagator {
     protected:
 
         // Comparator for BCP priority queue
@@ -120,16 +120,16 @@ namespace Minisat {
 
     public:
         /**
-         * @brief Construct a new PropagationComponent object
+         * @brief Construct a new UnitPropagator object
          * 
          * @param s Pointer to main solver object - must not be nullptr
          */
-        PropagationComponent(Solver* s);
+        UnitPropagator(Solver* s);
 
         /**
-         * @brief Destroy the PropagationComponent object
+         * @brief Destroy the UnitPropagator object
          */
-        ~PropagationComponent();
+        ~UnitPropagator();
 
         /**
          * @brief Register watchers for a new variable
@@ -268,12 +268,12 @@ namespace Minisat {
     };
 
     // Explicitly instantiate required templates
-    template class PropagationComponent::LitOrderLt<double>;
+    template class UnitPropagator::LitOrderLt<double>;
 
-    inline lbool PropagationComponent::bcpValue(Var x) const { return bcp_assigns[x]; }
-    inline lbool PropagationComponent::bcpValue(Lit p) const { return bcp_assigns[var(p)] ^ sign(p); }
+    inline lbool UnitPropagator::bcpValue(Var x) const { return bcp_assigns[x]; }
+    inline lbool UnitPropagator::bcpValue(Lit p) const { return bcp_assigns[var(p)] ^ sign(p); }
 
-    inline void PropagationComponent::newVar(Var v) {
+    inline void UnitPropagator::newVar(Var v) {
         watches_bin.init(mkLit(v, false));
         watches_bin.init(mkLit(v, true ));
         watches    .init(mkLit(v, false));
@@ -281,15 +281,15 @@ namespace Minisat {
         bcp_assigns.push(l_Undef);
     }
 
-    inline void PropagationComponent::attachClause(const Clause& c, CRef cr) {
+    inline void UnitPropagator::attachClause(const Clause& c, CRef cr) {
         assert(c.size() > 1);
         OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = c.size() == 2 ? watches_bin : watches;
         ws[~c[0]].push(Watcher(cr, c[1]));
         ws[~c[1]].push(Watcher(cr, c[0]));
     }
-    inline void PropagationComponent::attachClause(CRef cr) { attachClause(ca[cr], cr); }
+    inline void UnitPropagator::attachClause(CRef cr) { attachClause(ca[cr], cr); }
 
-    inline void PropagationComponent::detachClause(const Clause& c, CRef cr, bool strict) {
+    inline void UnitPropagator::detachClause(const Clause& c, CRef cr, bool strict) {
         assert(c.size() > 1);
         OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = c.size() == 2 ? watches_bin : watches;
         if (strict) {
@@ -301,34 +301,34 @@ namespace Minisat {
             ws.smudge(~c[1]);
         }
     }
-    inline void PropagationComponent::detachClause(CRef cr, bool strict) { detachClause(ca[cr], cr, strict); }
+    inline void UnitPropagator::detachClause(CRef cr, bool strict) { detachClause(ca[cr], cr, strict); }
 
-    inline void PropagationComponent::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
+    inline void UnitPropagator::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
         for (int i = 0; i < ws.size(); i++) ca.reloc(ws[i].cref, to);
     }
 
-    inline void PropagationComponent::setQueueHead(int i) { qhead = i; }
+    inline void UnitPropagator::setQueueHead(int i) { qhead = i; }
 
-    inline void PropagationComponent::decreasePriority(Var v) {
+    inline void UnitPropagator::decreasePriority(Var v) {
         // Note: this uses the increase() method because we're using a min-heap as a max-heap
         Lit l = mkLit(v);
         if (bcp_order_heap.inHeap(( l).x)) bcp_order_heap.increase(( l).x);
         if (bcp_order_heap.inHeap((~l).x)) bcp_order_heap.increase((~l).x);
     }
 
-    inline void PropagationComponent::increasePriority(Var v) {
+    inline void UnitPropagator::increasePriority(Var v) {
         // Note: this uses the decrease() method because we're using a min-heap as a max-heap
         Lit l = mkLit(v);
         if (bcp_order_heap.inHeap(( l).x)) bcp_order_heap.decrease(( l).x);
         if (bcp_order_heap.inHeap((~l).x)) bcp_order_heap.decrease((~l).x);
     }
 
-    inline const vec<Watcher>& PropagationComponent::getWatchers      (Lit l) const { return watches    [l]; }
-    inline const vec<Watcher>& PropagationComponent::getBinaryWatchers(Lit l) const { return watches_bin[l]; }
+    inline const vec<Watcher>& UnitPropagator::getWatchers      (Lit l) const { return watches    [l]; }
+    inline const vec<Watcher>& UnitPropagator::getBinaryWatchers(Lit l) const { return watches_bin[l]; }
 
-    inline void PropagationComponent::setPropBudget(int64_t x) { propagation_budget = propagations + x; }
-    inline void PropagationComponent::budgetOff() { propagation_budget = -1; }
-    inline bool PropagationComponent::withinBudget() const { return propagation_budget < 0 || propagations < (uint64_t) propagation_budget; }
+    inline void UnitPropagator::setPropBudget(int64_t x) { propagation_budget = propagations + x; }
+    inline void UnitPropagator::budgetOff() { propagation_budget = -1; }
+    inline bool UnitPropagator::withinBudget() const { return propagation_budget < 0 || propagations < (uint64_t) propagation_budget; }
 
 } // namespace Minisat
 

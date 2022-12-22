@@ -48,8 +48,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 #include "core/SolverERTypes.h"
 #include "core/VariableDatabase.h"
-#include "core/BranchingComponent.h"
-#include "core/PropagationComponent.h"
+#include "core/BranchingHeuristicManager.h"
+#include "core/UnitPropagator.h"
 #include "core/RandomNumberGenerator.h"
 
 // Making internal data structures visible for testing
@@ -385,13 +385,13 @@ public:
 public:
     RandomNumberGenerator randomNumberGenerator;
     VariableDatabase      variableDatabase;
-    BranchingComponent    branchingComponent;
-    PropagationComponent  propagationComponent;
+    BranchingHeuristicManager    branchingHeuristicManager;
+    UnitPropagator  unitPropagator;
     SolverER* ser;
 
 private:
-    friend class PropagationComponent;
-    friend class BranchingComponent;
+    friend class UnitPropagator;
+    friend class BranchingHeuristicManager;
     friend class SolverER;
 };
 
@@ -437,17 +437,17 @@ inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ s
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts_core.size() + learnts_tier2.size() + learnts_local.size(); }
-inline int      Solver::nFreeVars     ()      const   { return (int) branchingComponent.dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
+inline int      Solver::nFreeVars     ()      const   { return (int) branchingHeuristicManager.dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
 inline void     Solver::clearInterrupt(){ asynch_interrupt = false; }
 inline void     Solver::budgetOff(){ conflict_budget = -1;
-    propagationComponent.budgetOff();
+    unitPropagator.budgetOff();
 }
 inline bool     Solver::withinBudget() const {
     return !asynch_interrupt &&
             (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&
-            propagationComponent.withinBudget();
+            unitPropagator.withinBudget();
 }
 
 // FIXME: after the introduction of asynchronous interrruptions the solve-versions that return a
