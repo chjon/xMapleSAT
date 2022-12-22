@@ -79,8 +79,9 @@ namespace Minisat {
     inline lbool VariableDatabase::value (Var x) const { return assigns[x]; }
     inline lbool VariableDatabase::value (Lit p) const { return assigns[var(p)] ^ sign(p); }
     inline Var   VariableDatabase::newVar() {
+        const Var v = nVars();
         assigns.push(l_Undef);
-        return nVars();
+        return v;
     }
     inline void  VariableDatabase::setVar(Var x, lbool val) { assigns[x] = val; }
 #endif
