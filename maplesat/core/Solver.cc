@@ -96,7 +96,7 @@ Solver::Solver() :
 
     // Statistics: (formerly in 'SolverStats')
     //
-  , solves(0), starts(0), decisions(0), rnd_decisions(0), propagations(0), conflicts(0)
+  , solves(0), starts(0), decisions(0), rnd_decisions(0), conflicts(0)
   , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
 
   , lbd_calls(0)
@@ -112,8 +112,6 @@ Solver::Solver() :
 #if BRANCHING_HEURISTIC == VSIDS
   , var_inc            (1)
 #endif
-  , watches            (WatcherDeleted(ca))
-  , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
 #if PRIORITIZE_ER
@@ -134,6 +132,10 @@ Solver::Solver() :
   , conflict_budget    (-1)
   , propagation_budget (-1)
   , asynch_interrupt   (false)
+
+  // Solver components
+  , assignmentTrail(this)
+  , unitPropagator(this)
 {
 #ifdef POLARITY_VOTING
     group_polarity.push(0);
@@ -156,15 +158,13 @@ Solver::~Solver()
 Var Solver::newVar(bool sign, bool dvar)
 {
     int v = variableDatabase.newVar();
-    watches  .init(mkLit(v, false));
-    watches  .init(mkLit(v, true ));
-    vardata  .push(mkVarData(CRef_Undef, 0));
+    assignmentTrail.newVar(v);
+    unitPropagator.newVar(v);
     //activity .push(0);
     activity .push(rnd_init_act ? randomNumberGenerator.drand() * 0.00001 : 0);
     seen     .push(0);
     polarity .push(sign);
     decision .push();
-    trail    .capacity(v+1);
     lbd_seen.push(0);
     picked.push(0);
     conflicted.push(0);
@@ -190,7 +190,7 @@ Var Solver::newVar(bool sign, bool dvar)
 
 bool Solver::addClause_(vec<Lit>& ps)
 {
-    assert(decisionLevel() == 0);
+    assert(assignmentTrail.decisionLevel() == 0);
     if (!ok) return false;
 
     // Check if clause is satisfied and remove false/duplicate literals:
@@ -211,8 +211,8 @@ bool Solver::addClause_(vec<Lit>& ps)
     if (ps.size() == 0)
         return ok = false;
     else if (ps.size() == 1){
-        uncheckedEnqueue(ps[0]);
-        return ok = (propagate() == CRef_Undef);
+        assignmentTrail.uncheckedEnqueue(ps[0]);
+        return ok = (unitPropagator.propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -225,35 +225,25 @@ bool Solver::addClause_(vec<Lit>& ps)
 
 void Solver::attachClause(CRef cr) {
     const Clause& c = ca[cr];
-    assert(c.size() > 1);
-    watches[~c[0]].push(Watcher(cr, c[1]));
-    watches[~c[1]].push(Watcher(cr, c[0]));
+    unitPropagator.attachClause(c, cr);
     if (c.learnt()) learnts_literals += c.size();
-    else            clauses_literals += c.size(); }
+    else            clauses_literals += c.size();
+}
 
 
 void Solver::detachClause(CRef cr, bool strict) {
     const Clause& c = ca[cr];
-    assert(c.size() > 1);
-    
-    if (strict){
-        remove(watches[~c[0]], Watcher(cr, c[1]));
-        remove(watches[~c[1]], Watcher(cr, c[0]));
-    }else{
-        // Lazy detaching: (NOTE! Must clean all watcher lists before garbage collecting this clause)
-        watches.smudge(~c[0]);
-        watches.smudge(~c[1]);
-    }
-
+    unitPropagator.detachClause(c, cr, strict);
     if (c.learnt()) learnts_literals -= c.size();
-    else            clauses_literals -= c.size(); }
+    else            clauses_literals -= c.size();
+}
 
 
 void Solver::removeClause(CRef cr) {
     Clause& c = ca[cr];
     detachClause(cr);
     // Don't leave pointers to free'd memory!
-    if (locked(c)) vardata[var(c[0])].reason = CRef_Undef;
+    assignmentTrail.handleEventClauseDeleted(c);
     c.mark(1); 
     ca.free(cr);
 }
@@ -264,49 +254,6 @@ bool Solver::satisfied(const Clause& c) const {
         if (variableDatabase.value(c[i]) == l_True)
             return true;
     return false; }
-
-
-// Revert to the state at given level (keeping all assignment at 'level' but not beyond).
-//
-void Solver::cancelUntil(int level) {
-    if (decisionLevel() > level){
-        for (int c = trail.size()-1; c >= trail_lim[level]; c--){
-            Var      x  = var(trail[c]);
-            uint64_t age = conflicts - picked[x];
-            if (age > 0) {
-                double reward = ((double) conflicted[x]) / ((double) age);
-#if BRANCHING_HEURISTIC == LRB
-#if ALMOST_CONFLICT
-                double adjusted_reward = ((double) (conflicted[x] + almost_conflicted[x])) / ((double) age);
-#else
-                double adjusted_reward = reward;
-#endif
-                double old_activity = activity[x];
-                activity[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-                Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
-#endif
-                if (order_heap.inHeap(x)) {
-                    if (activity[x] > old_activity)
-                        order_heap.decrease(x);
-                    else
-                        order_heap.increase(x);
-                }
-#endif
-                total_actual_rewards[x] += reward;
-                total_actual_count[x] ++;
-            }
-#if ANTI_EXPLORATION
-            canceled[x] = conflicts;
-#endif
-            variableDatabase.setVar(x, l_Undef);
-            if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
-                polarity[x] = sign(trail[c]);
-            insertVarOrder(x); }
-        qhead = trail_lim[level];
-        trail.shrink(trail.size() - trail_lim[level]);
-        trail_lim.shrink(trail_lim.size() - level);
-    } }
 
 
 //=================================================================================================
@@ -390,7 +337,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     // Generate conflict clause:
     //
     out_learnt.push();      // (leave room for the asserting literal)
-    int index   = trail.size() - 1;
+    int index = assignmentTrail.nAssigns() - 1;
 
 #ifdef POLARITY_VOTING
     // Count votes for the polarity that led to the conflict
@@ -413,7 +360,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
             Lit q = c[j];
 
-            if (!seen[var(q)] && level(var(q)) > 0){
+            if (!seen[var(q)] && assignmentTrail.level(var(q)) > 0){
 #if BRANCHING_HEURISTIC == CHB
                 last_conflict[var(q)] = conflicts;
 #elif BRANCHING_HEURISTIC == VSIDS
@@ -425,7 +372,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 #endif
                 conflicted[var(q)]++;
                 seen[var(q)] = 1;
-                if (level(var(q)) >= decisionLevel())
+                if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
                     pathC++;
                 else
                     out_learnt.push(q);
@@ -433,9 +380,9 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         }
         
         // Select next clause to look at:
-        while (!seen[var(trail[index--])]);
-        p     = trail[index+1];
-        confl = reason(var(p));
+        while (!seen[var(assignmentTrail[index--])]);
+        p     = assignmentTrail[index+1];
+        confl = assignmentTrail.reason(var(p));
         seen[var(p)] = 0;
         pathC--;
 
@@ -458,22 +405,22 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     if (ccmin_mode == 2){
         uint32_t abstract_level = 0;
         for (i = 1; i < out_learnt.size(); i++)
-            abstract_level |= abstractLevel(var(out_learnt[i])); // (maintain an abstraction of levels involved in conflict)
+            abstract_level |= assignmentTrail.abstractLevel(var(out_learnt[i])); // (maintain an abstraction of levels involved in conflict)
 
         for (i = j = 1; i < out_learnt.size(); i++)
-            if (reason(var(out_learnt[i])) == CRef_Undef || !litRedundant(out_learnt[i], abstract_level))
+            if (assignmentTrail.reason(var(out_learnt[i])) == CRef_Undef || !litRedundant(out_learnt[i], abstract_level))
                 out_learnt[j++] = out_learnt[i];
         
     }else if (ccmin_mode == 1){
         for (i = j = 1; i < out_learnt.size(); i++){
             Var x = var(out_learnt[i]);
 
-            if (reason(x) == CRef_Undef)
+            if (assignmentTrail.reason(x) == CRef_Undef)
                 out_learnt[j++] = out_learnt[i];
             else{
-                Clause& c = ca[reason(var(out_learnt[i]))];
+                Clause& c = ca[assignmentTrail.reason(var(out_learnt[i]))];
                 for (int k = 1; k < c.size(); k++)
-                    if (!seen[var(c[k])] && level(var(c[k])) > 0){
+                    if (!seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0){
                         out_learnt[j++] = out_learnt[i];
                         break; }
             }
@@ -493,20 +440,20 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         int max_i = 1;
         // Find the first literal assigned at the next-highest level:
         for (int i = 2; i < out_learnt.size(); i++)
-            if (level(var(out_learnt[i])) > level(var(out_learnt[max_i])))
+            if (assignmentTrail.level(var(out_learnt[i])) > assignmentTrail.level(var(out_learnt[max_i])))
                 max_i = i;
         // Swap-in this literal at index 1:
         Lit p             = out_learnt[max_i];
         out_learnt[max_i] = out_learnt[1];
         out_learnt[1]     = p;
-        out_btlevel       = level(var(p));
+        out_btlevel       = assignmentTrail.level(var(p));
     }
 
 #if ALMOST_CONFLICT
     seen[var(p)] = true;
     for(int i = out_learnt.size() - 1; i >= 0; i--) {
         Var v = var(out_learnt[i]);
-        CRef rea = reason(v);
+        CRef rea = assignmentTrail.reason(v);
         if (rea != CRef_Undef) {
             Clause& reaC = ca[rea];
             for (int i = 0; i < reaC.size(); i++) {
@@ -531,13 +478,13 @@ bool Solver::litRedundant(Lit p, uint32_t abstract_levels)
     analyze_stack.clear(); analyze_stack.push(p);
     int top = analyze_toclear.size();
     while (analyze_stack.size() > 0){
-        assert(reason(var(analyze_stack.last())) != CRef_Undef);
-        Clause& c = ca[reason(var(analyze_stack.last()))]; analyze_stack.pop();
+        assert(assignmentTrail.reason(var(analyze_stack.last())) != CRef_Undef);
+        Clause& c = ca[assignmentTrail.reason(var(analyze_stack.last()))]; analyze_stack.pop();
 
         for (int i = 1; i < c.size(); i++){
             Lit p  = c[i];
-            if (!seen[var(p)] && level(var(p)) > 0){
-                if (reason(var(p)) != CRef_Undef && (abstractLevel(var(p)) & abstract_levels) != 0){
+            if (!seen[var(p)] && assignmentTrail.level(var(p)) > 0){
+                if (assignmentTrail.reason(var(p)) != CRef_Undef && (assignmentTrail.abstractLevel(var(p)) & abstract_levels) != 0){
                     seen[var(p)] = 1;
                     analyze_stack.push(p);
                     analyze_toclear.push(p);
@@ -564,26 +511,25 @@ bool Solver::litRedundant(Lit p, uint32_t abstract_levels)
 |    Calculates the (possibly empty) set of assumptions that led to the assignment of 'p', and
 |    stores the result in 'out_conflict'.
 |________________________________________________________________________________________________@*/
-void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
-{
+void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
     out_conflict.clear();
     out_conflict.push(p);
 
-    if (decisionLevel() == 0)
+    if (assignmentTrail.decisionLevel() == 0)
         return;
 
     seen[var(p)] = 1;
 
-    for (int i = trail.size()-1; i >= trail_lim[0]; i--){
-        Var x = var(trail[i]);
+    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--){
+        Var x = var(assignmentTrail[i]);
         if (seen[x]){
-            if (reason(x) == CRef_Undef){
-                assert(level(x) > 0);
-                out_conflict.push(~trail[i]);
+            if (assignmentTrail.reason(x) == CRef_Undef){
+                assert(assignmentTrail.level(x) > 0);
+                out_conflict.push(~assignmentTrail[i]);
             }else{
-                Clause& c = ca[reason(x)];
+                Clause& c = ca[assignmentTrail.reason(x)];
                 for (int j = 1; j < c.size(); j++)
-                    if (level(var(c[j])) > 0)
+                    if (assignmentTrail.level(var(c[j])) > 0)
                         seen[var(c[j])] = 1;
             }
             seen[x] = 0;
@@ -593,108 +539,6 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
     seen[var(p)] = 0;
 }
 
-
-void Solver::uncheckedEnqueue(Lit p, CRef from)
-{
-    assert(variableDatabase.value(p) == l_Undef);
-    picked[var(p)] = conflicts;
-#if ANTI_EXPLORATION
-    uint64_t age = conflicts - canceled[var(p)];
-    if (age > 0) {
-        double decay = pow(0.95, age);
-        activity[var(p)] *= decay;
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        if (order_heap_extlvl.inHeap(var(p)))
-            order_heap_extlvl.increase(var(p));
-        if (order_heap_degree.inHeap(var(p)))
-            order_heap_degree.increase(var(p));
-#else
-        if (order_heap.inHeap(var(p))) {
-            order_heap.increase(var(p));
-        }
-#endif
-    }
-#endif
-    conflicted[var(p)] = 0;
-#if ALMOST_CONFLICT
-    almost_conflicted[var(p)] = 0;
-#endif
-    variableDatabase.setVar(var(p), lbool(!sign(p)));
-    vardata[var(p)] = mkVarData(from, decisionLevel());
-    trail.push_(p);
-}
-
-/*_________________________________________________________________________________________________
-|
-|  propagate : [void]  ->  [Clause*]
-|  
-|  Description:
-|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
-|    otherwise CRef_Undef.
-|  
-|    Post-conditions:
-|      * the propagation queue is empty, even if there was a conflict.
-|________________________________________________________________________________________________@*/
-CRef Solver::propagate()
-{
-    CRef    confl     = CRef_Undef;
-    int     num_props = 0;
-    watches.cleanAll();
-
-    while (qhead < trail.size()){
-        Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
-        vec<Watcher>&  ws  = watches[p];
-        Watcher        *i, *j, *end;
-        num_props++;
-
-        for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
-            // Try to avoid inspecting the clause:
-            Lit blocker = i->blocker;
-            if (variableDatabase.value(blocker) == l_True){
-                *j++ = *i++; continue; }
-
-            // Make sure the false literal is data[1]:
-            CRef     cr        = i->cref;
-            Clause&  c         = ca[cr];
-            Lit      false_lit = ~p;
-            if (c[0] == false_lit)
-                c[0] = c[1], c[1] = false_lit;
-            assert(c[1] == false_lit);
-            i++;
-
-            // If 0th watch is true, then clause is already satisfied.
-            Lit     first = c[0];
-            Watcher w     = Watcher(cr, first);
-            if (first != blocker && variableDatabase.value(first) == l_True){
-                *j++ = w; continue; }
-
-            // Look for new watch:
-            for (int k = 2; k < c.size(); k++)
-                if (variableDatabase.value(c[k]) != l_False){
-                    c[1] = c[k]; c[k] = false_lit;
-                    watches[~c[1]].push(w);
-                    goto NextClause; }
-
-            // Did not find watch -- clause is unit under assignment:
-            *j++ = w;
-            if (variableDatabase.value(first) == l_False){
-                confl = cr;
-                qhead = trail.size();
-                // Copy the remaining watches:
-                while (i < end)
-                    *j++ = *i++;
-            }else
-                uncheckedEnqueue(first, cr);
-
-        NextClause:;
-        }
-        ws.shrink(i - j);
-    }
-    propagations += num_props;
-    simpDB_props -= num_props;
-
-    return confl;
-}
 
 int min(int a, int b) {
     return a < b ? a : b;
@@ -724,8 +568,8 @@ struct reduceDB_lt {
         return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity()); } 
 #endif
 };
-void Solver::reduceDB()
-{
+
+void Solver::reduceDB() {
     int     i, j;
 #if LBD_BASED_CLAUSE_DELETION
     sort(learnts, reduceDB_lt(ca, activity));
@@ -739,11 +583,11 @@ void Solver::reduceDB()
 #if LBD_BASED_CLAUSE_DELETION
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
-        if (c.activity() > 2 && !locked(c) && i < learnts.size() / 2)
+        if (c.activity() > 2 && !assignmentTrail.locked(c) && i < learnts.size() / 2)
 #else
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
-        if (c.size() > 2 && !locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
+        if (c.size() > 2 && !assignmentTrail.locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
 #endif
             removeClause(learnts[i]);
         else
@@ -798,12 +642,12 @@ void Solver::rebuildOrderHeap()
 |________________________________________________________________________________________________@*/
 bool Solver::simplify()
 {
-    assert(decisionLevel() == 0);
+    assert(assignmentTrail.decisionLevel() == 0);
 
-    if (!ok || propagate() != CRef_Undef)
+    if (!ok || unitPropagator.propagate() != CRef_Undef)
         return ok = false;
 
-    if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
+    if (assignmentTrail.nAssigns() == simpDB_assigns || (simpDB_props > 0))
         return true;
 
     // Remove satisfied clauses:
@@ -813,7 +657,7 @@ bool Solver::simplify()
     checkGarbage();
     rebuildOrderHeap();
 
-    simpDB_assigns = nAssigns();
+    simpDB_assigns = assignmentTrail.nAssigns();
     simpDB_props   = clauses_literals + learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
 
     return true;
@@ -841,7 +685,7 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     for (;;){
-        CRef confl = propagate();
+        CRef confl = unitPropagator.propagate();
 
 #if BRANCHING_HEURISTIC == CHB
         double multiplier = confl == CRef_Undef ? reward_multiplier : 1.0;
@@ -866,12 +710,12 @@ lbool Solver::search(int nof_conflicts)
             if (step_size > min_step_size)
                 step_size -= step_size_dec;
 #endif
-            if (decisionLevel() == 0) return l_False;
+            if (assignmentTrail.decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
             analyze(confl, learnt_clause, backtrack_level);
 
-            cancelUntil(backtrack_level);
+            assignmentTrail.cancelUntil(backtrack_level);
 
 #if BRANCHING_HEURISTIC == CHB
             action = trail.size();
@@ -881,7 +725,7 @@ lbool Solver::search(int nof_conflicts)
                 degree[var(learnt_clause[k])]++;
 #endif
             if (learnt_clause.size() == 1){
-                uncheckedEnqueue(learnt_clause[0]);
+                assignmentTrail.uncheckedEnqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
                 learnts.push(cr);
@@ -892,7 +736,7 @@ lbool Solver::search(int nof_conflicts)
 #else
                 claBumpActivity(ca[cr]);
 #endif
-                uncheckedEnqueue(learnt_clause[0], cr);
+                assignmentTrail.uncheckedEnqueue(learnt_clause[0], cr);
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -912,23 +756,23 @@ lbool Solver::search(int nof_conflicts)
                 if (verbosity >= 1)
                     printf("| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
                            (int)conflicts, 
-                           (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]), nClauses(), (int)clauses_literals, 
-                           (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), progressEstimate()*100);
+                           (int)dec_vars - assignmentTrail.nRootAssigns(), nClauses(), (int)clauses_literals, 
+                           (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), assignmentTrail.progressEstimate()*100);
             }
 
         }else{
             // NO CONFLICT
             if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()){
                 // Reached bound on number of conflicts:
-                progress_estimate = progressEstimate();
-                cancelUntil(0);
+                progress_estimate = assignmentTrail.progressEstimate();
+                assignmentTrail.cancelUntil(0);
                 return l_Undef; }
 
             // Simplify the set of problem clauses:
-            if (decisionLevel() == 0 && !simplify())
+            if (assignmentTrail.decisionLevel() == 0 && !simplify())
                 return l_False;
 
-            if (learnts.size()-nAssigns() >= max_learnts) {
+            if (learnts.size() - assignmentTrail.nAssigns() >= max_learnts) {
                 // Reduce the set of learnt clauses:
                 reduceDB();
 #if RAPID_DELETION
@@ -937,12 +781,12 @@ lbool Solver::search(int nof_conflicts)
             }
 
             Lit next = lit_Undef;
-            while (decisionLevel() < assumptions.size()){
+            while (assignmentTrail.decisionLevel() < assumptions.size()){
                 // Perform user provided assumption:
-                Lit p = assumptions[decisionLevel()];
+                Lit p = assumptions[assignmentTrail.decisionLevel()];
                 if (variableDatabase.value(p) == l_True){
                     // Dummy decision level:
-                    newDecisionLevel();
+                    assignmentTrail.newDecisionLevel();
                 }else if (variableDatabase.value(p) == l_False){
                     analyzeFinal(~p, conflict);
                     return l_False;
@@ -966,28 +810,13 @@ lbool Solver::search(int nof_conflicts)
             }
 
             // Increase decision level and enqueue 'next'
-            newDecisionLevel();
+            assignmentTrail.newDecisionLevel();
 #if BRANCHING_HEURISTIC == CHB
-            action = trail.size();
+            action = assignmentTrail.nAssigns();
 #endif
-            uncheckedEnqueue(next);
+            assignmentTrail.uncheckedEnqueue(next);
         }
     }
-}
-
-
-double Solver::progressEstimate() const
-{
-    double  progress = 0;
-    double  F = 1.0 / variableDatabase.nVars();
-
-    for (int i = 0; i <= decisionLevel(); i++){
-        int beg = i == 0 ? 0 : trail_lim[i - 1];
-        int end = i == decisionLevel() ? trail.size() : trail_lim[i];
-        progress += pow(F, i) * (end - beg);
-    }
-
-    return progress / variableDatabase.nVars();
 }
 
 /*
@@ -1067,7 +896,7 @@ lbool Solver::solve_()
     }else if (status == l_False && conflict.size() == 0)
         ok = false;
 
-    cancelUntil(0);
+    assignmentTrail.cancelUntil(0);
     return status;
 }
 
@@ -1157,24 +986,11 @@ void Solver::relocAll(ClauseAllocator& to)
     // All watchers:
     //
     // for (int i = 0; i < watches.size(); i++)
-    watches.cleanAll();
-    for (int v = 0; v < variableDatabase.nVars(); v++)
-        for (int s = 0; s < 2; s++){
-            Lit p = mkLit(v, s);
-            // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
-            vec<Watcher>& ws = watches[p];
-            for (int j = 0; j < ws.size(); j++)
-                ca.reloc(ws[j].cref, to);
-        }
+    unitPropagator.relocAll(to);
 
     // All reasons:
     //
-    for (int i = 0; i < trail.size(); i++){
-        Var v = var(trail[i]);
-
-        if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            ca.reloc(vardata[v].reason, to);
-    }
+    assignmentTrail.relocAll(to);
 
     // All learnt:
     //

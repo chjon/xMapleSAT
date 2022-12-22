@@ -29,6 +29,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 #include "core/VariableDatabase.h"
 #include "core/RandomNumberGenerator.h"
+#include "core/AssignmentTrail.h"
+#include "core/UnitPropagator.h"
 
 namespace Minisat {
 
@@ -89,7 +91,6 @@ public:
 #endif
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
-    int     nAssigns   ()      const;       // The current number of assigned literals.
     int     nClauses   ()      const;       // The current number of original clauses.
     int     nLearnts   ()      const;       // The current number of learnt clauses.
     int     nFreeVars  ()      const;
@@ -97,7 +98,6 @@ public:
     // Resource contraints:
     //
     void    setConfBudget(int64_t x);
-    void    setPropBudget(int64_t x);
     void    budgetOff();
     void    interrupt();          // Trigger a (potentially asynchronous) interruption of the solver.
     void    clearInterrupt();     // Clear interrupt indicator flag.
@@ -146,7 +146,7 @@ public:
 
     // Statistics: (read-only member variable)
     //
-    uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts;
+    uint64_t solves, starts, decisions, rnd_decisions, conflicts;
     uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
 
     uint64_t lbd_calls;
@@ -185,29 +185,6 @@ protected:
 
     // Helper structures:
     //
-    struct VarData { CRef reason; int level; };
-    static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
-
-    struct Watcher {
-        CRef cref;
-        Lit  blocker;
-        Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
-        bool operator==(const Watcher& w) const { return cref == w.cref; }
-        bool operator!=(const Watcher& w) const { return cref != w.cref; }
-    };
-
-    struct WatcherDeleted
-    {
-        const ClauseAllocator& ca;
-        WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
-        bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
-    };
-
-    struct LitOrderLt {
-        const vec<double>&  activity;
-        bool operator () (Var x, Var y) const { return activity[x >> 1] > activity[y >> 1]; }
-        LitOrderLt(const vec<double>&  act) : activity(act) { }
-    };
 
     struct VarOrderLt {
         const vec<double>&  activity;
@@ -239,21 +216,12 @@ protected:
 #endif
     vec<double>         activity;         // A heuristic measurement of the activity of a variable.
     double              var_inc;          // Amount to bump next variable with.
-    OccLists<Lit, vec<Watcher>, WatcherDeleted>
-                        watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
-    vec<Lit>            trail;            // Assignment stack; stores all assigments made in the order they were made.
-    vec<int>            trail_lim;        // Separator indices for different decision levels in 'trail'.
-    vec<VarData>        vardata;          // Stores reason and level for each variable.
-    int                 qhead;            // Head of queue (as index into the trail -- no more explicit propagation queue in MiniSat).
+
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-    Heap<LitOrderLt>    bcp_order_heap;
-    vec<lbool>          bcp_assigns;
-#endif
 #if PRIORITIZE_ER
 #ifdef EXTLVL_ACTIVITY
     Multiheap<VarOrderLt> order_heap;
@@ -291,11 +259,6 @@ protected:
     //
     void     insertVarOrder   (Var x);                                                 // Insert a variable in the decision order priority queue.
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
-    void     newDecisionLevel ();                                                      // Begins a new decision level.
-    void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
-    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
-    CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
-    void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
     bool     litRedundant     (Lit p, uint32_t abstract_levels);                       // (helper method for 'analyze()')
@@ -304,7 +267,7 @@ protected:
         lbd_calls++;
         int lbd = 0;
         for (int i = 0; i < clause.size(); i++) {
-            int l = level(var(clause[i]));
+            int l = assignmentTrail.level(var(clause[i]));
             if (lbd_seen[l] != lbd_calls) {
                 lbd++;
                 lbd_seen[l] = lbd_calls;
@@ -312,10 +275,10 @@ protected:
         }
         return lbd;
     }
-    lbool    search           (int nof_conflicts);                                     // Search for a given number of conflicts.
-    lbool    solve_           ();                                                      // Main solve method (assumptions given in 'assumptions').
-    void     reduceDB         ();                                                      // Reduce the set of learnt clauses.
-    void     removeSatisfied  (vec<CRef>& cs);                                         // Shrink 'cs' to contain only non-satisfied clauses.
+    lbool    search           (int nof_conflicts); // Search for a given number of conflicts.
+    lbool    solve_           ();                  // Main solve method (assumptions given in 'assumptions').
+    void     reduceDB         ();                  // Reduce the set of learnt clauses.
+    void     removeSatisfied  (vec<CRef>& cs);     // Shrink 'cs' to contain only non-satisfied clauses.
     void     rebuildOrderHeap ();
 
     // Maintaining Variable/Clause activity:
@@ -335,31 +298,28 @@ protected:
     void     attachClause     (CRef cr);               // Attach a clause to watcher lists.
     void     detachClause     (CRef cr, bool strict = false); // Detach a clause to watcher lists.
     void     removeClause     (CRef cr);               // Detach and free a clause.
-    bool     locked           (const Clause& c) const; // Returns TRUE if a clause is a reason for some implication in the current state.
     bool     satisfied        (const Clause& c) const; // Returns TRUE if a clause is satisfied in the current state.
 
     void     relocAll         (ClauseAllocator& to);
 
     // Misc:
     //
-    int      decisionLevel    ()      const; // Gives the current decisionlevel.
-    uint32_t abstractLevel    (Var x) const; // Used to represent an abstraction of sets of decision levels.
-    CRef     reason           (Var x) const;
-    int      level            (Var x) const;
-    double   progressEstimate ()      const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
     bool     withinBudget     ()      const;
 
 public:
     VariableDatabase      variableDatabase;
     RandomNumberGenerator randomNumberGenerator;
+    AssignmentTrail       assignmentTrail;
+    UnitPropagator        unitPropagator;
+
+private:
+    friend AssignmentTrail;
+    friend UnitPropagator;
 };
 
 
 //=================================================================================================
 // Implementation of inline methods:
-
-inline CRef Solver::reason(Var x) const { return vardata[x].reason; }
-inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
 #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
@@ -416,30 +376,23 @@ inline void Solver::checkGarbage(double gf){
         garbageCollect(); }
 
 // NOTE: enqueue does not set the ok flag! (only public methods do)
-inline bool     Solver::enqueue         (Lit p, CRef from)      { return variableDatabase.value(p) != l_Undef ? variableDatabase.value(p) != l_False : (uncheckedEnqueue(p, from), true); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
-inline bool     Solver::locked          (const Clause& c) const { return variableDatabase.value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
-inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
 
-inline int      Solver::decisionLevel ()      const   { return trail_lim.size(); }
-inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
 inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
 inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
 #endif
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
-inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
-inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
+inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - assignmentTrail.nRootAssigns(); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
-inline void     Solver::setDecisionVar(Var v, bool b) 
-{ 
+inline void     Solver::setDecisionVar(Var v, bool b) { 
     if      ( b && !decision[v]) dec_vars++;
     else if (!b &&  decision[v]) dec_vars--;
 
@@ -447,14 +400,14 @@ inline void     Solver::setDecisionVar(Var v, bool b)
     insertVarOrder(v);
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
-inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
 inline void     Solver::clearInterrupt(){ asynch_interrupt = false; }
 inline void     Solver::budgetOff(){ conflict_budget = propagation_budget = -1; }
 inline bool     Solver::withinBudget() const {
     return !asynch_interrupt &&
-           (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&
-           (propagation_budget < 0 || propagations < (uint64_t)propagation_budget); }
+        (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&
+        unitPropagator.withinBudget();
+}
 
 // FIXME: after the introduction of asynchronous interrruptions the solve-versions that return a
 // pure bool do not give a safe interface. Either interrupts must be possible to turn off here, or
