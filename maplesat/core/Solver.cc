@@ -43,7 +43,6 @@ static DoubleOption  opt_var_decay         (_cat, "var-decay",   "The variable a
 static DoubleOption  opt_clause_decay      (_cat, "cla-decay",   "The clause activity decay factor",              0.999,    DoubleRange(0, false, 1, false));
 #endif
 static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq",    "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
-static DoubleOption  opt_random_seed       (_cat, "rnd-seed",    "Used by the random variable selection",         91648253, DoubleRange(0, false, HUGE_VAL, false));
 static IntOption     opt_ccmin_mode        (_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
 static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the level of phase saving (0=none, 1=limited, 2=full)", 2, IntRange(0, 2));
 static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the initial activity", false);
@@ -77,7 +76,6 @@ Solver::Solver() :
   , clause_decay     (opt_clause_decay)
 #endif
   , random_var_freq  (opt_random_var_freq)
-  , random_seed      (opt_random_seed)
   , luby_restart     (opt_luby_restart)
   , ccmin_mode       (opt_ccmin_mode)
   , phase_saving     (opt_phase_saving)
@@ -162,7 +160,7 @@ Var Solver::newVar(bool sign, bool dvar)
     watches  .init(mkLit(v, true ));
     vardata  .push(mkVarData(CRef_Undef, 0));
     //activity .push(0);
-    activity .push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+    activity .push(rnd_init_act ? randomNumberGenerator.drand() * 0.00001 : 0);
     seen     .push(0);
     polarity .push(sign);
     decision .push();
@@ -325,8 +323,8 @@ Lit Solver::pickBranchLit()
 #endif
 
     // Random decision:
-    if (drand(random_seed) < random_var_freq && !order_heap.empty()){
-        next = order_heap[irand(random_seed,order_heap.size())];
+    if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
+        next = order_heap[randomNumberGenerator.irand(order_heap.size())];
         if (variableDatabase.value(next) == l_Undef && decision[next])
             rnd_decisions++; }
     }
@@ -361,9 +359,9 @@ Lit Solver::pickBranchLit()
 #ifdef POLARITY_VOTING
     double vote = group_polarity[extensionLevel[next]];
     bool preferred_polarity = (vote == 0) ? polarity[next] : (vote < 0);
-    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : preferred_polarity);
+    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? randomNumberGenerator.drand() < 0.5 : preferred_polarity);
 #else
-    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? drand(random_seed) < 0.5 : polarity[next]);
+    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? randomNumberGenerator.drand() < 0.5 : polarity[next]);
 #endif
 }
 
