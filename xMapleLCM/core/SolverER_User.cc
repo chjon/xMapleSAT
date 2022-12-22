@@ -124,7 +124,7 @@ void SolverER::quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_m
     if (k <= 0 || k >= r - l + 1) return;
     while (!solver->asynch_interrupt) {
         // Partition the array around last element and get position of pivot element in sorted array
-        int pivot = l + solver->irand(solver->random_seed, r - l + 1);
+        int pivot = l + randomNumberGenerator.irand(r - l + 1);
         pivot = partition_count(db, subexpr_count, l, r, pivot);
 
         // Update selection bounds
@@ -259,7 +259,7 @@ void SolverER::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDef
 
     // Add extension variables
     std::tr1::unordered_set<LitPair> generatedPairs;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = variableDatabase.nVars() + extVarDefBuffer.size();
     for (std::vector<LitPair>::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         Lit a = i->first, b = i->second;
         if (isValidDefPair(a, b, generatedPairs)) {
@@ -303,12 +303,12 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     // already exist and there aren't enough distinct literals in the selected clauses
 
     const unsigned int MAX_RETRIES = 10;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = variableDatabase.nVars() + extVarDefBuffer.size();
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
         for (unsigned int j = 0; j < MAX_RETRIES; j++) {
-            const int i_a = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
-            const int i_b = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
+            const int i_a = randomNumberGenerator.irand(static_cast<int>(litVec.size()));
+            const int i_b = randomNumberGenerator.irand(static_cast<int>(litVec.size()));
             Lit a = litVec[i_a], b = litVec[i_b];
             LitPair litPair = mkLitPair(a, b);
 
@@ -326,7 +326,7 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
 void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
     // Add extension variables
     std::tr1::unordered_set<LitPair> generatedPairs;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = variableDatabase.nVars() + extVarDefBuffer.size();
     for (unsigned int i = 1; i < selectedClauses.size(); i++) {
         int n = numDiffs(tmp_vec, solver->ca[selectedClauses[i]], solver->ca[selectedClauses[i - 1]]);
         assert(n == 2);

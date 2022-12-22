@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_PropagationComponent_h
 
 #include <core/SolverTypes.h>
+#include <core/VariableDatabase.h>
 #include <mtl/Heap.h>
 #include <map>
 
@@ -60,22 +61,7 @@ namespace Minisat {
             LitOrderLt(const vec<T>&  act) : activity(act) { }
         };
 
-        /////////////////////////
-        // Convenience methods //
-        /////////////////////////
-        // Call the methods implemented by Solver.h by the same names
-        // Implementation is overridden in unit testing
-
-        inline lbool value(Var x) const; // Gets the truth assignment of a variable
-        inline lbool value(Lit p) const; // Gets the truth assignment of a literal
-
-        ////////////////////
-        // HELPER METHODS //
-        ////////////////////
-
-#ifdef TESTING
-        inline void set_value(Var x, lbool v, int l);
-#endif
+    private:
 
         lbool bcpValue  (Var x) const; // The queued value of a variable.
         lbool bcpValue  (Lit p) const; // The queued value of a literal.
@@ -115,7 +101,7 @@ namespace Minisat {
 
         int64_t propagation_budget; // -1 means no budget.
 
-public:
+    public:
         ////////////////
         // STATISTICS //
         ////////////////
@@ -123,17 +109,14 @@ public:
         uint64_t propagations  ; // Total number of propagations performed by @code{propagate}
         uint64_t s_propagations; // Total number of propagations performed by @code{simplePropagate}
 
-protected:
+    protected:
         ///////////////////////
         // SOLVER REFERENCES //
         ///////////////////////
 
+        VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         Solver* solver;
-
-#ifdef TESTING
-        std::map< Var, std::pair<lbool, int> > test_value;
-#endif
 
     public:
         /**

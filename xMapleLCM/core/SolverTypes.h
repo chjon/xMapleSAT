@@ -41,6 +41,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
+enum BranchingHeuristic: uint8_t {
+    CHB   = 0,
+    VSIDS = 1,
+};
+
 //=================================================================================================
 // Variables, literals, lifted booleans, clauses:
 

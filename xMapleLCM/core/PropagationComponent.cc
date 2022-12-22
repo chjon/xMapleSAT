@@ -6,11 +6,12 @@ namespace Minisat {
     PropagationComponent::PropagationComponent(Solver* s)
         : watches_bin(s->ca)
         , watches(s->ca)
-        , bcp_order_heap(s->activity_VSIDS)
+        , bcp_order_heap(s->branchingComponent.getActivityVSIDS())
         , qhead(0)
         , propagation_budget(-1)
         , propagations(0)
         , s_propagations(0)
+        , variableDatabase(s->variableDatabase)
         , ca(s->ca)
         , solver(s)
     {}
@@ -19,27 +20,13 @@ namespace Minisat {
         solver = nullptr;
     }
 
-#ifdef TESTING
-    inline void  PropagationComponent::set_value(Var x, lbool v, int l) {
-        auto it = test_value.find(x);
-        if (it == test_value.end()) test_value.insert(std::make_pair(x, std::make_pair(v, l)));
-        else it->second = std::make_pair(v, l);
-    }
-
-    inline lbool PropagationComponent::value(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (l_Undef) : (it->second.first ); }
-    inline lbool PropagationComponent::value(Lit p) const { return value(var(p)) ^ sign(p); }
-#else
-    inline lbool PropagationComponent::value(Var x) const { return solver->value(x); }
-    inline lbool PropagationComponent::value(Lit p) const { return solver->value(p); }
-#endif
-
     void PropagationComponent::relocAll(ClauseAllocator& to) {
         // Clean watchers
         watches_bin.cleanAll();
         watches.cleanAll();
 
         // Reloc clauses in watchers
-        for (int v = 0; v < solver->nVars(); v++) {
+        for (int v = 0; v < variableDatabase.nVars(); v++) {
             Lit p = mkLit(v);
             relocWatchers(watches_bin[ p], to);
             relocWatchers(watches_bin[~p], to);
@@ -56,13 +43,13 @@ namespace Minisat {
         vec<Watcher>& ws_bin = watches_bin[p];  // Propagate binary clauses first.
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
-            if (value(the_other) == l_True) {
+            if (variableDatabase.value(the_other) == l_True) {
                 continue;
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-            } else if (value(the_other) == l_False || bcpValue(the_other) == l_False){
+            } else if (variableDatabase.value(the_other) == l_False || bcpValue(the_other) == l_False){
                 // Found a conflict!
                 // Make sure conflicting literal is on the trail
-                if (value(the_other) == l_Undef)
+                if (variableDatabase.value(the_other) == l_Undef)
                     solver->uncheckedEnqueue(~the_other, solver->vardata[var(the_other)].reason);
 
                 // Clear the propagation queue
@@ -70,10 +57,10 @@ namespace Minisat {
                     bcp_assigns[bcp_order_heap[k] >> 1] = l_Undef;
                 bcp_order_heap.clear();
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-            } else if (value(the_other) == l_False) {
+            } else if (variableDatabase.value(the_other) == l_False) {
                 bcp_order_heap.clear();
     #else
-            } else if (value(the_other) == l_False) {
+            } else if (variableDatabase.value(the_other) == l_False) {
     #endif
                 return ws_bin[k].cref;
             } else {
@@ -96,7 +83,7 @@ namespace Minisat {
         for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
             // Try to avoid inspecting the clause:
             Lit blocker = i->blocker;
-            if (value(blocker) == l_True){
+            if (variableDatabase.value(blocker) == l_True){
                 *j++ = *i++; continue; }
 
             // Make sure the false literal is data[1]:
@@ -111,12 +98,12 @@ namespace Minisat {
             // If 0th watch is true, then clause is already satisfied.
             Lit     first = c[0];
             Watcher w     = Watcher(cr, first);
-            if (first != blocker && value(first) == l_True){
+            if (first != blocker && variableDatabase.value(first) == l_True){
                 *j++ = w; continue; }
 
             // Look for new watch:
             for (int k = 2; k < c.size(); k++)
-                if (value(c[k]) != l_False){
+                if (variableDatabase.value(c[k]) != l_False){
                     c[1] = c[k]; c[k] = false_lit;
                     watches[~c[1]].push(w);
                     goto NextClause; }
@@ -124,10 +111,10 @@ namespace Minisat {
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-            if (value(first) == l_False || bcpValue(first) == l_False){
+            if (variableDatabase.value(first) == l_False || bcpValue(first) == l_False){
                 // Found a conflict!
                 // Make sure conflicting literal is on the trail
-                if (value(first) == l_Undef)
+                if (variableDatabase.value(first) == l_Undef)
                     solver->uncheckedEnqueue(~first, solver->vardata[var(first)].reason);
 
                 // Clear the propagation queue
@@ -137,10 +124,10 @@ namespace Minisat {
                 }
                 bcp_order_heap.clear();
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-            if (value(first) == l_False) {
+            if (variableDatabase.value(first) == l_False) {
                 bcp_order_heap.clear();
     #else
-            if (value(first) == l_False){
+            if (variableDatabase.value(first) == l_False){
     #endif
                 confl = cr;
                 // Copy the remaining watches:
@@ -239,12 +226,12 @@ namespace Minisat {
 
                 Lit imp = wbin[k].blocker;
 
-                if (value(imp) == l_False)
+                if (variableDatabase.value(imp) == l_False)
                 {
                     return wbin[k].cref;
                 }
 
-                if (value(imp) == l_Undef)
+                if (variableDatabase.value(imp) == l_Undef)
                 {
                     solver->simpleUncheckEnqueue(imp, wbin[k].cref);
                 }
@@ -253,7 +240,7 @@ namespace Minisat {
             {
                 // Try to avoid inspecting the clause:
                 Lit blocker = i->blocker;
-                if (value(blocker) == l_True)
+                if (variableDatabase.value(blocker) == l_True)
                 {
                     *j++ = *i++; continue;
                 }
@@ -272,7 +259,7 @@ namespace Minisat {
                 // why not simply do i->blocker=first in this case?
                 Lit     first = c[0];
                 //  Watcher w     = Watcher(cr, first);
-                if (first != blocker && value(first) == l_True)
+                if (first != blocker && variableDatabase.value(first) == l_True)
                 {
                     i->blocker = first;
                     *j++ = *i++; continue;
@@ -282,7 +269,7 @@ namespace Minisat {
                     for (int k = 2; k < c.size(); k++)
                     {
 
-                        if (value(c[k]) != l_False)
+                        if (variableDatabase.value(c[k]) != l_False)
                         {
                             // watcher i is abandonned using i++, because cr watches now ~c[k] instead of p
                             // the blocker is first in the watcher. However,
@@ -298,7 +285,7 @@ namespace Minisat {
                 // Did not find watch -- clause is unit under assignment:
                 i->blocker = first;
                 *j++ = *i++;
-                if (value(first) == l_False)
+                if (variableDatabase.value(first) == l_False)
                 {
                     confl = cr;
                     qhead = solver->trail.size();
@@ -326,7 +313,7 @@ namespace Minisat {
         Lit x = c[i_undef], max = c[i_max];
         if (c.size() == 2) {
             // Don't need to touch watchers for binary clauses
-            if (value(c[0]) == l_False) std::swap(c[0], c[1]);
+            if (variableDatabase.value(c[0]) == l_False) std::swap(c[0], c[1]);
         } else {
             // Swap unassigned literal to index 0 and highest-level literal to index 1,
             // replacing watchers as necessary

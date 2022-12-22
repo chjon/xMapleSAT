@@ -104,6 +104,9 @@ namespace Minisat {
         , ext_act_threshold(opt_ext_act_thresh)
 #endif
         , ext_del_freq(opt_ext_del_freq)
+
+        , randomNumberGenerator(s->randomNumberGenerator)
+        , variableDatabase(s->variableDatabase)
         , solver(s)
     {
         using namespace std::placeholders;
@@ -301,7 +304,7 @@ namespace Minisat {
         }
 
         // Prioritize new variables
-        // prioritize(*extVarDefBuffer);
+        solver->branchingComponent.prioritize(*extVarDefBuffer, ext_prio_act);
 
         // Update stats and clean up
         total_ext_vars += extVarDefBuffer->size();
@@ -309,25 +312,6 @@ namespace Minisat {
         extVarDefBuffer->clear();
 
         extTimerStop(ext_add_overhead);
-    }
-
-    void SolverER::prioritize(const std::vector<ExtDef>& defs) {
-        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
-        const double desiredActivityCHB   = solver->activity_CHB  [solver->order_heap_CHB  [0]] * ext_prio_act;
-        const double desiredActivityVSIDS = solver->activity_VSIDS[solver->order_heap_VSIDS[0]] * ext_prio_act;
-        for (const ExtDef& def : defs) {
-            Var v = var(def.x);
-            // Prioritize branching on our extension variables
-            solver->activity_CHB  [v] = desiredActivityCHB;
-            solver->activity_VSIDS[v] = desiredActivityVSIDS;
-
-#if EXTENSION_FORCE_BRANCHING
-            // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
-            solver->canceled[v] = conflicts;
-#endif
-            if (solver->order_heap_CHB  .inHeap(v)) solver->order_heap_CHB  .decrease(v);
-            if (solver->order_heap_VSIDS.inHeap(v)) solver->order_heap_VSIDS.decrease(v);
-        }
     }
 
     template<class V>

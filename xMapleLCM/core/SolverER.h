@@ -202,13 +202,6 @@ public:
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause);
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause);
 
-    /**
-     * @brief Prioritize branching on a given set of variables
-     * 
-     * @param defs Extension variable definitions -- the extension variables will be prioritized
-     */
-    void prioritize(const std::vector<ExtDef>& defs);
-
     // Extension Variable Substitution
 
     /**
@@ -357,6 +350,9 @@ protected:
     void   extTimerStart() const;
     void   extTimerStop(struct rusage& ext_overhead) const;
 
+    // Solver references
+    RandomNumberGenerator& randomNumberGenerator;
+    VariableDatabase& variableDatabase;
     Solver* solver;
     ExtDefMap<Lit> xdm;
 

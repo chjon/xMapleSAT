@@ -50,7 +50,7 @@ void printStats(Solver& solver)
     double mem_used = memUsedPeak();
     printf("c restarts              : %"    PRIu64 "\n", solver.starts);
     printf("c conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
-    printf("c decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
+    printf("c decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.branchingComponent.decisions, (float)solver.branchingComponent.rnd_decisions*100 / (float)solver.branchingComponent.decisions, solver.branchingComponent.decisions   /cpu_time);
     printf("c propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.propagationComponent.propagations, solver.propagationComponent.propagations/cpu_time);
     printf("c conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     printf("c total ext vars        : %-12" PRIu64 "\n", solver.ser->total_ext_vars);
@@ -159,7 +159,7 @@ int main(int argc, char** argv)
         FILE* res = (argc >= 3) ? fopen(argv[2], "wb") : NULL;
         
         if (S.verbosity > 0){
-            printf("c |  Number of variables:  %12d                                         |\n", S.nVars());
+            printf("c |  Number of variables:  %12d                                         |\n", S.variableDatabase.nVars());
             printf("c |  Number of clauses:    %12d                                         |\n", S.nClauses()); }
         
         double parsed_time = cpuTime();
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
         printf(ret == l_True ? "s SATISFIABLE\n" : ret == l_False ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
         if (ret == l_True){
             printf("v ");
-            for (int i = 0; i < S.nVars(); i++)
+            for (int i = 0; i < S.variableDatabase.nVars(); i++)
                 if (S.model[i] != l_Undef)
                     printf("%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
             printf(" 0\n");
@@ -206,7 +206,7 @@ int main(int argc, char** argv)
         if (res != NULL){
             if (ret == l_True){
                 fprintf(res, "SAT\n");
-                for (int i = 0; i < S.nVars(); i++)
+                for (int i = 0; i < S.variableDatabase.nVars(); i++)
                     if (S.model[i] != l_Undef)
                         fprintf(res, "%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
                 fprintf(res, " 0\n");
