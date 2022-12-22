@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
+#include "core/VariableDatabase.h"
 
 
 namespace Minisat {
@@ -82,8 +83,6 @@ public:
 
     // Read state:
     //
-    lbool   value      (Var x) const;       // The current value of a variable.
-    lbool   value      (Lit p) const;       // The current value of a literal.
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     lbool   bcpValue  (Var x) const;       // The queued value of a variable.
     lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
@@ -93,7 +92,6 @@ public:
     int     nAssigns   ()      const;       // The current number of assigned literals.
     int     nClauses   ()      const;       // The current number of original clauses.
     int     nLearnts   ()      const;       // The current number of learnt clauses.
-    int     nVars      ()      const;       // The current number of variables.
     int     nFreeVars  ()      const;
 
     // Resource contraints:
@@ -244,7 +242,6 @@ protected:
     double              var_inc;          // Amount to bump next variable with.
     OccLists<Lit, vec<Watcher>, WatcherDeleted>
                         watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
-    vec<lbool>          assigns;          // The current assignments.
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
     vec<Lit>            trail;            // Assignment stack; stores all assigments made in the order they were made.
@@ -298,7 +295,6 @@ protected:
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
     bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
-    CRef     propagate_single (Lit p);                                                 // Perform unit propagation. Returns possibly conflicting clause.
     CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
@@ -367,6 +363,9 @@ protected:
     // Returns a random integer 0 <= x < size. Seed must never be 0.
     static inline int irand(double& seed, int size) {
         return (int)(drand(seed) * size); }
+
+public:
+    VariableDatabase variableDatabase;
 };
 
 
@@ -394,7 +393,7 @@ inline void Solver::varBumpActivity(Var v, double inc) {
         }
 #endif
         // Rescale:
-        for (int i = 0; i < nVars(); i++) {
+        for (int i = 0; i < variableDatabase.nVars(); i++) {
             activity[i] *= 1e-100;
 #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
             extensionLevelActivity[extensionLevel[i]] += activity[i];
@@ -431,19 +430,17 @@ inline void Solver::checkGarbage(double gf){
         garbageCollect(); }
 
 // NOTE: enqueue does not set the ok flag! (only public methods do)
-inline bool     Solver::enqueue         (Lit p, CRef from)      { return value(p) != l_Undef ? value(p) != l_False : (uncheckedEnqueue(p, from), true); }
+inline bool     Solver::enqueue         (Lit p, CRef from)      { return variableDatabase.value(p) != l_Undef ? variableDatabase.value(p) != l_False : (uncheckedEnqueue(p, from), true); }
 inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
 inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
-inline bool     Solver::locked          (const Clause& c) const { return value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
+inline bool     Solver::locked          (const Clause& c) const { return variableDatabase.value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
 inline void     Solver::newDecisionLevel()                      { trail_lim.push(trail.size()); }
 
 inline int      Solver::decisionLevel ()      const   { return trail_lim.size(); }
 inline uint32_t Solver::abstractLevel (Var x) const   { return 1 << (level(x) & 31); }
-inline lbool    Solver::value         (Var x) const   { return assigns[x]; }
-inline lbool    Solver::value         (Lit p) const   { return assigns[var(p)] ^ sign(p); }
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
 inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
 inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
@@ -453,7 +450,6 @@ inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ s
 inline int      Solver::nAssigns      ()      const   { return trail.size(); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
-inline int      Solver::nVars         ()      const   { return vardata.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]); }
 inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
 inline void     Solver::setDecisionVar(Var v, bool b) 

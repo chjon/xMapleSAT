@@ -157,10 +157,9 @@ Solver::~Solver()
 //
 Var Solver::newVar(bool sign, bool dvar)
 {
-    int v = nVars();
+    int v = variableDatabase.newVar();
     watches  .init(mkLit(v, false));
     watches  .init(mkLit(v, true ));
-    assigns  .push(l_Undef);
     vardata  .push(mkVarData(CRef_Undef, 0));
     //activity .push(0);
     activity .push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
@@ -200,9 +199,9 @@ bool Solver::addClause_(vec<Lit>& ps)
     sort(ps);
     Lit p; int i, j;
     for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
-        if (value(ps[i]) == l_True || ps[i] == ~p)
+        if (variableDatabase.value(ps[i]) == l_True || ps[i] == ~p)
             return true;
-        else if (value(ps[i]) != l_False && ps[i] != p)
+        else if (variableDatabase.value(ps[i]) != l_False && ps[i] != p)
             ps[j++] = p = ps[i];
     ps.shrink(i - j);
 
@@ -215,7 +214,7 @@ bool Solver::addClause_(vec<Lit>& ps)
         return ok = false;
     else if (ps.size() == 1){
         uncheckedEnqueue(ps[0]);
-        return ok = (propagationManager->propagate() == CRef_Undef);
+        return ok = (propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
         clauses.push(cr);
@@ -264,7 +263,7 @@ void Solver::removeClause(CRef cr) {
 
 bool Solver::satisfied(const Clause& c) const {
     for (int i = 0; i < c.size(); i++)
-        if (value(c[i]) == l_True)
+        if (variableDatabase.value(c[i]) == l_True)
             return true;
     return false; }
 
@@ -302,7 +301,7 @@ void Solver::cancelUntil(int level) {
 #if ANTI_EXPLORATION
             canceled[x] = conflicts;
 #endif
-            assigns [x] = l_Undef;
+            variableDatabase.setVar(x, l_Undef);
             if (phase_saving > 1 || (phase_saving == 1) && c > trail_lim.last())
                 polarity[x] = sign(trail[c]);
             insertVarOrder(x); }
@@ -328,12 +327,12 @@ Lit Solver::pickBranchLit()
     // Random decision:
     if (drand(random_seed) < random_var_freq && !order_heap.empty()){
         next = order_heap[irand(random_seed,order_heap.size())];
-        if (value(next) == l_Undef && decision[next])
+        if (variableDatabase.value(next) == l_Undef && decision[next])
             rnd_decisions++; }
     }
 
     // Activity based decision:
-    while (next == var_Undef || value(next) != l_Undef || !decision[next]) {
+    while (next == var_Undef || variableDatabase.value(next) != l_Undef || !decision[next]) {
 #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
         Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
 #endif
@@ -344,7 +343,7 @@ Lit Solver::pickBranchLit()
 #if ANTI_EXPLORATION
             next = order_heap[0];
             uint64_t age = conflicts - canceled[next];
-            while (age > 0 && value(next) == l_Undef) {
+            while (age > 0 && variableDatabase.value(next) == l_Undef) {
                 double decay = pow(0.95, age);
                 activity[next] *= decay;
                 if (order_heap.inHeap(next)) {
@@ -599,7 +598,7 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
 
 void Solver::uncheckedEnqueue(Lit p, CRef from)
 {
-    assert(value(p) == l_Undef);
+    assert(variableDatabase.value(p) == l_Undef);
     picked[var(p)] = conflicts;
 #if ANTI_EXPLORATION
     uint64_t age = conflicts - canceled[var(p)];
@@ -622,9 +621,81 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
 #if ALMOST_CONFLICT
     almost_conflicted[var(p)] = 0;
 #endif
-    assigns[var(p)] = lbool(!sign(p));
+    variableDatabase.setVar(var(p), lbool(!sign(p)));
     vardata[var(p)] = mkVarData(from, decisionLevel());
     trail.push_(p);
+}
+
+/*_________________________________________________________________________________________________
+|
+|  propagate : [void]  ->  [Clause*]
+|  
+|  Description:
+|    Propagates all enqueued facts. If a conflict arises, the conflicting clause is returned,
+|    otherwise CRef_Undef.
+|  
+|    Post-conditions:
+|      * the propagation queue is empty, even if there was a conflict.
+|________________________________________________________________________________________________@*/
+CRef Solver::propagate()
+{
+    CRef    confl     = CRef_Undef;
+    int     num_props = 0;
+    watches.cleanAll();
+
+    while (qhead < trail.size()){
+        Lit            p   = trail[qhead++];     // 'p' is enqueued fact to propagate.
+        vec<Watcher>&  ws  = watches[p];
+        Watcher        *i, *j, *end;
+        num_props++;
+
+        for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
+            // Try to avoid inspecting the clause:
+            Lit blocker = i->blocker;
+            if (variableDatabase.value(blocker) == l_True){
+                *j++ = *i++; continue; }
+
+            // Make sure the false literal is data[1]:
+            CRef     cr        = i->cref;
+            Clause&  c         = ca[cr];
+            Lit      false_lit = ~p;
+            if (c[0] == false_lit)
+                c[0] = c[1], c[1] = false_lit;
+            assert(c[1] == false_lit);
+            i++;
+
+            // If 0th watch is true, then clause is already satisfied.
+            Lit     first = c[0];
+            Watcher w     = Watcher(cr, first);
+            if (first != blocker && variableDatabase.value(first) == l_True){
+                *j++ = w; continue; }
+
+            // Look for new watch:
+            for (int k = 2; k < c.size(); k++)
+                if (variableDatabase.value(c[k]) != l_False){
+                    c[1] = c[k]; c[k] = false_lit;
+                    watches[~c[1]].push(w);
+                    goto NextClause; }
+
+            // Did not find watch -- clause is unit under assignment:
+            *j++ = w;
+            if (variableDatabase.value(first) == l_False){
+                confl = cr;
+                qhead = trail.size();
+                // Copy the remaining watches:
+                while (i < end)
+                    *j++ = *i++;
+            }else
+                uncheckedEnqueue(first, cr);
+
+        NextClause:;
+        }
+        ws.shrink(i - j);
+    }
+    propagations += num_props;
+    simpDB_props -= num_props;
+
+    return confl;
 }
 
 int min(int a, int b) {
@@ -704,15 +775,15 @@ void Solver::rebuildOrderHeap()
 #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     order_heap_extlvl.clear();
     order_heap_degree.clear();
-    for (Var v = 0; v < nVars(); v++)
-        if (decision[v] && value(v) == l_Undef) {
+    for (Var v = 0; v < variableDatabase.nVars(); v++)
+        if (decision[v] && variableDatabase.(v) == l_Undef) {
             order_heap_degree.insert(v);
             if (extensionLevel[v]) order_heap_extlvl.insert(v);
         }
 #else
     vec<Var> vs;
-    for (Var v = 0; v < nVars(); v++)
-        if (decision[v] && value(v) == l_Undef)
+    for (Var v = 0; v < variableDatabase.nVars(); v++)
+        if (decision[v] && variableDatabase.value(v) == l_Undef)
             vs.push(v);
     order_heap.build(vs);
 #endif
@@ -731,7 +802,7 @@ bool Solver::simplify()
 {
     assert(decisionLevel() == 0);
 
-    if (!ok || propagationManager->propagate() != CRef_Undef)
+    if (!ok || propagate() != CRef_Undef)
         return ok = false;
 
     if (nAssigns() == simpDB_assigns || (simpDB_props > 0))
@@ -772,7 +843,7 @@ lbool Solver::search(int nof_conflicts)
     starts++;
 
     for (;;){
-        CRef confl = propagationManager->propagate();
+        CRef confl = propagate();
 
 #if BRANCHING_HEURISTIC == CHB
         double multiplier = confl == CRef_Undef ? reward_multiplier : 1.0;
@@ -871,10 +942,10 @@ lbool Solver::search(int nof_conflicts)
             while (decisionLevel() < assumptions.size()){
                 // Perform user provided assumption:
                 Lit p = assumptions[decisionLevel()];
-                if (value(p) == l_True){
+                if (variableDatabase.value(p) == l_True){
                     // Dummy decision level:
                     newDecisionLevel();
-                }else if (value(p) == l_False){
+                }else if (variableDatabase.value(p) == l_False){
                     analyzeFinal(~p, conflict);
                     return l_False;
                 }else{
@@ -910,7 +981,7 @@ lbool Solver::search(int nof_conflicts)
 double Solver::progressEstimate() const
 {
     double  progress = 0;
-    double  F = 1.0 / nVars();
+    double  F = 1.0 / variableDatabase.nVars();
 
     for (int i = 0; i <= decisionLevel(); i++){
         int beg = i == 0 ? 0 : trail_lim[i - 1];
@@ -918,7 +989,7 @@ double Solver::progressEstimate() const
         progress += pow(F, i) * (end - beg);
     }
 
-    return progress / nVars();
+    return progress / variableDatabase.nVars();
 }
 
 /*
@@ -993,8 +1064,8 @@ lbool Solver::solve_()
 
     if (status == l_True){
         // Extend & copy model:
-        model.growTo(nVars());
-        for (int i = 0; i < nVars(); i++) model[i] = value(i);
+        model.growTo(variableDatabase.nVars());
+        for (int i = 0; i < variableDatabase.nVars(); i++) model[i] = variableDatabase.value(i);
     }else if (status == l_False && conflict.size() == 0)
         ok = false;
 
@@ -1022,7 +1093,7 @@ void Solver::toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max)
     if (satisfied(c)) return;
 
     for (int i = 0; i < c.size(); i++)
-        if (value(c[i]) != l_False)
+        if (variableDatabase.value(c[i]) != l_False)
             fprintf(f, "%s%d ", sign(c[i]) ? "-" : "", mapVar(var(c[i]), map, max)+1);
     fprintf(f, "0\n");
 }
@@ -1058,7 +1129,7 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
         if (!satisfied(ca[clauses[i]])){
             Clause& c = ca[clauses[i]];
             for (int j = 0; j < c.size(); j++)
-                if (value(c[j]) != l_False)
+                if (variableDatabase.value(c[j]) != l_False)
                     mapVar(var(c[j]), map, max);
         }
 
@@ -1068,7 +1139,7 @@ void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
     fprintf(f, "p cnf %d %d\n", max, cnt);
 
     for (int i = 0; i < assumptions.size(); i++){
-        assert(value(assumptions[i]) != l_False);
+        assert(variableDatabase.value(assumptions[i]) != l_False);
         fprintf(f, "%s%d 0\n", sign(assumptions[i]) ? "-" : "", mapVar(var(assumptions[i]), map, max)+1);
     }
 
@@ -1089,7 +1160,7 @@ void Solver::relocAll(ClauseAllocator& to)
     //
     // for (int i = 0; i < watches.size(); i++)
     watches.cleanAll();
-    for (int v = 0; v < nVars(); v++)
+    for (int v = 0; v < variableDatabase.nVars(); v++)
         for (int s = 0; s < 2; s++){
             Lit p = mkLit(v, s);
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);

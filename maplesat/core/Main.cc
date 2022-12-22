@@ -135,7 +135,7 @@ int main(int argc, char** argv)
         FILE* res = (argc >= 3) ? fopen(argv[2], "wb") : NULL;
         
         if (S.verbosity > 0){
-            printf("|  Number of variables:  %12d                                         |\n", S.nVars());
+            printf("|  Number of variables:  %12d                                         |\n", S.variableDatabase.nVars());
             printf("|  Number of clauses:    %12d                                         |\n", S.nClauses()); }
         
         double parsed_time = cpuTime();
@@ -168,7 +168,7 @@ int main(int argc, char** argv)
         if (res != NULL){
             if (ret == l_True){
                 fprintf(res, "SAT\n");
-                for (int i = 0; i < S.nVars(); i++)
+                for (int i = 0; i < S.variableDatabase.nVars(); i++)
                     if (S.model[i] != l_Undef)
                         fprintf(res, "%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
                 fprintf(res, " 0\n");
