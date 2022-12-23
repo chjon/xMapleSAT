@@ -31,14 +31,6 @@ using namespace Minisat;
 
 static const char* _cat = "CORE";
 
-#if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
-static DoubleOption  opt_step_size         (_cat, "step-size",   "Initial step size",                             0.40,     DoubleRange(0, false, 1, false));
-static DoubleOption  opt_step_size_dec     (_cat, "step-size-dec","Step size decrement",                          0.000001, DoubleRange(0, false, 1, false));
-static DoubleOption  opt_min_step_size     (_cat, "min-step-size","Minimal step size",                            0.06,     DoubleRange(0, false, 1, false));
-#endif
-#if BRANCHING_HEURISTIC == VSIDS
-static DoubleOption  opt_var_decay         (_cat, "var-decay",   "The variable activity decay factor",            0.95,     DoubleRange(0, false, 1, false));
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
 static DoubleOption  opt_clause_decay      (_cat, "cla-decay",   "The clause activity decay factor",              0.999,    DoubleRange(0, false, 1, false));
 #endif
@@ -64,23 +56,12 @@ Solver::Solver() :
     // Parameters (user settable):
     //
     verbosity        (0)
-#if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
-  , step_size        (opt_step_size)
-  , step_size_dec    (opt_step_size_dec)
-  , min_step_size    (opt_min_step_size)
-#endif
-#if BRANCHING_HEURISTIC == VSIDS
-  , var_decay        (opt_var_decay)
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
   , clause_decay     (opt_clause_decay)
 #endif
-  , random_var_freq  (opt_random_var_freq)
   , luby_restart     (opt_luby_restart)
   , ccmin_mode       (opt_ccmin_mode)
   , phase_saving     (opt_phase_saving)
-  , rnd_pol          (false)
-  , rnd_init_act     (opt_rnd_init_act)
   , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
@@ -96,8 +77,8 @@ Solver::Solver() :
 
     // Statistics: (formerly in 'SolverStats')
     //
-  , solves(0), starts(0), decisions(0), rnd_decisions(0), conflicts(0)
-  , dec_vars(0), clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
+  , solves(0), starts(0), conflicts(0)
+  , clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
 
   , lbd_calls(0)
 #if BRANCHING_HEURISTIC == CHB
@@ -109,21 +90,8 @@ Solver::Solver() :
 #if ! LBD_BASED_CLAUSE_DELETION
   , cla_inc            (1)
 #endif
-#if BRANCHING_HEURISTIC == VSIDS
-  , var_inc            (1)
-#endif
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-#if PRIORITIZE_ER
-#ifdef EXTLVL_ACTIVITY
-  , order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
-#else
-  , order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
-  , order_heap_degree  (VarOrderLt(activity, degree, true))
-#endif
-#else
-  , order_heap         (VarOrderLt(activity))
-#endif
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -136,11 +104,8 @@ Solver::Solver() :
   // Solver components
   , assignmentTrail(this)
   , unitPropagator(this)
-{
-#ifdef POLARITY_VOTING
-    group_polarity.push(0);
-#endif
-}
+  , branchingHeuristicManager(this)
+{}
 
 
 Solver::~Solver()
@@ -160,30 +125,9 @@ Var Solver::newVar(bool sign, bool dvar)
     int v = variableDatabase.newVar();
     assignmentTrail.newVar(v);
     unitPropagator.newVar(v);
-    //activity .push(0);
-    activity .push(rnd_init_act ? randomNumberGenerator.drand() * 0.00001 : 0);
+    branchingHeuristicManager.newVar(v, sign, dvar);
     seen     .push(0);
-    polarity .push(sign);
-    decision .push();
     lbd_seen.push(0);
-    picked.push(0);
-    conflicted.push(0);
-#if PRIORITIZE_ER
-    degree.push(0);
-    extensionLevel.push(0);
-#endif
-#if ALMOST_CONFLICT
-    almost_conflicted.push(0);
-#endif
-#if ANTI_EXPLORATION
-    canceled.push(0);
-#endif
-#if BRANCHING_HEURISTIC == CHB
-    last_conflict.push(0);
-#endif
-    total_actual_rewards.push(0);
-    total_actual_count.push(0);
-    setDecisionVar(v, dvar);
     return v;
 }
 
@@ -259,59 +203,6 @@ bool Solver::satisfied(const Clause& c) const {
 //=================================================================================================
 // Major methods:
 
-
-Lit Solver::pickBranchLit()
-{
-    Var next = var_Undef;
-
-    {
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-    Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
-#endif
-
-    // Random decision:
-    if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
-        next = order_heap[randomNumberGenerator.irand(order_heap.size())];
-        if (variableDatabase.value(next) == l_Undef && decision[next])
-            rnd_decisions++; }
-    }
-
-    // Activity based decision:
-    while (next == var_Undef || variableDatabase.value(next) != l_Undef || !decision[next]) {
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
-#endif
-        if (order_heap.empty()){
-            next = var_Undef;
-            break;
-        } else {
-#if ANTI_EXPLORATION
-            next = order_heap[0];
-            uint64_t age = conflicts - canceled[next];
-            while (age > 0 && variableDatabase.value(next) == l_Undef) {
-                double decay = pow(0.95, age);
-                activity[next] *= decay;
-                if (order_heap.inHeap(next)) {
-                    order_heap.increase(next);
-                }
-                canceled[next] = conflicts;
-                next = order_heap[0];
-                age = conflicts - canceled[next];
-            }
-#endif
-            next = order_heap.removeMin();
-        }
-    }
-
-#ifdef POLARITY_VOTING
-    double vote = group_polarity[extensionLevel[next]];
-    bool preferred_polarity = (vote == 0) ? polarity[next] : (vote < 0);
-    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? randomNumberGenerator.drand() < 0.5 : preferred_polarity);
-#else
-    return next == var_Undef ? lit_Undef : mkLit(next, rnd_pol ? randomNumberGenerator.drand() < 0.5 : polarity[next]);
-#endif
-}
-
 /*_________________________________________________________________________________________________
 |
 |  analyze : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
@@ -339,12 +230,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
     out_learnt.push();      // (leave room for the asserting literal)
     int index = assignmentTrail.nAssigns() - 1;
 
-#ifdef POLARITY_VOTING
-    // Count votes for the polarity that led to the conflict
-    vec<int> count;
-    for (int k = 0; k < group_polarity.size(); k++) count.push(0);
-#endif
-
     do{
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
@@ -361,16 +246,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
             Lit q = c[j];
 
             if (!seen[var(q)] && assignmentTrail.level(var(q)) > 0){
-#if BRANCHING_HEURISTIC == CHB
-                last_conflict[var(q)] = conflicts;
-#elif BRANCHING_HEURISTIC == VSIDS
-                varBumpActivity(var(q));
-#endif
-#ifdef POLARITY_VOTING
-                // Count votes for the polarity that led to the conflict
-                count[extensionLevel[var(q)]] += sign(q) ? (+1) : (-1);
-#endif
-                conflicted[var(q)]++;
+                branchingHeuristicManager.handleEventLitInConflictGraph(q);
                 seen[var(q)] = 1;
                 if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
                     pathC++;
@@ -388,15 +264,6 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
     }while (pathC > 0);
     out_learnt[0] = ~p;
-
-#ifdef POLARITY_VOTING
-    // Apply EMA to group polarities
-    for (int k = 0; k < group_polarity.size(); k++) {
-        if (count[k]) {
-            group_polarity[k] = 0.9 * (group_polarity[k] + count[k]);
-        }
-    }
-#endif
 
     // Simplify conflict clause:
     //
@@ -451,23 +318,8 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
 
 #if ALMOST_CONFLICT
     seen[var(p)] = true;
-    for(int i = out_learnt.size() - 1; i >= 0; i--) {
-        Var v = var(out_learnt[i]);
-        CRef rea = assignmentTrail.reason(v);
-        if (rea != CRef_Undef) {
-            Clause& reaC = ca[rea];
-            for (int i = 0; i < reaC.size(); i++) {
-                Lit l = reaC[i];
-                if (!seen[var(l)]) {
-                    seen[var(l)] = true;
-                    almost_conflicted[var(l)]++;
-                    analyze_toclear.push(l);
-                }
-            }
-        }
-    }
 #endif
-    for (int j = 0; j < analyze_toclear.size(); j++) seen[var(analyze_toclear[j])] = 0;    // ('seen[]' is now cleared)
+    branchingHeuristicManager.handleEventLearnedClause(out_learnt, out_btlevel);
 }
 
 
@@ -555,24 +407,24 @@ int min(int a, int b) {
 struct reduceDB_lt { 
     ClauseAllocator& ca;
 #if LBD_BASED_CLAUSE_DELETION
-    vec<double>& activity;
-    reduceDB_lt(ClauseAllocator& ca_,vec<double>& activity_) : ca(ca_), activity(activity_) {}
+    const vec<double>& activity;
+    reduceDB_lt(ClauseAllocator& ca_,const vec<double>& activity_) : ca(ca_), activity(activity_) {}
 #else
     reduceDB_lt(ClauseAllocator& ca_) : ca(ca_) {}
 #endif
     bool operator () (CRef x, CRef y) { 
 #if LBD_BASED_CLAUSE_DELETION
         return ca[x].activity() > ca[y].activity();
-    }
 #else
-        return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity()); } 
+        return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity());
 #endif
+    }
 };
 
 void Solver::reduceDB() {
     int     i, j;
 #if LBD_BASED_CLAUSE_DELETION
-    sort(learnts, reduceDB_lt(ca, activity));
+    sort(learnts, reduceDB_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
 #else
     double  extra_lim = cla_inc / learnts.size();    // Remove any clause below this activity
     sort(learnts, reduceDB_lt(ca));
@@ -612,26 +464,6 @@ void Solver::removeSatisfied(vec<CRef>& cs)
 }
 
 
-void Solver::rebuildOrderHeap()
-{
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-    order_heap_extlvl.clear();
-    order_heap_degree.clear();
-    for (Var v = 0; v < variableDatabase.nVars(); v++)
-        if (decision[v] && variableDatabase.(v) == l_Undef) {
-            order_heap_degree.insert(v);
-            if (extensionLevel[v]) order_heap_extlvl.insert(v);
-        }
-#else
-    vec<Var> vs;
-    for (Var v = 0; v < variableDatabase.nVars(); v++)
-        if (decision[v] && variableDatabase.value(v) == l_Undef)
-            vs.push(v);
-    order_heap.build(vs);
-#endif
-}
-
-
 /*_________________________________________________________________________________________________
 |
 |  simplify : [void]  ->  [bool]
@@ -655,7 +487,7 @@ bool Solver::simplify()
     if (remove_satisfied)        // Can be turned off.
         removeSatisfied(clauses);
     checkGarbage();
-    rebuildOrderHeap();
+    branchingHeuristicManager.rebuildOrderHeap();
 
     simpDB_assigns = assignmentTrail.nAssigns();
     simpDB_props   = clauses_literals + learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
@@ -687,29 +519,12 @@ lbool Solver::search(int nof_conflicts)
     for (;;){
         CRef confl = unitPropagator.propagate();
 
-#if BRANCHING_HEURISTIC == CHB
-        double multiplier = confl == CRef_Undef ? reward_multiplier : 1.0;
-        for (int a = action; a < trail.size(); a++) {
-            Var v = var(trail[a]);
-            uint64_t age = conflicts - last_conflict[v] + 1;
-            double reward = multiplier / age ;
-            double old_activity = activity[v];
-            activity[v] = step_size * reward + ((1 - step_size) * old_activity);
-            if (order_heap.inHeap(v)) {
-                if (activity[v] > old_activity)
-                    order_heap.decrease(v);
-                else
-                    order_heap.increase(v);
-            }
-        }
-#endif
+        branchingHeuristicManager.handleEventPropagated(conflicts);
+
         if (confl != CRef_Undef){
             // CONFLICT
             conflicts++; conflictC++;
-#if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
-            if (step_size > min_step_size)
-                step_size -= step_size_dec;
-#endif
+            branchingHeuristicManager.handleEventConflicted(conflicts);
             if (assignmentTrail.decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
@@ -756,7 +571,7 @@ lbool Solver::search(int nof_conflicts)
                 if (verbosity >= 1)
                     printf("| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
                            (int)conflicts, 
-                           (int)dec_vars - assignmentTrail.nRootAssigns(), nClauses(), (int)clauses_literals, 
+                           nFreeVars(), nClauses(), (int)clauses_literals, 
                            (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), assignmentTrail.progressEstimate()*100);
             }
 
@@ -798,15 +613,11 @@ lbool Solver::search(int nof_conflicts)
 
             if (next == lit_Undef){
                 // New variable decision:
-                decisions++;
-                next = pickBranchLit();
+                next = branchingHeuristicManager.pickBranchLit();
 
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
-#ifdef POLARITY_VOTING
-                group_polarity[extensionLevel[var(next)]] += (sign(next) ? (-1) : (+1)) * 0.01;
-#endif
             }
 
             // Increase decision level and enqueue 'next'

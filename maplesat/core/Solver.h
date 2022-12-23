@@ -31,6 +31,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/RandomNumberGenerator.h"
 #include "core/AssignmentTrail.h"
 #include "core/UnitPropagator.h"
+#include "core/BranchingHeuristicManager.h"
 
 namespace Minisat {
 
@@ -77,11 +78,6 @@ public:
     void    toDimacs     (const char* file, Lit p);
     void    toDimacs     (const char* file, Lit p, Lit q);
     void    toDimacs     (const char* file, Lit p, Lit q, Lit r);
-    
-    // Variable mode:
-    // 
-    void    setPolarity    (Var v, bool b); // Declare which polarity the decision heuristic should use for a variable. Requires mode 'polarity_user'.
-    void    setDecisionVar (Var v, bool b); // Declare if a variable should be eligible for selection in the decision heuristic.
 
     // Read state:
     //
@@ -117,23 +113,12 @@ public:
     // Mode of operation:
     //
     int       verbosity;
-#if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
-    double    step_size;
-    double    step_size_dec;
-    double    min_step_size;
-#endif
-#if BRANCHING_HEURISTIC == VSIDS
-    double    var_decay;
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
     double    clause_decay;
 #endif
-    double    random_var_freq;
     bool      luby_restart;
     int       ccmin_mode;         // Controls conflict clause minimization (0=none, 1=basic, 2=deep).
     int       phase_saving;       // Controls the level of phase saving (0=none, 1=limited, 2=full).
-    bool      rnd_pol;            // Use random polarities for branching heuristics.
-    bool      rnd_init_act;       // Initialize variable activities with a small random value.
     double    garbage_frac;       // The fraction of wasted memory allowed before a garbage collection is triggered.
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
@@ -146,40 +131,11 @@ public:
 
     // Statistics: (read-only member variable)
     //
-    uint64_t solves, starts, decisions, rnd_decisions, conflicts;
-    uint64_t dec_vars, clauses_literals, learnts_literals, max_literals, tot_literals;
+    uint64_t solves, starts, conflicts;
+    uint64_t clauses_literals, learnts_literals, max_literals, tot_literals;
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
-    vec<uint64_t> picked;
-    vec<uint64_t> conflicted;
-#if PRIORITIZE_ER
-    // Number of times a variable occurs in a clause
-    vec<uint64_t> degree;
-    // Map from variables to their extension level
-    vec<uint64_t> extensionLevel;
-
-#ifdef EXTLVL_ACTIVITY
-    vec<double> extensionLevelActivity; // The activity of each extension level
-#endif
-#ifdef POLARITY_VOTING
-    vec<double> group_polarity;   // The preferred polarity of each group.
-#endif
-#endif
-#if ALMOST_CONFLICT
-    vec<uint64_t> almost_conflicted;
-#endif
-#if ANTI_EXPLORATION
-    vec<uint64_t> canceled;
-#endif
-#if BRANCHING_HEURISTIC == CHB
-    vec<uint64_t> last_conflict;
-    int action;
-    double reward_multiplier;
-#endif
-
-    vec<long double> total_actual_rewards;
-    vec<int> total_actual_count;
 
 protected:
 
@@ -214,24 +170,10 @@ protected:
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
-    vec<double>         activity;         // A heuristic measurement of the activity of a variable.
-    double              var_inc;          // Amount to bump next variable with.
-    vec<char>           polarity;         // The preferred polarity of each variable.
-    vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
 
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-#if PRIORITIZE_ER
-#ifdef EXTLVL_ACTIVITY
-    Multiheap<VarOrderLt> order_heap;
-#else
-    Heap<VarOrderLt>    order_heap_extlvl;       // A priority queue of variables ordered with respect to the extension level.
-    Heap<VarOrderLt>    order_heap_degree;       // A priority queue of variables ordered with respect to the variable degree.
-#endif
-#else
-    Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
-#endif
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -257,8 +199,6 @@ protected:
 
     // Main internal methods:
     //
-    void     insertVarOrder   (Var x);                                                 // Insert a variable in the decision order priority queue.
-    Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
     bool     litRedundant     (Lit p, uint32_t abstract_levels);                       // (helper method for 'analyze()')
@@ -279,15 +219,9 @@ protected:
     lbool    solve_           ();                  // Main solve method (assumptions given in 'assumptions').
     void     reduceDB         ();                  // Reduce the set of learnt clauses.
     void     removeSatisfied  (vec<CRef>& cs);     // Shrink 'cs' to contain only non-satisfied clauses.
-    void     rebuildOrderHeap ();
 
     // Maintaining Variable/Clause activity:
     //
-#if BRANCHING_HEURISTIC == VSIDS
-    void     varDecayActivity ();                      // Decay all variables with the specified factor. Implemented by increasing the 'bump' value instead.
-    void     varBumpActivity  (Var v, double inc);     // Increase a variable with the current 'bump' value.
-    void     varBumpActivity  (Var v);                 // Increase a variable with the current 'bump' value.
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
     void     claDecayActivity ();                      // Decay all clauses with the specified factor. Implemented by increasing the 'bump' value instead.
     void     claBumpActivity  (Clause& c);             // Increase a clause with the current 'bump' value.
@@ -307,59 +241,22 @@ protected:
     bool     withinBudget     ()      const;
 
 public:
-    VariableDatabase      variableDatabase;
-    RandomNumberGenerator randomNumberGenerator;
-    AssignmentTrail       assignmentTrail;
-    UnitPropagator        unitPropagator;
+    VariableDatabase          variableDatabase;
+    RandomNumberGenerator     randomNumberGenerator;
+    AssignmentTrail           assignmentTrail;
+    UnitPropagator            unitPropagator;
+    BranchingHeuristicManager branchingHeuristicManager;
 
 private:
     friend AssignmentTrail;
     friend UnitPropagator;
+    friend BranchingHeuristicManager;
 };
 
 
 //=================================================================================================
 // Implementation of inline methods:
 
-inline void Solver::insertVarOrder(Var x) {
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-    Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
-#endif
-    if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
-
-#if BRANCHING_HEURISTIC == VSIDS
-inline void Solver::varDecayActivity() { var_inc *= (1 / var_decay); }
-inline void Solver::varBumpActivity(Var v) { varBumpActivity(v, var_inc); }
-inline void Solver::varBumpActivity(Var v, double inc) {
-    if ( (activity[v] += inc) > 1e100 ) {
-#if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
-        // Clear extension level activity
-        for (int i = 0; i < extensionLevelActivity.size(); i++) {
-            extensionLevelActivity[i] = 0;
-        }
-#endif
-        // Rescale:
-        for (int i = 0; i < variableDatabase.nVars(); i++) {
-            activity[i] *= 1e-100;
-#if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
-            extensionLevelActivity[extensionLevel[i]] += activity[i];
-#endif
-        }
-        var_inc *= 1e-100;
-    }
-
-    // Update order_heap with respect to new activity:
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-    if (order_heap_extlvl.inHeap(v))
-        order_heap_extlvl.decrease(v);
-    if (order_heap_degree.inHeap(v))
-        order_heap_degree.decrease(v);
-#else
-    if (order_heap.inHeap(v))
-        order_heap.decrease(v);
-#endif
-}
-#endif
 #if ! LBD_BASED_CLAUSE_DELETION
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
 inline void Solver::claBumpActivity (Clause& c) {
@@ -390,15 +287,7 @@ inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }
 inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
-inline int      Solver::nFreeVars     ()      const   { return (int)dec_vars - assignmentTrail.nRootAssigns(); }
-inline void     Solver::setPolarity   (Var v, bool b) { polarity[v] = b; }
-inline void     Solver::setDecisionVar(Var v, bool b) { 
-    if      ( b && !decision[v]) dec_vars++;
-    else if (!b &&  decision[v]) dec_vars--;
-
-    decision[v] = b;
-    insertVarOrder(v);
-}
+inline int      Solver::nFreeVars     ()      const   { return (int)branchingHeuristicManager.dec_vars - assignmentTrail.nRootAssigns(); }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
 inline void     Solver::clearInterrupt(){ asynch_interrupt = false; }
