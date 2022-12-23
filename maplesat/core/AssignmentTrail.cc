@@ -9,11 +9,6 @@ AssignmentTrail::AssignmentTrail(Solver* s)
     , solver(s)
 {}
 
-void AssignmentTrail::newVar(Var v) {
-    vardata.push(mkVarData(CRef_Undef, 0));
-    trail  .capacity(v + 1);
-}
-
 void AssignmentTrail::uncheckedEnqueue(Lit p, CRef from) {
     solver->branchingHeuristicManager.handleEventLitAssigned(p, solver->conflicts);
     variableDatabase.setVar(var(p), lbool(!sign(p)));

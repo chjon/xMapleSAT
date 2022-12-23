@@ -87,6 +87,11 @@ namespace Minisat {
         Solver* solver;
     };
 
+    inline void AssignmentTrail::newVar(Var v) {
+        vardata.push(mkVarData(CRef_Undef, 0));
+        trail  .capacity(v + 1);
+    }
+
     inline void     AssignmentTrail::newDecisionLevel()                 { trail_lim.push(trail.size()); }
     inline bool     AssignmentTrail::enqueue         (Lit p, CRef from) { return variableDatabase.value(p) != l_Undef ? variableDatabase.value(p) != l_False : (uncheckedEnqueue(p, from), true); }
     

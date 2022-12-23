@@ -254,9 +254,9 @@ namespace Minisat {
          * @brief Update data structures for branching heuristics when unit propagation exits.
          * 
          * @param conflicts the new total number of conflicts
-         * @param conflicted true iff propagation resulted in conflict
+         * @param consistentState true iff propagation did not result in conflict
          */
-        void handleEventPropagated(uint64_t conflicts, bool conflicted);
+        void handleEventPropagated(uint64_t conflicts, bool consistentState);
 
         /**
          * @brief Update data structures for branching heuristics upon conflict.
@@ -301,6 +301,40 @@ namespace Minisat {
         /////////////////////////////////////
 
     };
+
+    inline void BranchingHeuristicManager::newVar(Var v, bool sign, bool dvar) {
+        // VSIDS
+        activity.push(rnd_init_act ? randomNumberGenerator.drand() * 0.00001 : 0);
+
+        // CHB
+        conflicted.push(0);
+    #if ALMOST_CONFLICT
+        almost_conflicted.push(0);
+    #endif
+        picked.push(0);
+    #if ANTI_EXPLORATION
+        canceled.push(0);
+    #endif
+
+        // Phase saving
+        polarity.push(sign);
+
+        // Decision variables
+        decision.push();
+        setDecisionVar(v, dvar);
+
+    #if PRIORITIZE_ER
+        degree.push(0);
+        extensionLevel.push(0);
+    #endif
+    #if BRANCHING_HEURISTIC == CHB
+        last_conflict.push(0);
+    #endif
+
+        // Statistics
+        total_actual_rewards.push(0);
+        total_actual_count.push(0);
+    }
 
     inline void BranchingHeuristicManager::insertVarOrder(Var x) {
     #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
@@ -420,9 +454,9 @@ namespace Minisat {
         insertVarOrder(v);
     }
 
-    inline void BranchingHeuristicManager::handleEventPropagated(uint64_t conflicts, bool conflicted) {
+    inline void BranchingHeuristicManager::handleEventPropagated(uint64_t conflicts, bool consistentState) {
     #if BRANCHING_HEURISTIC == CHB
-        const double multiplier = conflicted ? reward_multiplier : 1.0;
+        const double multiplier = consistentState ? reward_multiplier : 1.0;
         for (int a = action; a < assignmentTrail.nAssigns(); a++) {
             Var v = var(assignmentTrail[a]);
             const uint64_t age = conflicts - last_conflict[v] + 1;

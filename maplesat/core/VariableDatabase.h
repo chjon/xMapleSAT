@@ -33,7 +33,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 
 namespace Minisat {
-    class VariableDatabase {
+    struct VariableDatabase {
     protected:
         //////////////////////
         // MEMBER VARIABLES //

@@ -113,11 +113,10 @@ Solver::~Solver()
 // Creates a new SAT variable in the solver. If 'decision' is cleared, variable will not be
 // used as a decision variable (NOTE! This has effects on the meaning of a SATISFIABLE result).
 //
-Var Solver::newVar(bool sign, bool dvar)
-{
-    int v = variableDatabase.newVar();
-    assignmentTrail.newVar(v);
-    unitPropagator.newVar(v);
+Var Solver::newVar(bool sign, bool dvar) {
+    int v = variableDatabase .newVar();
+    assignmentTrail          .newVar(v);
+    unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
     seen     .push(0);
     lbd_seen.push(0);
