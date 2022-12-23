@@ -254,8 +254,9 @@ namespace Minisat {
          * @brief Update data structures for branching heuristics when unit propagation exits.
          * 
          * @param conflicts the new total number of conflicts
+         * @param conflicted true iff propagation resulted in conflict
          */
-        void handleEventPropagated(uint64_t conflicts);
+        void handleEventPropagated(uint64_t conflicts, bool conflicted);
 
         /**
          * @brief Update data structures for branching heuristics upon conflict.
@@ -269,8 +270,9 @@ namespace Minisat {
          * the conflict graph.
          * 
          * @param l The literal in the conflict graph
+         * @param conflicts the previous total number of conflicts
          */
-        void handleEventLitInConflictGraph(Lit l);
+        void handleEventLitInConflictGraph(Lit l, uint64_t conflicts);
 
         /**
          * @brief Update data structures for branching heuristics when the solver restarts.
@@ -419,11 +421,11 @@ namespace Minisat {
         insertVarOrder(v);
     }
 
-    inline void BranchingHeuristicManager::handleEventPropagated(uint64_t conflicts) {
+    inline void BranchingHeuristicManager::handleEventPropagated(uint64_t conflicts, bool conflicted) {
     #if BRANCHING_HEURISTIC == CHB
-        const double multiplier = confl == CRef_Undef ? reward_multiplier : 1.0;
-        for (int a = action; a < trail.size(); a++) {
-            Var v = var(trail[a]);
+        const double multiplier = conflicted ? reward_multiplier : 1.0;
+        for (int a = action; a < assignmentTrail.nAssigns(); a++) {
+            Var v = var(assignmentTrail[a]);
             const uint64_t age = conflicts - last_conflict[v] + 1;
             const double reward = multiplier / age ;
             const double old_activity = activity[v];
@@ -435,6 +437,8 @@ namespace Minisat {
                     order_heap.increase(v);
             }
         }
+
+        action = assignmentTrail.nAssigns();
     #endif
     }
 
@@ -451,7 +455,7 @@ namespace Minisat {
     #endif
     }
 
-    inline void BranchingHeuristicManager::handleEventLitInConflictGraph(Lit q) {
+    inline void BranchingHeuristicManager::handleEventLitInConflictGraph(Lit q, uint64_t conflicts) {
     #if BRANCHING_HEURISTIC == CHB
         last_conflict[var(q)] = conflicts;
     #elif BRANCHING_HEURISTIC == VSIDS

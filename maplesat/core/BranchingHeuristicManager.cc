@@ -16,6 +16,9 @@ static DoubleOption  opt_step_size         (_cat, "step-size",   "Initial step s
 static DoubleOption  opt_step_size_dec     (_cat, "step-size-dec","Step size decrement",                          0.000001, DoubleRange(0, false, 1, false));
 static DoubleOption  opt_min_step_size     (_cat, "min-step-size","Minimal step size",                            0.06,     DoubleRange(0, false, 1, false));
 #endif
+#if BRANCHING_HEURISTIC == CHB
+static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
+#endif
 
 // Random
 static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq",    "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
@@ -53,6 +56,11 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
     , step_size    (opt_step_size)
     , step_size_dec(opt_step_size_dec)
     , min_step_size(opt_min_step_size)
+#endif
+
+#if BRANCHING_HEURISTIC == CHB
+    , action(0)
+    , reward_multiplier(opt_reward_multiplier)
 #endif
 
     // Random

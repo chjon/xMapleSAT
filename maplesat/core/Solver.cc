@@ -42,9 +42,6 @@ static BoolOption    opt_luby_restart      (_cat, "luby",        "Use the Luby r
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
-#if BRANCHING_HEURISTIC == CHB
-static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
-#endif
 
 
 //=================================================================================================
@@ -81,10 +78,6 @@ Solver::Solver() :
   , clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
 
   , lbd_calls(0)
-#if BRANCHING_HEURISTIC == CHB
-  , action(0)
-  , reward_multiplier(opt_reward_multiplier)
-#endif
 
   , ok                 (true)
 #if ! LBD_BASED_CLAUSE_DELETION
@@ -246,7 +239,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
             Lit q = c[j];
 
             if (!seen[var(q)] && assignmentTrail.level(var(q)) > 0){
-                branchingHeuristicManager.handleEventLitInConflictGraph(q);
+                branchingHeuristicManager.handleEventLitInConflictGraph(q, conflicts);
                 seen[var(q)] = 1;
                 if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
                     pathC++;
@@ -519,7 +512,7 @@ lbool Solver::search(int nof_conflicts)
     for (;;){
         CRef confl = unitPropagator.propagate();
 
-        branchingHeuristicManager.handleEventPropagated(conflicts);
+        branchingHeuristicManager.handleEventPropagated(conflicts, confl == CRef_Undef);
 
         if (confl != CRef_Undef){
             // CONFLICT
@@ -532,9 +525,6 @@ lbool Solver::search(int nof_conflicts)
 
             assignmentTrail.cancelUntil(backtrack_level);
 
-#if BRANCHING_HEURISTIC == CHB
-            action = trail.size();
-#endif
 #if PRIORITIZE_ER
             for (int k = 0; k < learnt_clause.size(); k++)
                 degree[var(learnt_clause[k])]++;
@@ -622,9 +612,6 @@ lbool Solver::search(int nof_conflicts)
 
             // Increase decision level and enqueue 'next'
             assignmentTrail.newDecisionLevel();
-#if BRANCHING_HEURISTIC == CHB
-            action = assignmentTrail.nAssigns();
-#endif
             assignmentTrail.uncheckedEnqueue(next);
         }
     }
