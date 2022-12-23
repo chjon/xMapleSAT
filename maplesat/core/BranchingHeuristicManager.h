@@ -313,7 +313,7 @@ namespace Minisat {
     inline void BranchingHeuristicManager::decayActivityVSIDS() { var_inc *= (1 / var_decay); }
 
     inline void BranchingHeuristicManager::bumpActivityVSIDS(Var v, double mult) {
-        if ( (activity[v] += inc) > 1e100 ) {
+        if ((activity[v] += var_inc) > 1e100) {
     #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
             // Clear extension level activity
             for (int i = 0; i < extensionLevelActivity.size(); i++) {
@@ -340,7 +340,6 @@ namespace Minisat {
         if (order_heap.inHeap(v))
             order_heap.decrease(v);
     #endif
-    }
     }
 #endif
 
@@ -459,7 +458,7 @@ namespace Minisat {
     #if BRANCHING_HEURISTIC == CHB
         last_conflict[var(q)] = conflicts;
     #elif BRANCHING_HEURISTIC == VSIDS
-        branchingHeuristicManager.bumpActivityVSIDS(var(q));
+        bumpActivityVSIDS(var(q), var_inc);
     #endif
     #ifdef POLARITY_VOTING
         // Count votes for the polarity that led to the conflict

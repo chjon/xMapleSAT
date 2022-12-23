@@ -545,7 +545,7 @@ lbool Solver::search(int nof_conflicts)
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
-            varDecayActivity();
+            branchingHeuristicManager.decayActivityVSIDS();
 #endif
 #if ! LBD_BASED_CLAUSE_DELETION
             claDecayActivity();
