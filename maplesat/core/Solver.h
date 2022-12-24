@@ -139,29 +139,6 @@ public:
 
 protected:
 
-    // Helper structures:
-    //
-
-    struct VarOrderLt {
-        const vec<double>&  activity;
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        const vec<uint64_t>& order_param;
-        bool greater_than;
-        bool operator () (Var x, Var y) const {
-            if (order_param[x] != order_param[y]) return greater_than ^ (order_param[x] < order_param[y]);
-            return activity[x] > activity[y];
-        }
-        VarOrderLt(const vec<double>&  act, const vec<uint64_t>& ord, bool gt = false)
-            : activity(act)
-            , order_param(ord)
-            , greater_than(gt)
-        { }
-#else
-        bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
-        VarOrderLt(const vec<double>&  act) : activity(act) { }
-#endif
-    };
-
     // Solver state:
     //
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
