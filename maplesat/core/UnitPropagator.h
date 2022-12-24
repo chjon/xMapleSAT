@@ -67,13 +67,25 @@ namespace Minisat {
         lbool bcpValue  (Var x) const; // The queued value of a variable.
         lbool bcpValue  (Lit p) const; // The queued value of a literal.
 
+        //////////////////////
+        // HELPER FUNCTIONS //
+        //////////////////////
+
+        /**
+         * @brief Add a literal to the propagation queue
+         * 
+         * @param p the literal to enqueue
+         * @param CRef the reason for propagating p
+         */
+        void enqueue(Lit p, CRef from);
+
         /**
          * @brief Perform all propagations for a single literal
          * 
          * @param p the literal to propagate
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
          */
-        CRef propagate_single(Lit p);
+        CRef propagateSingle(Lit p);
 
         /**
          * @brief Relocate watcher CRefs to new ClauseAllocator

@@ -202,62 +202,95 @@ namespace Minisat {
         // return confl;
     // }
 
-    CRef UnitPropagator::propagate() {
-        CRef    confl     = CRef_Undef;
-        int     num_props = 0;
-        watches.cleanAll();
-
-        while (qhead < assignmentTrail.nAssigns()){
-            Lit            p   = assignmentTrail[qhead++];     // 'p' is enqueued fact to propagate.
-            vec<Watcher>&  ws  = watches[p];
-            Watcher        *i, *j, *end;
-            num_props++;
-
-            for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
-                // Try to avoid inspecting the clause:
-                Lit blocker = i->blocker;
-                if (variableDatabase.value(blocker) == l_True){
-                    *j++ = *i++; continue; }
-
-                // Make sure the false literal is data[1]:
-                CRef     cr        = i->cref;
-                Clause&  c         = ca[cr];
-                Lit      false_lit = ~p;
-                if (c[0] == false_lit)
-                    c[0] = c[1], c[1] = false_lit;
-                assert(c[1] == false_lit);
-                i++;
-
-                // If 0th watch is true, then clause is already satisfied.
-                Lit     first = c[0];
-                Watcher w     = Watcher(cr, first);
-                if (first != blocker && variableDatabase.value(first) == l_True){
-                    *j++ = w; continue; }
-
-                // Look for new watch:
-                for (int k = 2; k < c.size(); k++)
-                    if (variableDatabase.value(c[k]) != l_False) {
-                        c[1] = c[k]; c[k] = false_lit;
-                        watches[~c[1]].push(w);
-                        goto NextClause;
-                    }
-
-                // Did not find watch -- clause is unit under assignment:
-                *j++ = w;
-                if (variableDatabase.value(first) == l_False) {
-                    confl = cr;
-                    qhead = assignmentTrail.nAssigns();
-                    // Copy the remaining watches:
-                    while (i < end)
-                        *j++ = *i++;
-                } else {
-                    assignmentTrail.uncheckedEnqueue(first, cr);
-                }
-
-            NextClause:;
-            }
-            ws.shrink(i - j);
+    inline void UnitPropagator::enqueue(Lit p, CRef from) {
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        // Queue literal for propagation
+        if (bcpValue(first) == l_Undef) {
+            bcp_assigns[var(first)] = lbool(!sign(first));
+            solver->vardata[var(first)].reason = cr;
+            bcp_order_heap.insert(first.x);
         }
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+        bcp_order_heap.insert(first.x);
+        assignmentTrail.uncheckedEnqueue(p, from);
+    #else
+        assignmentTrail.uncheckedEnqueue(p, from);
+    #endif
+    }
+
+    inline CRef UnitPropagator::propagateSingle(Lit p) {
+        CRef confl = CRef_Undef;
+
+        // Iterate through the watches for p, using pointers instead of array indices for speed
+        vec<Watcher>& ws = watches[p];
+        Watcher *i, *j, *end;
+        i = j = (Watcher*)ws;
+        end = i + ws.size();
+        while (i != end) {
+            // Try to avoid inspecting the clause:
+            Lit blocker = i->blocker;
+            if (variableDatabase.value(blocker) == l_True) {
+                *j++ = *i++;
+                continue;
+            }
+
+            // Make sure the false literal is data[1]:
+            CRef    cr = (i++)->cref;
+            Clause& c = ca[cr];
+            if (c[0] == ~p) std::swap(c[0], c[1]);
+            assert(c[1] == ~p);
+
+            // If 0th watch is true, then clause is already satisfied.
+            const Lit first = c[0];
+            Watcher w = Watcher(cr, first);
+            if (first != blocker && variableDatabase.value(first) == l_True) {
+                *j++ = w;
+                continue;
+            }
+
+            // Look for new watch:
+            for (int k = 2; k < c.size(); k++) {
+                if (variableDatabase.value(c[k]) != l_False) {
+                    std::swap(c[1], c[k]);
+                    watches[~c[1]].push(w);
+                    goto NextClause;
+                }
+            }
+
+            // Did not find watch -- clause is unit under assignment:
+            *j++ = w;
+            if (variableDatabase.value(first) == l_False) {
+                // All literals falsified!
+                confl = cr;
+                break;
+            } else {
+                // Propagate literal
+                enqueue(first, cr);
+            }
+
+        NextClause:;
+        }
+
+        // Copy the remaining watches:
+        while (i != end) *j++ = *i++;
+        ws.shrink(i - j);
+        return confl;
+    }
+
+    CRef UnitPropagator::propagate() {
+        // Batch update propagations stat to avoid cost of data non-locality
+        int num_props = 0;
+
+        CRef confl = CRef_Undef;
+        watches.cleanAll();
+        
+        while (qhead < assignmentTrail.nAssigns()) {
+            num_props++;
+            Lit p = assignmentTrail[qhead++]; // 'p' is enqueued fact to propagate.
+            confl = propagateSingle(p);
+            if (confl != CRef_Undef) break;
+        }
+
         propagations += num_props;
         solver->simpDB_props -= num_props;
 
