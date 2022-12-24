@@ -73,11 +73,13 @@ namespace Minisat {
         // MEMBER VARIABLES //
         //////////////////////
 
-        int qhead = 0;
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+        int qhead;
         vec<Lit>& queue;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        int qhead;
+        vec<Lit>& queue;
         Heap< LitOrderLt<double> > order_heap;
         vec<lbool> soft_assigns;
         vec<CRef>  reasons;
@@ -117,14 +119,26 @@ namespace Minisat {
         bool enqueue(Lit p, CRef from = CRef_Undef);
 
         /**
-         * @brief Set the head of the propagation queue as an index into the solver trail. Used for backtracking.
+         * @brief Add a set of literals to the propagation queue
          * 
-         * @param i The new head of the propagation queue as an index into the solver trail.
+         * @param trail the current assignment trail
+         * @param levelHead the start index from which to add literals to the queue
+         * 
+         * @note literals are added from @code{trail[levelHead]} up to @code{trail.last()}
          */
-        void setQueueHead(int i);
+        void batchEnqueue(vec<Lit>& trail, int levelHead);
 
+        /**
+         * @brief Get the next literal for propagation
+         * 
+         * @return the literal to propagate
+         */
         Lit getNext();
 
+        /**
+         * @brief Clear the propagation queue
+         * 
+         */
         void clear();
     };
 
@@ -169,10 +183,32 @@ namespace Minisat {
         return true;
     }
 
-    inline void PropagationQueue::setQueueHead(int i) { qhead = i; }
+    inline void PropagationQueue::batchEnqueue(vec<Lit>& trail, int levelHead) {
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+        qhead = levelHead;
+
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        qhead = levelHead;
+        
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+        Lit* i, end;
+        i = static_cast<Lit*>(trail);
+        end = i + trail.size();
+        while (i != end) {
+            order_heap.insert((i++)->x);
+        }
+    #endif
+    }
 
     inline Lit PropagationQueue::getNext() {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+        return qhead == queue.size() ? lit_Undef : queue[qhead++];
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        // Propagate along the trail first
+        if (qhead < queue.size()) return queue[qhead++];
+
+        // Propagate according to priority queue afterward
+        qhead++;
         if (!order_heap.empty()) {
             Lit p = Lit(order_heap.removeMin());
 
@@ -180,19 +216,20 @@ namespace Minisat {
             assignmentTrail.uncheckedEnqueue(p, from);
             return p;
         }
+        return lit_Undef;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        if (!order_heap.empty())
-            return Lit(order_heap.removeMin());
+        // Always propagate according to priority queue
+        return order_heap.empty() ? lit_Undef : Lit(order_heap.removeMin());
     #endif
-
-        return qhead == queue.size() ? lit_Undef : queue[qhead++];
     }
 
     inline void PropagationQueue::clear() {
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         qhead = queue.size();
 
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        qhead = queue.size();
         for (int k = 0; k < order_heap.size(); k++)
             soft_assigns[order_heap[k] >> 1] = l_Undef;
         order_heap.clear();

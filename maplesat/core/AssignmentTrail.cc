@@ -29,15 +29,18 @@ void AssignmentTrail::relocAll(ClauseAllocator& to) {
 //
 void AssignmentTrail::cancelUntil(int level) {
     if (decisionLevel() > level){
-        for (int c = trail.size()-1; c >= trail_lim[level]; c--){
+        for (int c = trail.size() - 1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
             variableDatabase.setVar(x, l_Undef);
             solver->branchingHeuristicManager.handleEventLitUnassigned(trail[c], solver->conflicts, c > trail_lim.last());
         }
 
-        solver->propagationQueue.setQueueHead(trail_lim[level]);
+        const int qhead = trail_lim[level];
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
+
+        // Add the assignments at 'level' to the queue
+        solver->propagationQueue.batchEnqueue(trail, qhead);
     }
 }
 
