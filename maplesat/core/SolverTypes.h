@@ -26,15 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define CHB 1
 #define LRB 2
 
-// Define BCP-prioritization mode
-#define BCP_PRIORITY_IMMEDIATE    0 // Immediate propagation
-#define BCP_PRIORITY_DELAYED      1 // Delayed propagation
-#define BCP_PRIORITY_OUT_OF_ORDER 2 // Out-of-order propagation
-
-#ifndef BCP_PRIORITY_MODE
-    #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
-#endif
-
 #ifndef PRIORITIZE_ER
     #define PRIORITIZE_ER false
 #endif

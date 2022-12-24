@@ -30,6 +30,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/VariableDatabase.h"
 #include "core/RandomNumberGenerator.h"
 #include "core/AssignmentTrail.h"
+#include "core/PropagationQueue.h"
 #include "core/UnitPropagator.h"
 #include "core/BranchingHeuristicManager.h"
 
@@ -81,10 +82,6 @@ public:
 
     // Read state:
     //
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    lbool   bcpValue  (Var x) const;       // The queued value of a variable.
-    lbool   bcpValue  (Lit p) const;       // The queued value of a literal.
-#endif
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nClauses   ()      const;       // The current number of original clauses.
@@ -221,6 +218,7 @@ public:
     VariableDatabase          variableDatabase;
     RandomNumberGenerator     randomNumberGenerator;
     AssignmentTrail           assignmentTrail;
+    PropagationQueue          propagationQueue;
     UnitPropagator            unitPropagator;
     BranchingHeuristicManager branchingHeuristicManager;
 
@@ -256,10 +254,6 @@ inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(
 inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
 inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
 
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-inline lbool    Solver::bcpValue      (Var x) const   { return bcp_assigns[x]; }
-inline lbool    Solver::bcpValue      (Lit p) const   { return bcp_assigns[var(p)] ^ sign(p); }
-#endif
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nClauses      ()      const   { return clauses.size(); }

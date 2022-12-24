@@ -35,6 +35,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
     class Solver;
+    class PropagationQueue;
 
     class AssignmentTrail {
     protected:
@@ -85,6 +86,8 @@ namespace Minisat {
         VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         Solver* solver;
+
+        friend PropagationQueue;
     };
 
     inline void AssignmentTrail::newVar(Var v) {

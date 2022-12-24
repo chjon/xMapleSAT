@@ -10,9 +10,10 @@ AssignmentTrail::AssignmentTrail(Solver* s)
 {}
 
 void AssignmentTrail::uncheckedEnqueue(Lit p, CRef from) {
+    const Var v = var(p);
     solver->branchingHeuristicManager.handleEventLitAssigned(p, solver->conflicts);
-    variableDatabase.setVar(var(p), lbool(!sign(p)));
-    vardata[var(p)] = mkVarData(from, decisionLevel());
+    variableDatabase.setVar(v, lbool(!sign(p)));
+    vardata[v] = mkVarData(from, decisionLevel());
     trail.push_(p);
 }
 
@@ -34,7 +35,7 @@ void AssignmentTrail::cancelUntil(int level) {
             solver->branchingHeuristicManager.handleEventLitUnassigned(trail[c], solver->conflicts, c > trail_lim.last());
         }
 
-        solver->unitPropagator.setQueueHead(trail_lim[level]);
+        solver->propagationQueue.setQueueHead(trail_lim[level]);
         trail.shrink(trail.size() - trail_lim[level]);
         trail_lim.shrink(trail_lim.size() - level);
     }

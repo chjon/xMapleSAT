@@ -96,6 +96,7 @@ Solver::Solver() :
 
   // Solver components
   , assignmentTrail(this)
+  , propagationQueue(this)
   , unitPropagator(this)
   , branchingHeuristicManager(this)
 {}
@@ -116,6 +117,7 @@ Solver::~Solver()
 Var Solver::newVar(bool sign, bool dvar) {
     int v = variableDatabase .newVar();
     assignmentTrail          .newVar(v);
+    propagationQueue         .newVar(v);
     unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
     seen     .push(0);
@@ -147,7 +149,7 @@ bool Solver::addClause_(vec<Lit>& ps)
     if (ps.size() == 0)
         return ok = false;
     else if (ps.size() == 1){
-        assignmentTrail.uncheckedEnqueue(ps[0]);
+        propagationQueue.enqueue(ps[0]);
         return ok = (unitPropagator.propagate() == CRef_Undef);
     }else{
         CRef cr = ca.alloc(ps, false);
@@ -529,7 +531,7 @@ lbool Solver::search(int nof_conflicts)
                 degree[var(learnt_clause[k])]++;
 #endif
             if (learnt_clause.size() == 1){
-                assignmentTrail.uncheckedEnqueue(learnt_clause[0]);
+                propagationQueue.enqueue(learnt_clause[0]);
             }else{
                 CRef cr = ca.alloc(learnt_clause, true);
                 learnts.push(cr);
@@ -540,7 +542,7 @@ lbool Solver::search(int nof_conflicts)
 #else
                 claBumpActivity(ca[cr]);
 #endif
-                assignmentTrail.uncheckedEnqueue(learnt_clause[0], cr);
+                propagationQueue.enqueue(learnt_clause[0], cr);
             }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -611,7 +613,7 @@ lbool Solver::search(int nof_conflicts)
 
             // Increase decision level and enqueue 'next'
             assignmentTrail.newDecisionLevel();
-            assignmentTrail.uncheckedEnqueue(next);
+            propagationQueue.enqueue(next);
         }
     }
 }

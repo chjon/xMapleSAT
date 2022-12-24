@@ -30,9 +30,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_UnitPropagator_h
 #define Minisat_UnitPropagator_h
 
-#include <core/SolverTypes.h>
-#include <core/VariableDatabase.h>
-#include <core/AssignmentTrail.h>
+#include "core/SolverTypes.h"
+#include "core/VariableDatabase.h"
+#include "core/AssignmentTrail.h"
+#include "core/PropagationQueue.h"
 #include <mtl/Heap.h>
 #include <map>
 
@@ -49,35 +50,11 @@ namespace Minisat {
      * @brief This class handles literal propagation.
      */
     class UnitPropagator {
-    protected:
-
-        // Comparator for BCP priority queue
-        template<class T>
-        struct LitOrderLt {
-            const vec<T>&  activity;
-            bool operator () (Var x, Var y) const {
-                x >>= 1; y >>= 1;
-                return activity[x] > activity[y];
-            }
-            LitOrderLt(const vec<T>&  act) : activity(act) { }
-        };
-
     private:
-
-        lbool bcpValue  (Var x) const; // The queued value of a variable.
-        lbool bcpValue  (Lit p) const; // The queued value of a literal.
 
         //////////////////////
         // HELPER FUNCTIONS //
         //////////////////////
-
-        /**
-         * @brief Add a literal to the propagation queue
-         * 
-         * @param p the literal to enqueue
-         * @param CRef the reason for propagating p
-         */
-        void enqueue(Lit p, CRef from);
 
         /**
          * @brief Perform all propagations for a single literal
@@ -102,13 +79,6 @@ namespace Minisat {
         // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
         OccLists<Lit, vec<Watcher>, WatcherDeleted> watches;
 
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-        Heap< LitOrderLt<double> > bcp_order_heap; // BCP priority queue
-        vec<lbool> bcp_assigns;
-#endif
-
-        int qhead; // Head of propagation queue (as index into the trail -- no more explicit propagation queue in MiniSat).
-
         //////////////////////////
         // RESOURCE CONSTRAINTS //
         //////////////////////////
@@ -129,6 +99,7 @@ namespace Minisat {
 
         VariableDatabase& variableDatabase;
         AssignmentTrail& assignmentTrail;
+        PropagationQueue& propagationQueue;
         ClauseAllocator& ca;
         Solver* solver;
 
@@ -197,32 +168,11 @@ namespace Minisat {
         void relocAll(ClauseAllocator& to);
 
         /**
-         * @brief Set the head of the propagation queue as an index into the solver trail. Used for backtracking.
-         * 
-         * @param i The new head of the propagation queue as an index into the solver trail.
-         */
-        void setQueueHead(int i);
-
-        /**
          * @brief Propagate all enqueued facts.
          * 
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef. 
          */
         CRef propagate();
-
-        /**
-         * @brief Decrease the BCP priority of a given variable
-         * 
-         * @param v the variable to prioritize
-         */
-        void decreasePriority(Var v);
-
-        /**
-         * @brief Increase the BCP priority of a given variable
-         * 
-         * @param v the variable to prioritize
-         */
-        void increasePriority(Var v);
 
         /**
          * @brief Get list of non-binary clause watchers for a given literal
@@ -274,20 +224,9 @@ namespace Minisat {
         bool withinBudget() const;
     };
 
-    // Explicitly instantiate required templates
-    template class UnitPropagator::LitOrderLt<double>;
-
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    inline lbool UnitPropagator::bcpValue(Var x) const { return bcp_assigns[x]; }
-    inline lbool UnitPropagator::bcpValue(Lit p) const { return bcp_assigns[var(p)] ^ sign(p); }
-#endif
-
     inline void UnitPropagator::newVar(Var v) {
         watches.init(mkLit(v, false));
         watches.init(mkLit(v, true ));
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        bcp_assigns.push(l_Undef);
-#endif
     }
 
     inline void UnitPropagator::attachClause(const Clause& c, CRef cr) {
@@ -314,26 +253,6 @@ namespace Minisat {
 
     inline void UnitPropagator::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
         for (int i = 0; i < ws.size(); i++) ca.reloc(ws[i].cref, to);
-    }
-
-    inline void UnitPropagator::setQueueHead(int i) { qhead = i; }
-
-    inline void UnitPropagator::decreasePriority(Var v) {
-        // Note: this uses the increase() method because we're using a min-heap as a max-heap
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-        Lit l = mkLit(v);
-        if (bcp_order_heap.inHeap(( l).x)) bcp_order_heap.increase(( l).x);
-        if (bcp_order_heap.inHeap((~l).x)) bcp_order_heap.increase((~l).x);
-#endif
-    }
-
-    inline void UnitPropagator::increasePriority(Var v) {
-        // Note: this uses the decrease() method because we're using a min-heap as a max-heap
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-        Lit l = mkLit(v);
-        if (bcp_order_heap.inHeap(( l).x)) bcp_order_heap.decrease(( l).x);
-        if (bcp_order_heap.inHeap((~l).x)) bcp_order_heap.decrease((~l).x);
-#endif
     }
 
     inline const vec<Watcher>& UnitPropagator::getWatchers(Lit l) const { return watches    [l]; }
