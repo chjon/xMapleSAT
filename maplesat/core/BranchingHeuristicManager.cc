@@ -181,7 +181,7 @@ void BranchingHeuristicManager::rebuildPriorityQueue() {
 #endif
 }
 
-void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause, const int out_btlevel) {
+void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause) {
 #if ALMOST_CONFLICT
     // Skip the asserting literal
     solver->seen[var(learnt_clause[0])] = true;

@@ -57,6 +57,105 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
     return true;
 }
 
+inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClause) {
+    Lit p = lit_Undef;
+
+    // Generate conflict clause by backtracking until the first UIP:
+    //
+    learntClause.push(); // (leave room for the asserting literal)
+    int index = assignmentTrail.nAssigns() - 1;
+
+    // Iterate through every clause that participates in the conflict graph
+    int pathC = 0;
+    do {
+        assert(confl != CRef_Undef); // (otherwise should be UIP)
+        Clause& c = ca[confl];
+
+#if LBD_BASED_CLAUSE_DELETION
+        if (c.learnt() && c.activity() > 2)
+            c.activity() = solver->lbd(c);
+#else
+        if (c.learnt())
+            claBumpActivity(c);
+#endif
+
+        // Iterate through every literal that participates in the conflict graph
+        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
+            Lit q = c[j];
+            if (solver->seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+            // Mark variable as seen
+            branchingHeuristicManager.handleEventLitInConflictGraph(q, solver->conflicts);
+            solver->seen[var(q)] = 1;
+
+            // Increment the number of paths if the variable is assigned after the decision level that resulted in conflict
+            if (assignmentTrail.level(var(q)) == assignmentTrail.decisionLevel())
+                pathC++;
+            // Add literals from earlier decision levels to the conflict clause
+            else
+                learntClause.push(q);
+        }
+        
+        // Select next clause to look at:
+        while (!solver->seen[var(assignmentTrail[index--])]);
+        p     = assignmentTrail[index+1];
+        confl = assignmentTrail.reason(var(p));
+        solver->seen[var(p)] = 0;
+        pathC--;
+
+    } while (pathC > 0);
+
+    // Add first UIP literal at index 0
+    learntClause[0] = ~p;
+}
+
+inline void ConflictAnalyzer::simplifyClause(vec<Lit>& learntClause) {
+    int i, j;
+    if (ccmin_mode == 2) {
+        uint32_t abstract_level = 0;
+        for (i = 1; i < learntClause.size(); i++)
+            abstract_level |= assignmentTrail.abstractLevel(var(learntClause[i])); // (maintain an abstraction of levels involved in conflict)
+
+        for (i = j = 1; i < learntClause.size(); i++)
+            if (assignmentTrail.reason(var(learntClause[i])) == CRef_Undef || !litRedundant(learntClause[i], abstract_level))
+                learntClause[j++] = learntClause[i];
+        
+    } else if (ccmin_mode == 1) {
+        for (i = j = 1; i < learntClause.size(); i++){
+            Var x = var(learntClause[i]);
+
+            if (assignmentTrail.reason(x) == CRef_Undef) {
+                learntClause[j++] = learntClause[i];
+            } else {
+                Clause& c = ca[assignmentTrail.reason(var(learntClause[i]))];
+                for (int k = 1; k < c.size(); k++)
+                    if (!solver->seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0){
+                        learntClause[j++] = learntClause[i];
+                        break; }
+            }
+        }
+    } else {
+        i = j = learntClause.size();
+    }
+
+    learntClause.shrink(i - j);
+}
+
+inline void ConflictAnalyzer::enforceWatcherInvariant(vec<Lit>& learntClause) {
+    // Nothing to do for unit clauses
+    if (learntClause.size() == 1) return;
+
+    // Find the first literal assigned at the next-highest level:
+    int max_i = 1;
+    for (int i = 2; i < learntClause.size(); i++) {
+        if (assignmentTrail.level(var(learntClause[i])) > assignmentTrail.level(var(learntClause[max_i])))
+            max_i = i;
+    }
+
+    // Swap-in this literal at index 1:
+    std::swap(learntClause[1], learntClause[max_i]);
+}
+
 /*_________________________________________________________________________________________________
 |
 |  analyze : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
@@ -75,101 +174,23 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
 |  
 |________________________________________________________________________________________________@*/
 void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
-    int pathC = 0;
-    Lit p     = lit_Undef;
-
     // Generate conflict clause:
-    //
-    out_learnt.push();      // (leave room for the asserting literal)
-    int index = assignmentTrail.nAssigns() - 1;
-
-    do{
-        assert(confl != CRef_Undef); // (otherwise should be UIP)
-        Clause& c = ca[confl];
-
-#if LBD_BASED_CLAUSE_DELETION
-        if (c.learnt() && c.activity() > 2)
-            c.activity() = solver->lbd(c);
-#else
-        if (c.learnt())
-            claBumpActivity(c);
-#endif
-
-        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
-            Lit q = c[j];
-
-            if (!solver->seen[var(q)] && assignmentTrail.level(var(q)) > 0){
-                branchingHeuristicManager.handleEventLitInConflictGraph(q, solver->conflicts);
-                solver->seen[var(q)] = 1;
-                if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
-                    pathC++;
-                else
-                    out_learnt.push(q);
-            }
-        }
-        
-        // Select next clause to look at:
-        while (!solver->seen[var(assignmentTrail[index--])]);
-        p     = assignmentTrail[index+1];
-        confl = assignmentTrail.reason(var(p));
-        solver->seen[var(p)] = 0;
-        pathC--;
-
-    } while (pathC > 0);
-    out_learnt[0] = ~p;
+    getFirstUIPClause(confl, out_learnt);
+    max_literals += out_learnt.size();
 
     // Simplify conflict clause:
-    //
-    int i, j;
     out_learnt.copyTo(solver->analyze_toclear);
-    if (ccmin_mode == 2){
-        uint32_t abstract_level = 0;
-        for (i = 1; i < out_learnt.size(); i++)
-            abstract_level |= assignmentTrail.abstractLevel(var(out_learnt[i])); // (maintain an abstraction of levels involved in conflict)
-
-        for (i = j = 1; i < out_learnt.size(); i++)
-            if (assignmentTrail.reason(var(out_learnt[i])) == CRef_Undef || !litRedundant(out_learnt[i], abstract_level))
-                out_learnt[j++] = out_learnt[i];
-        
-    }else if (ccmin_mode == 1){
-        for (i = j = 1; i < out_learnt.size(); i++){
-            Var x = var(out_learnt[i]);
-
-            if (assignmentTrail.reason(x) == CRef_Undef)
-                out_learnt[j++] = out_learnt[i];
-            else{
-                Clause& c = ca[assignmentTrail.reason(var(out_learnt[i]))];
-                for (int k = 1; k < c.size(); k++)
-                    if (!solver->seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0){
-                        out_learnt[j++] = out_learnt[i];
-                        break; }
-            }
-        }
-    }else
-        i = j = out_learnt.size();
-
-    max_literals += out_learnt.size();
-    out_learnt.shrink(i - j);
+    simplifyClause(out_learnt);
     tot_literals += out_learnt.size();
 
-    // Find correct backtrack level:
-    //
-    if (out_learnt.size() == 1)
-        out_btlevel = 0;
-    else{
-        int max_i = 1;
-        // Find the first literal assigned at the next-highest level:
-        for (int i = 2; i < out_learnt.size(); i++)
-            if (assignmentTrail.level(var(out_learnt[i])) > assignmentTrail.level(var(out_learnt[max_i])))
-                max_i = i;
-        // Swap-in this literal at index 1:
-        Lit p             = out_learnt[max_i];
-        out_learnt[max_i] = out_learnt[1];
-        out_learnt[1]     = p;
-        out_btlevel       = assignmentTrail.level(var(p));
-    }
+    // Enforce watcher invariant
+    enforceWatcherInvariant(out_learnt);
 
-    branchingHeuristicManager.handleEventLearnedClause(out_learnt, out_btlevel);
+    // Find backtrack level:
+    out_btlevel = (out_learnt.size() == 1) ? 0 : assignmentTrail.level(var(out_learnt[1]));
+
+    // Update data structures for branching heuristics
+    branchingHeuristicManager.handleEventLearnedClause(out_learnt);
 
     // Clear 'seen[]'
     for (int j = 0; j < solver->analyze_toclear.size(); j++)

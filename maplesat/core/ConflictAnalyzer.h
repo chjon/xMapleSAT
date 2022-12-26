@@ -74,6 +74,29 @@ protected:
         // HELPER FUNCTIONS //
         //////////////////////
 
+        /**
+         * @brief Learn a clause according to the first UIP learning scheme.
+         * @param confl the conflict clause
+         * @param learntClause the output learnt clause. Assumed to be empty initially.
+         */
+        void getFirstUIPClause(CRef confl, vec<Lit>& learntClause);
+
+        /**
+         * @brief Simplify a learnt clause
+         * 
+         * @param learntClause the learnt clause to modify.
+         */
+        void simplifyClause(vec<Lit>& learntClause);
+        
+        /**
+         * @brief Enforce the watcher invariant for a learnt clause. Assumes that the variable with
+         * the highest decision level is at index 0. Moves the variable with the next-highest
+         * decision level to index 1.
+         * 
+         * @param learntClause the learnt clause to modify.
+         */
+        void enforceWatcherInvariant(vec<Lit>& learntClause);
+
         bool litRedundant(Lit p, uint32_t abstract_levels); // (helper method for 'analyze()')
 
     public:

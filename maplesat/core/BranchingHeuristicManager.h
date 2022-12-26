@@ -319,9 +319,8 @@ namespace Minisat {
          * @brief Update data structures for branching heuristics after learning a clause
          * 
          * @param out_learnt  the learnt clause
-         * @param out_btlevel the backtrack level for the learnt clause
          */
-        void handleEventLearnedClause(const vec<Lit>& out_learnt, const int out_btlevel);
+        void handleEventLearnedClause(const vec<Lit>& out_learnt);
 
         ///////////////
         // ACCESSORS //
