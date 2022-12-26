@@ -82,27 +82,32 @@ namespace Minisat {
     #ifdef EXTLVL_ACTIVITY
         Multiheap<VarOrderLt> order_heap;
     #else
-        Heap<VarOrderLt>    order_heap_extlvl;       // A priority queue of variables ordered with respect to the extension level.
-        Heap<VarOrderLt>    order_heap_degree;       // A priority queue of variables ordered with respect to the variable degree.
+        // A priority queue of variables ordered with respect to the extension level.
+        Heap<VarOrderLt> order_heap_extlvl;
+        
+        // A priority queue of variables ordered with respect to the variable degree.
+        Heap<VarOrderLt> order_heap_degree;
     #endif
     #else
-        Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
+        // A priority queue of variables ordered with respect to the variable activity.
+        Heap<VarOrderLt> order_heap;
     #endif
 
-        vec<char> decision; // Declares whether a variable is eligible for selection in the decision heuristic.
+        // Declares whether a variable is eligible for selection in the decision heuristic.
+        vec<char> decision;
         
         //////////////////////////
         // Heuristic configuration
 
-        // VSIDS
 #if BRANCHING_HEURISTIC == VSIDS
-        double var_inc; // Amount to bump next variable with.
-        double var_decay;
+        // VSIDS
+        double var_inc;        // Amount by which to bump variable activity
+        double var_decay;      // Amount by which to decay variable activities
         vec<Lit> conflictLits; // Literals that participate in the conflict graph
 #endif
 
-        // CHB
 #if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
+        // CHB
         double step_size;
         double step_size_dec;
         double min_step_size;
@@ -134,15 +139,19 @@ namespace Minisat {
     #if PRIORITIZE_ER
         // Number of times a variable occurs in a clause
         vec<uint64_t> degree;
-        // Map from variables to their extension level
+
+        // The extension level of each variable
         vec<uint64_t> extensionLevel;
 
     #ifdef EXTLVL_ACTIVITY
-        vec<double> extensionLevelActivity; // The activity of each extension level
+        // The activity of each extension level
+        vec<double> extensionLevelActivity;
     #endif
     #ifdef POLARITY_VOTING
         vec<unsigned int> polarity_count;
-        vec<double> group_polarity;   // The preferred polarity of each group.
+        
+        // The preferred polarity of each group.
+        vec<double> group_polarity;
     #endif
     #endif
 
@@ -183,7 +192,7 @@ namespace Minisat {
          * @brief Destroy the BranchingHeuristicManager object
          * 
          */
-        ~BranchingHeuristicManager();
+        ~BranchingHeuristicManager() = default;
 
         /**
          * @brief Set up internal data structures for a new variable
@@ -192,13 +201,6 @@ namespace Minisat {
          * @note Assumes that @code{v} has not already been registered
          */
         void newVar(Var v, bool sign, bool dvar);
-
-        /**
-         * @brief Insert a variable in the decision order priority queue.
-         * 
-         * @param x the variable to insert
-         */
-        void insertVarOrder(Var x);
 
         /**
          * @brief Return the next decision variable.
@@ -211,7 +213,7 @@ namespace Minisat {
          * @brief Rebuild the priority queue from scratch
          * 
          */
-        void rebuildOrderHeap();
+        void rebuildPriorityQueue();
 
         ////////////////
         // HEURISTICS //
@@ -220,18 +222,50 @@ namespace Minisat {
 #if BRANCHING_HEURISTIC == VSIDS
         // VSIDS
 
-        void decayActivityVSIDS();                   // Decay all variables with the specified factor. Implemented by increasing the 'bump' value instead.
-        void bumpActivityVSIDS (Var v, double mult); // Increase a variable with the current 'bump' value.
+        /**
+         * @brief Decay all variables with the specified factor. 
+         * 
+         * @note Implemented by increasing the 'bump' value instead.
+         */
+        void decayActivityVSIDS(void);
+
+        /**
+         * @brief Increase a variable with the current 'bump' value.
+         * 
+         * @param v The variable to bump
+         */
+        void bumpActivityVSIDS (Var v);
 #endif
 
         // Phase saving
 
-        void setPolarity   (Var v, bool b); // Declare which polarity the decision heuristic should use for a variable. Requires mode 'polarity_user'.
-        void setDecisionVar(Var v, bool b); // Declare if a variable should be eligible for selection in the decision heuristic.
+        /**
+         * @brief Declare which polarity the decision heuristic should use for a variable.
+         * Requires mode 'polarity_user'.
+         * 
+         * @param v The variable to set
+         * @param b The default polarity for v
+         */
+        void setPolarity   (Var v, bool b);
+
+        /**
+         * @brief Declare whether a variable should be eligible for selection in the decision heuristic.
+         * 
+         * @param v The variable to set
+         * @param b true iff v is a decision variable
+         */
+        void setDecisionVar(Var v, bool b); 
 
         /////////////////////
         // EVENT LISTENERS //
         /////////////////////
+
+        /**
+         * @brief Update data structures for branching heuristics upon receiving a new input clause
+         * 
+         * @param ps The literal that was assigned
+         */
+        void handleEventInputClause(const vec<Lit>& ps);
 
         /**
          * @brief Update data structures for branching heuristics upon variable assignment.
@@ -293,14 +327,29 @@ namespace Minisat {
         // ACCESSORS //
         ///////////////
 
+        /**
+         * @brief Get the VSIDS activity array
+         * 
+         * @return the VSIDS activity array 
+         */
         const vec<double>& getActivityVSIDS() const;
 
     private:
-        /////////////////////////////////////
-        // HELPER FUNCTIONS FOR HEURISTICS //
-        /////////////////////////////////////
+        //////////////////////
+        // HELPER FUNCTIONS //
+        //////////////////////
 
+        /**
+         * @brief Insert a variable in the decision order priority queue.
+         * 
+         * @param x the variable to insert
+         */
+        void insertVarOrder(Var x);
     };
+
+    ////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE FUNCTIONS //
+    ////////////////////////////////////////
 
     inline void BranchingHeuristicManager::newVar(Var v, bool sign, bool dvar) {
         // VSIDS
@@ -315,6 +364,9 @@ namespace Minisat {
     #if ANTI_EXPLORATION
         canceled.push(0);
     #endif
+    #if BRANCHING_HEURISTIC == CHB
+        last_conflict.push(0);
+    #endif
 
         // Phase saving
         polarity.push(sign);
@@ -324,11 +376,9 @@ namespace Minisat {
         setDecisionVar(v, dvar);
 
     #if PRIORITIZE_ER
+        // Extension level branching
         degree.push(0);
         extensionLevel.push(0);
-    #endif
-    #if BRANCHING_HEURISTIC == CHB
-        last_conflict.push(0);
     #endif
 
         // Statistics
@@ -346,22 +396,24 @@ namespace Minisat {
 #if BRANCHING_HEURISTIC == VSIDS
     inline void BranchingHeuristicManager::decayActivityVSIDS() { var_inc *= (1 / var_decay); }
 
-    inline void BranchingHeuristicManager::bumpActivityVSIDS(Var v, double mult) {
-        if ((activity[v] += var_inc) > 1e100) {
-    #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
+    inline void BranchingHeuristicManager::bumpActivityVSIDS(Var v) {
+        const double RESCALE_THRESHOLD = 1e100;
+
+        if ((activity[v] += var_inc) > RESCALE_THRESHOLD) {
+        #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
             // Clear extension level activity
             for (int i = 0; i < extensionLevelActivity.size(); i++) {
                 extensionLevelActivity[i] = 0;
             }
-    #endif
+        #endif
             // Rescale:
             for (int i = 0; i < variableDatabase.nVars(); i++) {
-                activity[i] *= 1e-100;
-    #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
+                activity[i] /= RESCALE_THRESHOLD;
+        #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
                 extensionLevelActivity[extensionLevel[i]] += activity[i];
-    #endif
+        #endif
             }
-            var_inc *= 1e-100;
+            var_inc /= RESCALE_THRESHOLD;
         }
 
         // Update order_heap with respect to new activity:
@@ -384,6 +436,13 @@ namespace Minisat {
 
         decision[v] = b;
         insertVarOrder(v);
+    }
+
+    inline void BranchingHeuristicManager::handleEventInputClause(const vec<Lit>& ps) {
+    #if PRIORITIZE_ER
+        for (int k = 0; k < ps.size(); k++)
+            degree[var(ps[k])]++;
+    #endif
     }
 
     inline void BranchingHeuristicManager::handleEventLitAssigned(Lit l, uint64_t conflicts) {

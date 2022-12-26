@@ -141,6 +141,8 @@ bool Solver::addClause(vec<Lit>& ps) {
     // Mark solver as inconsistent if the clause is empty
     if (ps.size() == 0) return ok = false;
 
+    branchingHeuristicManager.handleEventInputClause(ps);
+
     // Add variable directly to trail if the clause is unit
     if (ps.size() == 1) {
         assignmentTrail.uncheckedEnqueue(ps[0]);
@@ -149,6 +151,7 @@ bool Solver::addClause(vec<Lit>& ps) {
 
     // Add the clause to the clause database
     clauseDatabase.addInputClause(ps);
+
     return true;
 }
 
@@ -172,8 +175,7 @@ bool Solver::addClause(vec<Lit>& ps) {
 |        rest of literals. There may be others from the same level though.
 |  
 |________________________________________________________________________________________________@*/
-void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
-{
+void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
     int pathC = 0;
     Lit p     = lit_Undef;
 
@@ -268,17 +270,17 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         out_btlevel       = assignmentTrail.level(var(p));
     }
 
-#if ALMOST_CONFLICT
-    seen[var(p)] = true;
-#endif
     branchingHeuristicManager.handleEventLearnedClause(out_learnt, out_btlevel);
+
+    // Clear 'seen[]'
+    for (int j = 0; j < analyze_toclear.size(); j++)
+        seen[var(analyze_toclear[j])] = 0;
 }
 
 
 // Check if 'p' can be removed. 'abstract_levels' is used to abort early if the algorithm is
 // visiting literals at levels that cannot be removed later.
-bool Solver::litRedundant(Lit p, uint32_t abstract_levels)
-{
+bool Solver::litRedundant(Lit p, uint32_t abstract_levels) {
     analyze_stack.clear(); analyze_stack.push(p);
     int top = analyze_toclear.size();
     while (analyze_stack.size() > 0){
@@ -286,18 +288,18 @@ bool Solver::litRedundant(Lit p, uint32_t abstract_levels)
         Clause& c = ca[assignmentTrail.reason(var(analyze_stack.last()))]; analyze_stack.pop();
 
         for (int i = 1; i < c.size(); i++){
-            Lit p  = c[i];
-            if (!seen[var(p)] && assignmentTrail.level(var(p)) > 0){
-                if (assignmentTrail.reason(var(p)) != CRef_Undef && (assignmentTrail.abstractLevel(var(p)) & abstract_levels) != 0){
-                    seen[var(p)] = 1;
-                    analyze_stack.push(p);
-                    analyze_toclear.push(p);
-                }else{
-                    for (int j = top; j < analyze_toclear.size(); j++)
-                        seen[var(analyze_toclear[j])] = 0;
-                    analyze_toclear.shrink(analyze_toclear.size() - top);
-                    return false;
-                }
+            Lit p = c[i];
+            if (seen[var(p)] || assignmentTrail.level(var(p)) == 0) continue;
+
+            if (assignmentTrail.reason(var(p)) != CRef_Undef && (assignmentTrail.abstractLevel(var(p)) & abstract_levels) != 0){
+                seen[var(p)] = 1;
+                analyze_stack.push(p);
+                analyze_toclear.push(p);
+            } else {
+                for (int j = top; j < analyze_toclear.size(); j++)
+                    seen[var(analyze_toclear[j])] = 0;
+                analyze_toclear.shrink(analyze_toclear.size() - top);
+                return false;
             }
         }
     }
@@ -370,7 +372,7 @@ bool Solver::simplify() {
     clauseDatabase.removeSatisfied();
     
     // Add variables back to queue of decision variables
-    branchingHeuristicManager.rebuildOrderHeap();
+    branchingHeuristicManager.rebuildPriorityQueue();
 
     simpDB_assigns = assignmentTrail.nAssigns();
     simpDB_props   = clauseDatabase.clauses_literals + clauseDatabase.learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
@@ -418,10 +420,6 @@ lbool Solver::search(int nof_conflicts) {
             // Backjump
             assignmentTrail.cancelUntil(backtrack_level);
 
-#if PRIORITIZE_ER
-            for (int k = 0; k < learnt_clause.size(); k++)
-                degree[var(learnt_clause[k])]++;
-#endif
             // Add the learnt clause to the clause database
             CRef cr = clauseDatabase.addLearntClause(learnt_clause);
 

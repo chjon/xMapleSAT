@@ -12,23 +12,23 @@ static DoubleOption  opt_var_decay         (_cat, "var-decay",   "The variable a
 
 #if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
 // CHB
-static DoubleOption  opt_step_size         (_cat, "step-size",   "Initial step size",                             0.40,     DoubleRange(0, false, 1, false));
-static DoubleOption  opt_step_size_dec     (_cat, "step-size-dec","Step size decrement",                          0.000001, DoubleRange(0, false, 1, false));
-static DoubleOption  opt_min_step_size     (_cat, "min-step-size","Minimal step size",                            0.06,     DoubleRange(0, false, 1, false));
+static DoubleOption  opt_step_size         (_cat, "step-size",     "Initial step size",   0.40,     DoubleRange(0, false, 1, false));
+static DoubleOption  opt_step_size_dec     (_cat, "step-size-dec", "Step size decrement", 0.000001, DoubleRange(0, false, 1, false));
+static DoubleOption  opt_min_step_size     (_cat, "min-step-size", "Minimal step size",   0.06,     DoubleRange(0, false, 1, false));
 #endif
 #if BRANCHING_HEURISTIC == CHB
 static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward multiplier", 0.9, DoubleRange(0, true, 1, true));
 #endif
 
 // Random
-static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq",    "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
-static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the initial activity", false);
+static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq", "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
+static BoolOption    opt_rnd_init_act      (_cat, "rnd-init", "Randomize the initial activity", false);
 
 // Phase saving
 static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the level of phase saving (0=none, 1=limited, 2=full)", 2, IntRange(0, 2));
 
 // Heuristic selection
-static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
+static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim", "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
 BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
 #if PRIORITIZE_ER
@@ -93,22 +93,20 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
 #endif
 }
 
-BranchingHeuristicManager::~BranchingHeuristicManager() {}
-
 Lit BranchingHeuristicManager::pickBranchLit() {
     decisions++;
     Var next = var_Undef;
 
-    {
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-    Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
-#endif
-
     // Random decision:
-    if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
-        next = order_heap[randomNumberGenerator.irand(order_heap.size())];
-        if (variableDatabase.value(next) == l_Undef && decision[next])
-            rnd_decisions++; }
+    {
+    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
+        Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
+    #endif
+        if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
+            next = order_heap[randomNumberGenerator.irand(order_heap.size())];
+            if (variableDatabase.value(next) == l_Undef && decision[next])
+                rnd_decisions++;
+        }
     }
 
     // Activity based decision:
@@ -159,43 +157,56 @@ Lit BranchingHeuristicManager::pickBranchLit() {
 }
 
 
-void BranchingHeuristicManager::rebuildOrderHeap() {
+void BranchingHeuristicManager::rebuildPriorityQueue() {
+    const int numVars = variableDatabase.nVars();
+
+    // Build the priority queue
 #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     order_heap_extlvl.clear();
     order_heap_degree.clear();
-    for (Var v = 0; v < variableDatabase.nVars(); v++)
-        if (decision[v] && variableDatabase.(v) == l_Undef) {
+    for (Var v = 0; v < numVars; v++) {
+        if (decision[v] && variableDatabase.value(v) == l_Undef) {
             order_heap_degree.insert(v);
             if (extensionLevel[v]) order_heap_extlvl.insert(v);
         }
+    }
 #else
     vec<Var> vs;
-    for (Var v = 0; v < variableDatabase.nVars(); v++)
-        if (decision[v] && variableDatabase.value(v) == l_Undef)
+    for (Var v = 0; v < numVars; v++) {
+        if (decision[v] && variableDatabase.value(v) == l_Undef) {
             vs.push(v);
+        }
+    }
     order_heap.build(vs);
 #endif
 }
 
-void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& out_learnt, const int out_btlevel) {
+void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause, const int out_btlevel) {
 #if ALMOST_CONFLICT
-    for (int i = out_learnt.size() - 1; i >= 0; i--) {
-        Var v = var(out_learnt[i]);
+    // Skip the asserting literal
+    solver->seen[var(learnt_clause[0])] = true;
+
+    // Iterate through every reason clause immediately before the learnt clause
+    for (int i = learnt_clause.size() - 1; i >= 0; i--) {
+        Var v = var(learnt_clause[i]);
         CRef rea = assignmentTrail.reason(v);
         if (rea == CRef_Undef) continue;
-
         Clause& reaC = ca[rea];
-        for (int i = 0; i < reaC.size(); i++) {
-            Lit l = reaC[i];
-            if (!solver->seen[var(l)]) {
-                solver->seen[var(l)] = true;
-                almost_conflicted[var(l)]++;
-                solver->analyze_toclear.push(l);
-            }
+
+        // Iterate through every unique variable in the reason clauses
+        for (int j = 0; j < reaC.size(); j++) {
+            Lit l = reaC[j];
+            if (solver->seen[var(l)]) continue;
+
+            // Increment the 'almost_conflicted' counter
+            almost_conflicted[var(l)]++;
+
+            // Mark the variable as seen
+            solver->seen[var(l)] = true;
+            solver->analyze_toclear.push(l);
         }
     }
 #endif
-    for (int j = 0; j < solver->analyze_toclear.size(); j++) solver->seen[var(solver->analyze_toclear[j])] = 0;    // ('seen[]' is now cleared)
 
 #ifdef POLARITY_VOTING
     // Apply EMA to group polarities
@@ -204,5 +215,10 @@ void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& out_lea
             group_polarity[k] = 0.9 * (group_polarity[k] + polarity_count[k]);
         }
     }
+#endif
+
+#if PRIORITIZE_ER
+    for (int k = 0; k < learnt_clause.size(); k++)
+        degree[var(learnt_clause[k])]++;
 #endif
 }
