@@ -24,63 +24,36 @@ ClauseDatabase::ClauseDatabase(Solver* s)
     , solver(s)
 {}
 
-bool ClauseDatabase::addClause_(vec<Lit>& ps, bool learnt) {
-    assert(assignmentTrail.decisionLevel() == 0);
-    if (!solver->ok) return false;
-
-    // Check if clause is satisfied and remove false/duplicate literals:
-    sort(ps);
-    Lit p; int i, j;
-    for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
-        if (variableDatabase.value(ps[i]) == l_True || ps[i] == ~p)
-            return true;
-        else if (variableDatabase.value(ps[i]) != l_False && ps[i] != p)
-            ps[j++] = p = ps[i];
-    ps.shrink(i - j);
-
-    if (ps.size() == 0)
-        return solver->ok = false;
-    else if (ps.size() == 1) {
-        solver->propagationQueue.enqueue(ps[0]);
-        return solver->ok = (unitPropagator.propagate() == CRef_Undef);
-    } else {
-        CRef cr = ca.alloc(ps, false);
-        unitPropagator.attachClause(cr);
-        
-        if (learnt) {
-            learnts.push(cr);
-            learnts_literals += ps.size();
-        } else {
-            clauses.push(cr);
-            clauses_literals += ps.size();
-        }  
-    }
-
-    return true;
-}
-
-CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
-    if (ps.size() == 1) {
-        return CRef_Undef;
-    } else {
-        CRef cr = ca.alloc(ps, true);
-        learnts.push(cr);
-        unitPropagator.attachClause(cr);
-        learnts_literals += ps.size();
-        return cr;
-    }
-}
-
 void ClauseDatabase::removeClause(CRef cr) {
     Clause& c = ca[cr];
     unitPropagator.detachClause(c, cr);
+
+    // Update stats
     if (c.learnt()) learnts_literals -= c.size();
     else            clauses_literals -= c.size();
 
     // Don't leave pointers to free'd memory!
     assignmentTrail.handleEventClauseDeleted(c);
+
+    // Mark clause as deleted
     c.mark(1); 
     ca.free(cr);
+}
+
+void ClauseDatabase::garbageCollect(void) {
+    // Initialize the next region to a size corresponding to the estimated utilization degree. This
+    // is not precise but should avoid some unnecessary reallocations for the new region:
+    ClauseAllocator to(ca.size() - ca.wasted()); 
+
+    // Reloc all clause references
+    solver->relocAll(to);
+
+    if (solver->verbosity >= 2)
+        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
+            ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
+    
+    // Transfer ownership of memory
+    to.moveTo(ca);
 }
 
 /*_________________________________________________________________________________________________
@@ -131,7 +104,7 @@ void ClauseDatabase::reduceDB() {
             learnts[j++] = learnts[i];
     }
     learnts.shrink(i - j);
-    checkGarbage();
+    checkGarbage(garbage_frac);
 }
 
 void ClauseDatabase::removeSatisfied(vec<CRef>& cs) {
@@ -144,18 +117,6 @@ void ClauseDatabase::removeSatisfied(vec<CRef>& cs) {
             cs[j++] = cs[i];
     }
     cs.shrink(i - j);
-}
-
-void ClauseDatabase::garbageCollect() {
-    // Initialize the next region to a size corresponding to the estimated utilization degree. This
-    // is not precise but should avoid some unnecessary reallocations for the new region:
-    ClauseAllocator to(ca.size() - ca.wasted()); 
-
-    solver->relocAll(to);
-    if (solver->verbosity >= 2)
-        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
-               ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
-    to.moveTo(ca);
 }
 
 //=================================================================================================

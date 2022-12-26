@@ -51,22 +51,30 @@ public:
     // Problem specification:
     //
     Var newVar (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
+    
+    /**
+     * @brief Add a new input clause
+     * 
+     * @param ps the literals of the new clause
+     * @return true iff the solver is in a consistent state after adding the clause
+     */
+    bool addClause(vec<Lit>& ps);
 
     // Solving:
     //
-    bool    simplify     ();                        // Removes already satisfied clauses.
-    bool    solve        (const vec<Lit>& assumps); // Search for a model that respects a given set of assumptions.
-    lbool   solveLimited (const vec<Lit>& assumps); // Search for a model that respects a given set of assumptions (With resource constraints).
-    bool    solve        ();                        // Search without assumptions.
-    bool    solve        (Lit p);                   // Search for a model that respects a single assumption.
-    bool    solve        (Lit p, Lit q);            // Search for a model that respects two assumptions.
-    bool    solve        (Lit p, Lit q, Lit r);     // Search for a model that respects three assumptions.
-    bool    okay         () const;                  // FALSE means solver is in a conflicting state
+    bool  simplify    ();                        // Removes already satisfied clauses.
+    bool  solve       (const vec<Lit>& assumps); // Search for a model that respects a given set of assumptions.
+    lbool solveLimited(const vec<Lit>& assumps); // Search for a model that respects a given set of assumptions (With resource constraints).
+    bool  solve       ();                        // Search without assumptions.
+    bool  solve       (Lit p);                   // Search for a model that respects a single assumption.
+    bool  solve       (Lit p, Lit q);            // Search for a model that respects two assumptions.
+    bool  solve       (Lit p, Lit q, Lit r);     // Search for a model that respects three assumptions.
+    bool  okay        () const;                  // FALSE means solver is in a conflicting state
 
     // Read state:
     //
-    lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
-    lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
+    lbool   modelValue (Var x) const; // The value of a variable in the last model. The last call to solve must have been satisfiable.
+    lbool   modelValue (Lit p) const; // The value of a literal in the last model. The last call to solve must have been satisfiable.
     int     nFreeVars  ()      const;
 
     // Resource contraints:
@@ -78,9 +86,11 @@ public:
 
     // Extra results: (read-only member variable)
     //
-    vec<lbool> model;             // If problem is satisfiable, this vector contains the model (if any).
-    vec<Lit>   conflict;          // If problem is unsatisfiable (possibly under assumptions),
-                                  // this vector represent the final conflict clause expressed in the assumptions.
+    vec<lbool> model;    // If problem is satisfiable, this vector contains the model (if any).
+
+    /// @brief if problem is unsatisfiable (possibly under assumptions), this vector represents the
+    // final conflict clause expressed in the assumptions.
+    vec<Lit> conflict;
 
     // Mode of operation:
     //
@@ -166,11 +176,16 @@ protected:
     void     claBumpActivity  (Clause& c);             // Increase a clause with the current 'bump' value.
 #endif
 
-    void     relocAll         (ClauseAllocator& to);
+    /**
+     * @brief Relocate all clause references
+     * 
+     * @param to the ClauseAllocator to relocate to
+     */
+    void relocAll(ClauseAllocator& to);
 
     // Misc:
     //
-    bool     withinBudget     ()      const;
+    bool withinBudget() const;
 
 public:
     VariableDatabase          variableDatabase;

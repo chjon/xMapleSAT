@@ -34,7 +34,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/VariableDatabase.h"
 #include "core/AssignmentTrail.h"
 #include "core/PropagationQueue.h"
-#include "core/ClauseDatabase.h"
 #include <mtl/Heap.h>
 #include <map>
 
@@ -46,6 +45,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 namespace Minisat {
     // Forward declarations
     class Solver;
+    class ClauseDatabase;
 
     /**
      * @brief This class handles literal propagation.

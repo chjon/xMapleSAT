@@ -33,11 +33,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <stdio.h>
 #include "core/SolverTypes.h"
 #include "core/VariableDatabase.h"
+#include "core/UnitPropagator.h"
 
 namespace Minisat {
     class Solver;
     class AssignmentTrail;
-    class UnitPropagator;
     class BranchingHeuristicManager;
 
     class ClauseDatabase {
@@ -49,8 +49,12 @@ namespace Minisat {
         vec<CRef> clauses; // List of problem clauses.
         vec<CRef> learnts; // List of learnt clauses.
 
-        bool remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
-        double garbage_frac; // The fraction of wasted memory allowed before a garbage collection is triggered.
+        /// @brief Indicates whether possibly inefficient linear scan for satisfied clauses
+        // should be performed in 'simplify'.
+        bool remove_satisfied;
+
+        /// @brief The fraction of wasted memory allowed before a garbage collection is triggered.
+        double garbage_frac;
 
         /////////////////////////
         // TEMPORARY VARIABLES //
@@ -66,6 +70,20 @@ namespace Minisat {
         uint64_t clauses_literals;
         uint64_t learnts_literals;
 
+        /**
+         * @brief Get the current number of original (input) clauses.
+         * 
+         * @return The current number of original (input) clauses.
+         */
+        int nClauses(void) const;
+
+        /**
+         * @brief Get the current number of learnt clauses.
+         * 
+         * @return The current number of learnt clauses.
+         */
+        int nLearnts(void) const;
+
     protected:
         ///////////////////////
         // SOLVER REFERENCES //
@@ -78,12 +96,46 @@ namespace Minisat {
         BranchingHeuristicManager& branchingHeuristicManager;
         Solver* solver;
 
-
         //////////////////////
         // HELPER FUNCTIONS //
         //////////////////////
 
-        void removeClause(CRef cr); // Detach and free a clause.
+        /**
+         * @brief Add a clause to a database
+         * 
+         * @param ps the clause to add
+         * @param db the database to which to add the clause
+         * @param learnt true if @code{ps} is a learnt clause; false otherwise
+         * @return the CRef of the newly added clause; CRef_Undef if the clause is unit
+         */
+        CRef addClause(vec<Lit>& ps, vec<CRef>& db, bool learnt);
+
+        /**
+         * @brief Detach and free a clause
+         * 
+         * @param cr the clause to remove
+         */
+        void removeClause(CRef cr);
+
+        /**
+         * @brief Reallocate clauses to defragment memory
+         * 
+         */
+        void garbageCollect(void);
+
+        /**
+         * @brief Run garbage collection if memory is sufficiently fragmented
+         * 
+         * @param gf the fraction of wasted memory required to trigger garbage collection
+         */
+        void checkGarbage(double gf);
+
+        /**
+         * @brief Remove satisfied clauses from a clause database
+         * 
+         * @param db the database from which to remove satisfied clauses
+         */
+        void removeSatisfied(vec<CRef>& db);
 
     public:
         //////////////////
@@ -97,54 +149,40 @@ namespace Minisat {
         // PUBLIC API //
         ////////////////
 
-        // Adding clauses
-
-        bool addClause (const vec<Lit>& ps);  // Add a clause to the solver. 
-        bool addEmptyClause();                // Add the empty clause, making the solver contradictory.
-        bool addClause (Lit p);               // Add a unit clause to the solver. 
-        bool addClause (Lit p, Lit q);        // Add a binary clause to the solver. 
-        bool addClause (Lit p, Lit q, Lit r); // Add a ternary clause to the solver.
-
         /**
          * @brief Add a clause to the learnt clause database
          * 
          * @param ps the list of literals to add as a clause
-         * @return The CRef of the generated clause; CRef_Undef if ps is a unit clause
+         * @return The CRef of the clause; CRef_Undef if ps is a unit clause
          */
         CRef addLearntClause(vec<Lit>& ps);
 
         /**
-         * @brief Add a clause to the solver without making superflous internal copy.
+         * @brief Add a clause to the input clause database
          * 
-         * @param ps The list of literals to add as a clause. Will be modified.
-         * @param learnt true if the clause is a learnt clause
-         * @return true 
-         * @return false 
+         * @param ps the list of literals to add as a clause (at least two literals)
+         * @return The CRef of the clause
          */
-        bool addClause_(vec<Lit>& ps, bool learnt = false);
+        CRef addInputClause(vec<Lit>& ps);
 
+        /**
+         * @brief Relocate all clauses
+         * 
+         * @param to the ClauseAllocator to relocate to
+         */
         void relocAll(ClauseAllocator& to);
-
-        // Memory managment:
-        //
-        virtual void garbageCollect();
-        void checkGarbage(double gf);
-        void checkGarbage();
-
-        // Statistics
-
-        int nClauses() const; // The current number of original clauses.
-        int nLearnts() const; // The current number of learnt clauses.
-
-        void reduceDB       ();              // Reduce the set of learnt clauses.
 
         /**
          * @brief Remove satisfied clauses from clause database.
          * 
          */
-        void removeSatisfied();
+        void removeSatisfied(void);
 
-        void removeSatisfied(vec<CRef>& cs); // Shrink 'cs' to contain only non-satisfied clauses.
+        /**
+         * @brief Reduce the set of learnt clauses
+         * 
+         */
+        void reduceDB(void);
 
         ////////////
         // OUTPUT //
@@ -165,33 +203,69 @@ namespace Minisat {
     // IMPLEMENTATION OF INLINE METHODS //
     //////////////////////////////////////
 
-    inline bool ClauseDatabase::addClause     (const vec<Lit>& ps)  { ps.copyTo(add_tmp); return addClause_(add_tmp); }
-    inline bool ClauseDatabase::addEmptyClause()                    { add_tmp.clear(); return addClause_(add_tmp); }
-    inline bool ClauseDatabase::addClause     (Lit p)               { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
-    inline bool ClauseDatabase::addClause     (Lit p, Lit q)        { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
-    inline bool ClauseDatabase::addClause     (Lit p, Lit q, Lit r) { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
+    ////////////////
+    // STATISTICS //
+    ////////////////
+
+    inline int ClauseDatabase::nClauses() const { return clauses.size(); }
+    inline int ClauseDatabase::nLearnts() const { return learnts.size(); }
+
+    //////////////////////
+    // HELPER FUNCTIONS //
+    //////////////////////
+
+    inline CRef ClauseDatabase::addClause(vec<Lit>& ps, vec<CRef>& db, bool learnt) {
+        assert(ps.size() > 0);
+
+        // Don't add unit clauses to the database -- they should be added to the trail instead
+        if (ps.size() == 1) return CRef_Undef;
+        
+        // Allocate clause
+        CRef cr = ca.alloc(ps, learnt);
+        unitPropagator.attachClause(cr);
+        db.push(cr);
+
+        // Update stats
+        if (learnt) learnts_literals += ps.size();
+        else        clauses_literals += ps.size();
+
+        return cr;
+    }
+
+    ////////////////
+    // PUBLIC API //
+    ////////////////
+
+    inline CRef ClauseDatabase::addInputClause(vec<Lit>& ps) {
+        assert(ps.size() > 1);
+        return addClause(ps, clauses, false);
+    }
+
+    inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
+        return addClause(ps, learnts, true);
+    }
 
     inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
         for (int i = 0; i < learnts.size(); i++) ca.reloc(learnts[i], to);
         for (int i = 0; i < clauses.size(); i++) ca.reloc(clauses[i], to);
     }
 
-    inline void ClauseDatabase::checkGarbage(void){ return checkGarbage(garbage_frac); }
-    inline void ClauseDatabase::checkGarbage(double gf){
+    inline void ClauseDatabase::checkGarbage(double gf) {
         if (ca.wasted() > ca.size() * gf)
             garbageCollect();
     }
 
-    inline void ClauseDatabase::removeSatisfied() {
+    inline void ClauseDatabase::removeSatisfied(void) {
         // Remove satisfied clauses:
         removeSatisfied(learnts);
         if (remove_satisfied)
             removeSatisfied(clauses);
-        checkGarbage();
+        checkGarbage(garbage_frac);
     }
 
-    inline int ClauseDatabase::nClauses() const { return clauses.size(); }
-    inline int ClauseDatabase::nLearnts() const { return learnts.size(); }
+    ////////////
+    // OUTPUT //
+    ////////////
 
     inline void ClauseDatabase::toDimacs(const char* file){ vec<Lit> as; toDimacs(file, as); }
     inline void ClauseDatabase::toDimacs(const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }

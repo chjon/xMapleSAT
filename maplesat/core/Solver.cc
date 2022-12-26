@@ -21,6 +21,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <math.h>
 
 #include "core/Solver.h"
+#include "mtl/Sort.h"
 
 using namespace Minisat;
 
@@ -118,6 +119,37 @@ Var Solver::newVar(bool sign, bool dvar) {
     seen     .push(0);
     lbd_seen.push(0);
     return v;
+}
+
+bool Solver::addClause(vec<Lit>& ps) {
+    assert(assignmentTrail.decisionLevel() == 0);
+
+    // Only add clause if the solver is in a consistent state
+    if (!ok) return false;
+
+    // Check if clause is satisfied and remove false/duplicate literals
+    sort(ps);
+    Lit p; int i, j;
+    for (i = j = 0, p = lit_Undef; i < ps.size(); i++) {
+        if (variableDatabase.value(ps[i]) == l_True || ps[i] == ~p)
+            return true;
+        else if (variableDatabase.value(ps[i]) != l_False && ps[i] != p)
+            ps[j++] = p = ps[i];
+    }
+    ps.shrink(i - j);
+
+    // Mark solver as inconsistent if the clause is empty
+    if (ps.size() == 0) return ok = false;
+
+    // Add variable directly to trail if the clause is unit
+    if (ps.size() == 1) {
+        assignmentTrail.uncheckedEnqueue(ps[0]);
+        return ok = (unitPropagator.propagate() == CRef_Undef);
+    }
+
+    // Add the clause to the clause database
+    clauseDatabase.addInputClause(ps);
+    return true;
 }
 
 //=================================================================================================
@@ -563,18 +595,13 @@ lbool Solver::solve_() {
 //=================================================================================================
 // Garbage Collection methods:
 
-void Solver::relocAll(ClauseAllocator& to)
-{
+void Solver::relocAll(ClauseAllocator& to) {
     // All watchers:
-    //
-    // for (int i = 0; i < watches.size(); i++)
     unitPropagator.relocAll(to);
 
     // All reasons:
-    //
     assignmentTrail.relocAll(to);
 
     // All clauses:
-    //
     clauseDatabase.relocAll(to);
 }
