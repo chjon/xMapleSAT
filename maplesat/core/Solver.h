@@ -33,6 +33,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/PropagationQueue.h"
 #include "core/UnitPropagator.h"
 #include "core/BranchingHeuristicManager.h"
+#include "core/ClauseDatabase.h"
 
 namespace Minisat {
 
@@ -49,15 +50,7 @@ public:
 
     // Problem specification:
     //
-    Var     newVar    (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
-
-    bool    addClause (const vec<Lit>& ps);                     // Add a clause to the solver. 
-    bool    addEmptyClause();                                   // Add the empty clause, making the solver contradictory.
-    bool    addClause (Lit p);                                  // Add a unit clause to the solver. 
-    bool    addClause (Lit p, Lit q);                           // Add a binary clause to the solver. 
-    bool    addClause (Lit p, Lit q, Lit r);                    // Add a ternary clause to the solver. 
-    bool    addClause_(      vec<Lit>& ps);                     // Add a clause to the solver without making superflous internal copy. Will
-                                                                // change the passed vector 'ps'.
+    Var newVar (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
 
     // Solving:
     //
@@ -70,22 +63,10 @@ public:
     bool    solve        (Lit p, Lit q, Lit r);     // Search for a model that respects three assumptions.
     bool    okay         () const;                  // FALSE means solver is in a conflicting state
 
-    void    toDimacs     (FILE* f, const vec<Lit>& assumps);            // Write CNF to file in DIMACS-format.
-    void    toDimacs     (const char *file, const vec<Lit>& assumps);
-    void    toDimacs     (FILE* f, Clause& c, vec<Var>& map, Var& max);
-
-    // Convenience versions of 'toDimacs()':
-    void    toDimacs     (const char* file);
-    void    toDimacs     (const char* file, Lit p);
-    void    toDimacs     (const char* file, Lit p, Lit q);
-    void    toDimacs     (const char* file, Lit p, Lit q, Lit r);
-
     // Read state:
     //
     lbool   modelValue (Var x) const;       // The value of a variable in the last model. The last call to solve must have been satisfiable.
     lbool   modelValue (Lit p) const;       // The value of a literal in the last model. The last call to solve must have been satisfiable.
-    int     nClauses   ()      const;       // The current number of original clauses.
-    int     nLearnts   ()      const;       // The current number of learnt clauses.
     int     nFreeVars  ()      const;
 
     // Resource contraints:
@@ -94,12 +75,6 @@ public:
     void    budgetOff();
     void    interrupt();          // Trigger a (potentially asynchronous) interruption of the solver.
     void    clearInterrupt();     // Clear interrupt indicator flag.
-
-    // Memory managment:
-    //
-    virtual void garbageCollect();
-    void    checkGarbage(double gf);
-    void    checkGarbage();
 
     // Extra results: (read-only member variable)
     //
@@ -115,8 +90,6 @@ public:
 #endif
     bool      luby_restart;
     int       ccmin_mode;         // Controls conflict clause minimization (0=none, 1=basic, 2=deep).
-    int       phase_saving;       // Controls the level of phase saving (0=none, 1=limited, 2=full).
-    double    garbage_frac;       // The fraction of wasted memory allowed before a garbage collection is triggered.
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
@@ -129,7 +102,7 @@ public:
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, conflicts;
-    uint64_t clauses_literals, learnts_literals, max_literals, tot_literals;
+    uint64_t max_literals, tot_literals;
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -139,8 +112,6 @@ protected:
     // Solver state:
     //
     bool                ok;               // If FALSE, the constraints are already unsatisfiable. No part of the solver state may be used!
-    vec<CRef>           clauses;          // List of problem clauses.
-    vec<CRef>           learnts;          // List of learnt clauses.
 #if ! LBD_BASED_CLAUSE_DELETION
     double              cla_inc;          // Amount to bump next clause with.
 #endif
@@ -149,9 +120,6 @@ protected:
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
     double              progress_estimate;// Set by 'search()'.
-    bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
-
-    ClauseAllocator     ca;
 
     // Temporaries (to reduce allocation overhead). Each variable is prefixed by the method in which it is
     // used, exept 'seen' wich is used in several places.
@@ -159,7 +127,6 @@ protected:
     vec<char>           seen;
     vec<Lit>            analyze_stack;
     vec<Lit>            analyze_toclear;
-    vec<Lit>            add_tmp;
 
     double              max_learnts;
     double              learntsize_adjust_confl;
@@ -191,8 +158,6 @@ protected:
     }
     lbool    search           (int nof_conflicts); // Search for a given number of conflicts.
     lbool    solve_           ();                  // Main solve method (assumptions given in 'assumptions').
-    void     reduceDB         ();                  // Reduce the set of learnt clauses.
-    void     removeSatisfied  (vec<CRef>& cs);     // Shrink 'cs' to contain only non-satisfied clauses.
 
     // Maintaining Variable/Clause activity:
     //
@@ -200,13 +165,6 @@ protected:
     void     claDecayActivity ();                      // Decay all clauses with the specified factor. Implemented by increasing the 'bump' value instead.
     void     claBumpActivity  (Clause& c);             // Increase a clause with the current 'bump' value.
 #endif
-
-    // Operations on clauses:
-    //
-    void     attachClause     (CRef cr);               // Attach a clause to watcher lists.
-    void     detachClause     (CRef cr, bool strict = false); // Detach a clause to watcher lists.
-    void     removeClause     (CRef cr);               // Detach and free a clause.
-    bool     satisfied        (const Clause& c) const; // Returns TRUE if a clause is satisfied in the current state.
 
     void     relocAll         (ClauseAllocator& to);
 
@@ -216,14 +174,17 @@ protected:
 
 public:
     VariableDatabase          variableDatabase;
+    ClauseAllocator           ca; // Memory manager for allocating/deallocating clauses
     RandomNumberGenerator     randomNumberGenerator;
     AssignmentTrail           assignmentTrail;
     PropagationQueue          propagationQueue;
     UnitPropagator            unitPropagator;
     BranchingHeuristicManager branchingHeuristicManager;
+    ClauseDatabase            clauseDatabase;
 
 private:
     friend AssignmentTrail;
+    friend ClauseDatabase;
     friend UnitPropagator;
     friend BranchingHeuristicManager;
 };
@@ -242,22 +203,10 @@ inline void Solver::claBumpActivity (Clause& c) {
             cla_inc *= 1e-20; } }
 #endif
 
-inline void Solver::checkGarbage(void){ return checkGarbage(garbage_frac); }
-inline void Solver::checkGarbage(double gf){
-    if (ca.wasted() > ca.size() * gf)
-        garbageCollect(); }
-
 // NOTE: enqueue does not set the ok flag! (only public methods do)
-inline bool     Solver::addClause       (const vec<Lit>& ps)    { ps.copyTo(add_tmp); return addClause_(add_tmp); }
-inline bool     Solver::addEmptyClause  ()                      { add_tmp.clear(); return addClause_(add_tmp); }
-inline bool     Solver::addClause       (Lit p)                 { add_tmp.clear(); add_tmp.push(p); return addClause_(add_tmp); }
-inline bool     Solver::addClause       (Lit p, Lit q)          { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); return addClause_(add_tmp); }
-inline bool     Solver::addClause       (Lit p, Lit q, Lit r)   { add_tmp.clear(); add_tmp.push(p); add_tmp.push(q); add_tmp.push(r); return addClause_(add_tmp); }
 
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
-inline int      Solver::nClauses      ()      const   { return clauses.size(); }
-inline int      Solver::nLearnts      ()      const   { return learnts.size(); }
 inline int      Solver::nFreeVars     ()      const   { return (int)branchingHeuristicManager.dec_vars - assignmentTrail.nRootAssigns(); }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
@@ -279,11 +228,6 @@ inline bool     Solver::solve         (Lit p, Lit q, Lit r) { budgetOff(); assum
 inline bool     Solver::solve         (const vec<Lit>& assumps){ budgetOff(); assumps.copyTo(assumptions); return solve_() == l_True; }
 inline lbool    Solver::solveLimited  (const vec<Lit>& assumps){ assumps.copyTo(assumptions); return solve_(); }
 inline bool     Solver::okay          ()      const   { return ok; }
-
-inline void     Solver::toDimacs     (const char* file){ vec<Lit> as; toDimacs(file, as); }
-inline void     Solver::toDimacs     (const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }
-inline void     Solver::toDimacs     (const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
-inline void     Solver::toDimacs     (const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
 
 
 //=================================================================================================

@@ -179,18 +179,18 @@ void BranchingHeuristicManager::rebuildOrderHeap() {
 
 void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& out_learnt, const int out_btlevel) {
 #if ALMOST_CONFLICT
-    for(int i = out_learnt.size() - 1; i >= 0; i--) {
+    for (int i = out_learnt.size() - 1; i >= 0; i--) {
         Var v = var(out_learnt[i]);
         CRef rea = assignmentTrail.reason(v);
-        if (rea != CRef_Undef) {
-            Clause& reaC = ca[rea];
-            for (int i = 0; i < reaC.size(); i++) {
-                Lit l = reaC[i];
-                if (!solver->seen[var(l)]) {
-                    solver->seen[var(l)] = true;
-                    almost_conflicted[var(l)]++;
-                    solver->analyze_toclear.push(l);
-                }
+        if (rea == CRef_Undef) continue;
+
+        Clause& reaC = ca[rea];
+        for (int i = 0; i < reaC.size(); i++) {
+            Lit l = reaC[i];
+            if (!solver->seen[var(l)]) {
+                solver->seen[var(l)] = true;
+                almost_conflicted[var(l)]++;
+                solver->analyze_toclear.push(l);
             }
         }
     }

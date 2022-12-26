@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/VariableDatabase.h"
 #include "core/AssignmentTrail.h"
 #include "core/PropagationQueue.h"
+#include "core/ClauseDatabase.h"
 #include <mtl/Heap.h>
 #include <map>
 
@@ -101,6 +102,7 @@ namespace Minisat {
         AssignmentTrail& assignmentTrail;
         PropagationQueue& propagationQueue;
         ClauseAllocator& ca;
+        ClauseDatabase& clauseDatabase;
         Solver* solver;
 
     public:
@@ -150,7 +152,7 @@ namespace Minisat {
          * 
          * @note c and cr are provided separately to enable compiler optimization at the caller.
          */
-        void detachClause(const Clause& c, CRef cr, bool strict);
+        void detachClause(const Clause& c, CRef cr, bool strict = false);
 
         /**
          * @brief Detach a clause from watcher lists.
@@ -158,7 +160,7 @@ namespace Minisat {
          * @param cr The CRef of the clause to detach.
          * @param strict False to use lazy detaching, true otherwise
          */
-        void detachClause(CRef cr, bool strict);
+        void detachClause(CRef cr, bool strict = false);
 
         /**
          * @brief Relocate CRefs to new ClauseAllocator

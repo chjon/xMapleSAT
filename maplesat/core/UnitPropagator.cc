@@ -11,6 +11,7 @@ namespace Minisat {
         , assignmentTrail(s->assignmentTrail)
         , propagationQueue(s->propagationQueue)
         , ca(s->ca)
+        , clauseDatabase(s->clauseDatabase)
         , solver(s)
     {}
 

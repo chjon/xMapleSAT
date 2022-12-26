@@ -59,6 +59,14 @@ namespace Minisat {
         Var   newVar()                ; // Introduce a new variable
         void  setVar(Var x, lbool val); // Set the value of a variable
 
+        /**
+         * @brief Check whether a clause is satisfied under the current variable assignment
+         * 
+         * @param c the clause to check
+         * @return true iff a literal in the clause is satisfied
+         */
+        bool satisfied(const Clause& c) const;
+
     protected:
 #ifdef TESTING
         inline void set_value(Var x, lbool v, int l);
@@ -83,8 +91,14 @@ namespace Minisat {
         assigns.push(l_Undef);
         return v;
     }
-    inline void  VariableDatabase::setVar(Var x, lbool val) { assigns[x] = val; }
+    inline void VariableDatabase::setVar(Var x, lbool val) { assigns[x] = val; }
 #endif
+
+    inline bool VariableDatabase::satisfied(const Clause& c) const {
+        for (int i = 0; i < c.size(); i++)
+            if (value(c[i]) == l_True) return true;
+        return false;
+    }
 }
 
 #endif

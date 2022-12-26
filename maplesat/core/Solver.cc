@@ -20,7 +20,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <math.h>
 
-#include "mtl/Sort.h"
 #include "core/Solver.h"
 
 using namespace Minisat;
@@ -36,12 +35,10 @@ static DoubleOption  opt_clause_decay      (_cat, "cla-decay",   "The clause act
 #endif
 static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq",    "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
 static IntOption     opt_ccmin_mode        (_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
-static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the level of phase saving (0=none, 1=limited, 2=full)", 2, IntRange(0, 2));
 static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the initial activity", false);
 static BoolOption    opt_luby_restart      (_cat, "luby",        "Use the Luby restart sequence", true);
 static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
-static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
 
 
 //=================================================================================================
@@ -58,8 +55,6 @@ Solver::Solver() :
 #endif
   , luby_restart     (opt_luby_restart)
   , ccmin_mode       (opt_ccmin_mode)
-  , phase_saving     (opt_phase_saving)
-  , garbage_frac     (opt_garbage_frac)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
 
@@ -75,7 +70,7 @@ Solver::Solver() :
     // Statistics: (formerly in 'SolverStats')
     //
   , solves(0), starts(0), conflicts(0)
-  , clauses_literals(0), learnts_literals(0), max_literals(0), tot_literals(0)
+  , max_literals(0), tot_literals(0)
 
   , lbd_calls(0)
 
@@ -86,7 +81,6 @@ Solver::Solver() :
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
   , progress_estimate  (0)
-  , remove_satisfied   (true)
 
     // Resource constraints:
     //
@@ -99,6 +93,7 @@ Solver::Solver() :
   , propagationQueue(this)
   , unitPropagator(this)
   , branchingHeuristicManager(this)
+  , clauseDatabase(this)
 {}
 
 
@@ -124,75 +119,6 @@ Var Solver::newVar(bool sign, bool dvar) {
     lbd_seen.push(0);
     return v;
 }
-
-
-bool Solver::addClause_(vec<Lit>& ps)
-{
-    assert(assignmentTrail.decisionLevel() == 0);
-    if (!ok) return false;
-
-    // Check if clause is satisfied and remove false/duplicate literals:
-    sort(ps);
-    Lit p; int i, j;
-    for (i = j = 0, p = lit_Undef; i < ps.size(); i++)
-        if (variableDatabase.value(ps[i]) == l_True || ps[i] == ~p)
-            return true;
-        else if (variableDatabase.value(ps[i]) != l_False && ps[i] != p)
-            ps[j++] = p = ps[i];
-    ps.shrink(i - j);
-
-#if PRIORITIZE_ER
-    for (int k = 0; k < ps.size(); k++)
-        degree[var(ps[k])]++;
-#endif
-
-    if (ps.size() == 0)
-        return ok = false;
-    else if (ps.size() == 1){
-        propagationQueue.enqueue(ps[0]);
-        return ok = (unitPropagator.propagate() == CRef_Undef);
-    }else{
-        CRef cr = ca.alloc(ps, false);
-        clauses.push(cr);
-        attachClause(cr);
-    }
-
-    return true;
-}
-
-
-void Solver::attachClause(CRef cr) {
-    const Clause& c = ca[cr];
-    unitPropagator.attachClause(c, cr);
-    if (c.learnt()) learnts_literals += c.size();
-    else            clauses_literals += c.size();
-}
-
-
-void Solver::detachClause(CRef cr, bool strict) {
-    const Clause& c = ca[cr];
-    unitPropagator.detachClause(c, cr, strict);
-    if (c.learnt()) learnts_literals -= c.size();
-    else            clauses_literals -= c.size();
-}
-
-
-void Solver::removeClause(CRef cr) {
-    Clause& c = ca[cr];
-    detachClause(cr);
-    // Don't leave pointers to free'd memory!
-    assignmentTrail.handleEventClauseDeleted(c);
-    c.mark(1); 
-    ca.free(cr);
-}
-
-
-bool Solver::satisfied(const Clause& c) const {
-    for (int i = 0; i < c.size(); i++)
-        if (variableDatabase.value(c[i]) == l_True)
-            return true;
-    return false; }
-
 
 //=================================================================================================
 // Major methods:
@@ -256,7 +182,7 @@ void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel)
         seen[var(p)] = 0;
         pathC--;
 
-    }while (pathC > 0);
+    } while (pathC > 0);
     out_learnt[0] = ~p;
 
     // Simplify conflict clause:
@@ -366,13 +292,13 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
 
     seen[var(p)] = 1;
 
-    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--){
+    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--) {
         Var x = var(assignmentTrail[i]);
-        if (seen[x]){
+        if (seen[x]) {
             if (assignmentTrail.reason(x) == CRef_Undef){
                 assert(assignmentTrail.level(x) > 0);
                 out_conflict.push(~assignmentTrail[i]);
-            }else{
+            } else {
                 Clause& c = ca[assignmentTrail.reason(x)];
                 for (int j = 1; j < c.size(); j++)
                     if (assignmentTrail.level(var(c[j])) > 0)
@@ -392,84 +318,16 @@ int min(int a, int b) {
 
 /*_________________________________________________________________________________________________
 |
-|  reduceDB : ()  ->  [void]
-|  
-|  Description:
-|    Remove half of the learnt clauses, minus the clauses locked by the current assignment. Locked
-|    clauses are clauses that are reason to some assignment. Binary clauses are never removed.
-|________________________________________________________________________________________________@*/
-struct reduceDB_lt { 
-    ClauseAllocator& ca;
-#if LBD_BASED_CLAUSE_DELETION
-    const vec<double>& activity;
-    reduceDB_lt(ClauseAllocator& ca_,const vec<double>& activity_) : ca(ca_), activity(activity_) {}
-#else
-    reduceDB_lt(ClauseAllocator& ca_) : ca(ca_) {}
-#endif
-    bool operator () (CRef x, CRef y) { 
-#if LBD_BASED_CLAUSE_DELETION
-        return ca[x].activity() > ca[y].activity();
-#else
-        return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity());
-#endif
-    }
-};
-
-void Solver::reduceDB() {
-    int     i, j;
-#if LBD_BASED_CLAUSE_DELETION
-    sort(learnts, reduceDB_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
-#else
-    double  extra_lim = cla_inc / learnts.size();    // Remove any clause below this activity
-    sort(learnts, reduceDB_lt(ca));
-#endif
-
-    // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
-    // and clauses with activity smaller than 'extra_lim':
-#if LBD_BASED_CLAUSE_DELETION
-    for (i = j = 0; i < learnts.size(); i++){
-        Clause& c = ca[learnts[i]];
-        if (c.activity() > 2 && !assignmentTrail.locked(c) && i < learnts.size() / 2)
-#else
-    for (i = j = 0; i < learnts.size(); i++){
-        Clause& c = ca[learnts[i]];
-        if (c.size() > 2 && !assignmentTrail.locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
-#endif
-            removeClause(learnts[i]);
-        else
-            learnts[j++] = learnts[i];
-    }
-    learnts.shrink(i - j);
-    checkGarbage();
-}
-
-
-void Solver::removeSatisfied(vec<CRef>& cs)
-{
-    int i, j;
-    for (i = j = 0; i < cs.size(); i++){
-        Clause& c = ca[cs[i]];
-        if (satisfied(c))
-            removeClause(cs[i]);
-        else
-            cs[j++] = cs[i];
-    }
-    cs.shrink(i - j);
-}
-
-
-/*_________________________________________________________________________________________________
-|
 |  simplify : [void]  ->  [bool]
 |  
 |  Description:
 |    Simplify the clause database according to the current top-level assigment. Currently, the only
 |    thing done here is the removal of satisfied clauses, but more things can be put here.
 |________________________________________________________________________________________________@*/
-bool Solver::simplify()
-{
+bool Solver::simplify() {
     assert(assignmentTrail.decisionLevel() == 0);
 
+    // Don't need to simplify if the formula is already UNSAT
     if (!ok || unitPropagator.propagate() != CRef_Undef)
         return ok = false;
 
@@ -477,14 +335,13 @@ bool Solver::simplify()
         return true;
 
     // Remove satisfied clauses:
-    removeSatisfied(learnts);
-    if (remove_satisfied)        // Can be turned off.
-        removeSatisfied(clauses);
-    checkGarbage();
+    clauseDatabase.removeSatisfied();
+    
+    // Add variables back to queue of decision variables
     branchingHeuristicManager.rebuildOrderHeap();
 
     simpDB_assigns = assignmentTrail.nAssigns();
-    simpDB_props   = clauses_literals + learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
+    simpDB_props   = clauseDatabase.clauses_literals + clauseDatabase.learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
 
     return true;
 }
@@ -502,15 +359,14 @@ bool Solver::simplify()
 |    all variables are decision variables, this means that the clause set is satisfiable. 'l_False'
 |    if the clause set is unsatisfiable. 'l_Undef' if the bound on number of conflicts is reached.
 |________________________________________________________________________________________________@*/
-lbool Solver::search(int nof_conflicts)
-{
+lbool Solver::search(int nof_conflicts) {
     assert(ok);
     int         backtrack_level;
     int         conflictC = 0;
     vec<Lit>    learnt_clause;
     starts++;
 
-    for (;;){
+    for (;;) {
         CRef confl = unitPropagator.propagate();
 
         branchingHeuristicManager.handleEventPropagated(conflicts, confl == CRef_Undef);
@@ -519,31 +375,36 @@ lbool Solver::search(int nof_conflicts)
             // CONFLICT
             conflicts++; conflictC++;
             branchingHeuristicManager.handleEventConflicted(conflicts);
+
+            // Check for root-level conflict
             if (assignmentTrail.decisionLevel() == 0) return l_False;
 
+            // Generate a learnt clause from the conflict graph
             learnt_clause.clear();
             analyze(confl, learnt_clause, backtrack_level);
 
+            // Backjump
             assignmentTrail.cancelUntil(backtrack_level);
 
 #if PRIORITIZE_ER
             for (int k = 0; k < learnt_clause.size(); k++)
                 degree[var(learnt_clause[k])]++;
 #endif
-            if (learnt_clause.size() == 1){
-                propagationQueue.enqueue(learnt_clause[0]);
-            }else{
-                CRef cr = ca.alloc(learnt_clause, true);
-                learnts.push(cr);
-                attachClause(cr);
-#if LBD_BASED_CLAUSE_DELETION
+            // Add the learnt clause to the clause database
+            CRef cr = clauseDatabase.addLearntClause(learnt_clause);
+
+            // Update clause activity
+            if (cr != CRef_Undef) {
+            #if LBD_BASED_CLAUSE_DELETION
                 Clause& clause = ca[cr];
                 clause.activity() = lbd(clause);
-#else
+            #else
                 claBumpActivity(ca[cr]);
-#endif
-                propagationQueue.enqueue(learnt_clause[0], cr);
+            #endif
             }
+
+            // First UIP learnt clauses are asserting after backjumping -- propagate!
+            propagationQueue.enqueue(learnt_clause[0], cr);
 
 #if BRANCHING_HEURISTIC == VSIDS
             branchingHeuristicManager.decayActivityVSIDS();
@@ -562,41 +423,42 @@ lbool Solver::search(int nof_conflicts)
                 if (verbosity >= 1)
                     printf("| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
                            (int)conflicts, 
-                           nFreeVars(), nClauses(), (int)clauses_literals, 
-                           (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), assignmentTrail.progressEstimate()*100);
+                           nFreeVars(), clauseDatabase.nClauses(), (int)clauseDatabase.clauses_literals, 
+                           (int)max_learnts, clauseDatabase.nLearnts(), (double)clauseDatabase.learnts_literals/clauseDatabase.nLearnts(), assignmentTrail.progressEstimate()*100);
             }
 
-        }else{
+        } else {
             // NO CONFLICT
-            if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()){
+            if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()) {
                 // Reached bound on number of conflicts:
                 progress_estimate = assignmentTrail.progressEstimate();
                 assignmentTrail.cancelUntil(0);
-                return l_Undef; }
+                return l_Undef;
+            }
 
             // Simplify the set of problem clauses:
             if (assignmentTrail.decisionLevel() == 0 && !simplify())
                 return l_False;
 
-            if (learnts.size() - assignmentTrail.nAssigns() >= max_learnts) {
-                // Reduce the set of learnt clauses:
-                reduceDB();
+            // Reduce the set of learnt clauses:
+            if (clauseDatabase.nLearnts() - assignmentTrail.nAssigns() >= max_learnts) {
+                clauseDatabase.reduceDB();
 #if RAPID_DELETION
                 max_learnts += 500;
 #endif
             }
 
             Lit next = lit_Undef;
-            while (assignmentTrail.decisionLevel() < assumptions.size()){
+            while (assignmentTrail.decisionLevel() < assumptions.size()) {
                 // Perform user provided assumption:
                 Lit p = assumptions[assignmentTrail.decisionLevel()];
-                if (variableDatabase.value(p) == l_True){
+                if (variableDatabase.value(p) == l_True) {
                     // Dummy decision level:
                     assignmentTrail.newDecisionLevel();
-                }else if (variableDatabase.value(p) == l_False){
+                } else if (variableDatabase.value(p) == l_False) {
                     analyzeFinal(~p, conflict);
                     return l_False;
-                }else{
+                } else {
                     next = p;
                     break;
                 }
@@ -647,8 +509,7 @@ static double luby(double y, int x){
 }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
-lbool Solver::solve_()
-{
+lbool Solver::solve_() {
     model.clear();
     conflict.clear();
     if (!ok) return l_False;
@@ -700,84 +561,6 @@ lbool Solver::solve_()
 }
 
 //=================================================================================================
-// Writing CNF to DIMACS:
-// 
-// FIXME: this needs to be rewritten completely.
-
-static Var mapVar(Var x, vec<Var>& map, Var& max)
-{
-    if (map.size() <= x || map[x] == -1){
-        map.growTo(x+1, -1);
-        map[x] = max++;
-    }
-    return map[x];
-}
-
-
-void Solver::toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max)
-{
-    if (satisfied(c)) return;
-
-    for (int i = 0; i < c.size(); i++)
-        if (variableDatabase.value(c[i]) != l_False)
-            fprintf(f, "%s%d ", sign(c[i]) ? "-" : "", mapVar(var(c[i]), map, max)+1);
-    fprintf(f, "0\n");
-}
-
-
-void Solver::toDimacs(const char *file, const vec<Lit>& assumps)
-{
-    FILE* f = fopen(file, "wr");
-    if (f == NULL)
-        fprintf(stderr, "could not open file %s\n", file), exit(1);
-    toDimacs(f, assumps);
-    fclose(f);
-}
-
-
-void Solver::toDimacs(FILE* f, const vec<Lit>& assumps)
-{
-    // Handle case when solver is in contradictory state:
-    if (!ok){
-        fprintf(f, "p cnf 1 2\n1 0\n-1 0\n");
-        return; }
-
-    vec<Var> map; Var max = 0;
-
-    // Cannot use removeClauses here because it is not safe
-    // to deallocate them at this point. Could be improved.
-    int cnt = 0;
-    for (int i = 0; i < clauses.size(); i++)
-        if (!satisfied(ca[clauses[i]]))
-            cnt++;
-        
-    for (int i = 0; i < clauses.size(); i++)
-        if (!satisfied(ca[clauses[i]])){
-            Clause& c = ca[clauses[i]];
-            for (int j = 0; j < c.size(); j++)
-                if (variableDatabase.value(c[j]) != l_False)
-                    mapVar(var(c[j]), map, max);
-        }
-
-    // Assumptions are added as unit clauses:
-    cnt += assumptions.size();
-
-    fprintf(f, "p cnf %d %d\n", max, cnt);
-
-    for (int i = 0; i < assumptions.size(); i++){
-        assert(variableDatabase.value(assumptions[i]) != l_False);
-        fprintf(f, "%s%d 0\n", sign(assumptions[i]) ? "-" : "", mapVar(var(assumptions[i]), map, max)+1);
-    }
-
-    for (int i = 0; i < clauses.size(); i++)
-        toDimacs(f, ca[clauses[i]], map, max);
-
-    if (verbosity > 0)
-        printf("Wrote %d clauses with %d variables.\n", cnt, max);
-}
-
-
-//=================================================================================================
 // Garbage Collection methods:
 
 void Solver::relocAll(ClauseAllocator& to)
@@ -791,27 +574,7 @@ void Solver::relocAll(ClauseAllocator& to)
     //
     assignmentTrail.relocAll(to);
 
-    // All learnt:
+    // All clauses:
     //
-    for (int i = 0; i < learnts.size(); i++)
-        ca.reloc(learnts[i], to);
-
-    // All original:
-    //
-    for (int i = 0; i < clauses.size(); i++)
-        ca.reloc(clauses[i], to);
-}
-
-
-void Solver::garbageCollect()
-{
-    // Initialize the next region to a size corresponding to the estimated utilization degree. This
-    // is not precise but should avoid some unnecessary reallocations for the new region:
-    ClauseAllocator to(ca.size() - ca.wasted()); 
-
-    relocAll(to);
-    if (verbosity >= 2)
-        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
-               ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
-    to.moveTo(ca);
+    clauseDatabase.relocAll(to);
 }

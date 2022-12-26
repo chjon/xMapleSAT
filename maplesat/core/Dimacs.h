@@ -87,7 +87,7 @@ static void parse_DIMACS_main(B& in, Solver& S) {
         else{
             cnt++;
             readClause(in, S, lits);
-            S.addClause_(lits); }
+            S.clauseDatabase.addClause_(lits); }
     }
     if (vars != S.variableDatabase.nVars())
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of variables.\n");

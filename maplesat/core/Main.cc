@@ -136,7 +136,7 @@ int main(int argc, char** argv)
         
         if (S.verbosity > 0){
             printf("|  Number of variables:  %12d                                         |\n", S.variableDatabase.nVars());
-            printf("|  Number of clauses:    %12d                                         |\n", S.nClauses()); }
+            printf("|  Number of clauses:    %12d                                         |\n", S.clauseDatabase.nClauses()); }
         
         double parsed_time = cpuTime();
         if (S.verbosity > 0){
