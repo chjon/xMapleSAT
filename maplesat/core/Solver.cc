@@ -32,14 +32,11 @@ using namespace Minisat;
 static const char* _cat = "CORE";
 
 #if ! LBD_BASED_CLAUSE_DELETION
-static DoubleOption  opt_clause_decay      (_cat, "cla-decay",   "The clause activity decay factor",              0.999,    DoubleRange(0, false, 1, false));
+static DoubleOption opt_clause_decay (_cat, "cla-decay", "The clause activity decay factor", 0.999, DoubleRange(0, false, 1, false));
 #endif
-static DoubleOption  opt_random_var_freq   (_cat, "rnd-freq",    "The frequency with which the decision heuristic tries to choose a random variable", 0, DoubleRange(0, true, 1, true));
-static IntOption     opt_ccmin_mode        (_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
-static BoolOption    opt_rnd_init_act      (_cat, "rnd-init",    "Randomize the initial activity", false);
-static BoolOption    opt_luby_restart      (_cat, "luby",        "Use the Luby restart sequence", true);
-static IntOption     opt_restart_first     (_cat, "rfirst",      "The base restart interval", 100, IntRange(1, INT32_MAX));
-static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
+static BoolOption   opt_luby_restart (_cat, "luby",   "Use the Luby restart sequence", true);
+static IntOption    opt_restart_first(_cat, "rfirst", "The base restart interval", 100, IntRange(1, INT32_MAX));
+static DoubleOption opt_restart_inc  (_cat, "rinc",   "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 
 
 //=================================================================================================
@@ -55,7 +52,6 @@ Solver::Solver() :
   , clause_decay     (opt_clause_decay)
 #endif
   , luby_restart     (opt_luby_restart)
-  , ccmin_mode       (opt_ccmin_mode)
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
 
@@ -71,8 +67,6 @@ Solver::Solver() :
     // Statistics: (formerly in 'SolverStats')
     //
   , solves(0), starts(0), conflicts(0)
-  , max_literals(0), tot_literals(0)
-
   , lbd_calls(0)
 
   , ok                 (true)
@@ -95,6 +89,7 @@ Solver::Solver() :
   , unitPropagator(this)
   , branchingHeuristicManager(this)
   , clauseDatabase(this)
+  , conflictAnalyzer(this)
 {}
 
 
@@ -116,7 +111,8 @@ Var Solver::newVar(bool sign, bool dvar) {
     propagationQueue         .newVar(v);
     unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
-    seen     .push(0);
+    conflictAnalyzer         .newVar(v);
+    seen.push(0);
     lbd_seen.push(0);
     return v;
 }
@@ -154,197 +150,6 @@ bool Solver::addClause(vec<Lit>& ps) {
 
     return true;
 }
-
-//=================================================================================================
-// Major methods:
-
-/*_________________________________________________________________________________________________
-|
-|  analyze : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
-|  
-|  Description:
-|    Analyze conflict and produce a reason clause.
-|  
-|    Pre-conditions:
-|      * 'out_learnt' is assumed to be cleared.
-|      * Current decision level must be greater than root level.
-|  
-|    Post-conditions:
-|      * 'out_learnt[0]' is the asserting literal at level 'out_btlevel'.
-|      * If out_learnt.size() > 1 then 'out_learnt[1]' has the greatest decision level of the 
-|        rest of literals. There may be others from the same level though.
-|  
-|________________________________________________________________________________________________@*/
-void Solver::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
-    int pathC = 0;
-    Lit p     = lit_Undef;
-
-    // Generate conflict clause:
-    //
-    out_learnt.push();      // (leave room for the asserting literal)
-    int index = assignmentTrail.nAssigns() - 1;
-
-    do{
-        assert(confl != CRef_Undef); // (otherwise should be UIP)
-        Clause& c = ca[confl];
-
-#if LBD_BASED_CLAUSE_DELETION
-        if (c.learnt() && c.activity() > 2)
-            c.activity() = lbd(c);
-#else
-        if (c.learnt())
-            claBumpActivity(c);
-#endif
-
-        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
-            Lit q = c[j];
-
-            if (!seen[var(q)] && assignmentTrail.level(var(q)) > 0){
-                branchingHeuristicManager.handleEventLitInConflictGraph(q, conflicts);
-                seen[var(q)] = 1;
-                if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
-                    pathC++;
-                else
-                    out_learnt.push(q);
-            }
-        }
-        
-        // Select next clause to look at:
-        while (!seen[var(assignmentTrail[index--])]);
-        p     = assignmentTrail[index+1];
-        confl = assignmentTrail.reason(var(p));
-        seen[var(p)] = 0;
-        pathC--;
-
-    } while (pathC > 0);
-    out_learnt[0] = ~p;
-
-    // Simplify conflict clause:
-    //
-    int i, j;
-    out_learnt.copyTo(analyze_toclear);
-    if (ccmin_mode == 2){
-        uint32_t abstract_level = 0;
-        for (i = 1; i < out_learnt.size(); i++)
-            abstract_level |= assignmentTrail.abstractLevel(var(out_learnt[i])); // (maintain an abstraction of levels involved in conflict)
-
-        for (i = j = 1; i < out_learnt.size(); i++)
-            if (assignmentTrail.reason(var(out_learnt[i])) == CRef_Undef || !litRedundant(out_learnt[i], abstract_level))
-                out_learnt[j++] = out_learnt[i];
-        
-    }else if (ccmin_mode == 1){
-        for (i = j = 1; i < out_learnt.size(); i++){
-            Var x = var(out_learnt[i]);
-
-            if (assignmentTrail.reason(x) == CRef_Undef)
-                out_learnt[j++] = out_learnt[i];
-            else{
-                Clause& c = ca[assignmentTrail.reason(var(out_learnt[i]))];
-                for (int k = 1; k < c.size(); k++)
-                    if (!seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0){
-                        out_learnt[j++] = out_learnt[i];
-                        break; }
-            }
-        }
-    }else
-        i = j = out_learnt.size();
-
-    max_literals += out_learnt.size();
-    out_learnt.shrink(i - j);
-    tot_literals += out_learnt.size();
-
-    // Find correct backtrack level:
-    //
-    if (out_learnt.size() == 1)
-        out_btlevel = 0;
-    else{
-        int max_i = 1;
-        // Find the first literal assigned at the next-highest level:
-        for (int i = 2; i < out_learnt.size(); i++)
-            if (assignmentTrail.level(var(out_learnt[i])) > assignmentTrail.level(var(out_learnt[max_i])))
-                max_i = i;
-        // Swap-in this literal at index 1:
-        Lit p             = out_learnt[max_i];
-        out_learnt[max_i] = out_learnt[1];
-        out_learnt[1]     = p;
-        out_btlevel       = assignmentTrail.level(var(p));
-    }
-
-    branchingHeuristicManager.handleEventLearnedClause(out_learnt, out_btlevel);
-
-    // Clear 'seen[]'
-    for (int j = 0; j < analyze_toclear.size(); j++)
-        seen[var(analyze_toclear[j])] = 0;
-}
-
-
-// Check if 'p' can be removed. 'abstract_levels' is used to abort early if the algorithm is
-// visiting literals at levels that cannot be removed later.
-bool Solver::litRedundant(Lit p, uint32_t abstract_levels) {
-    analyze_stack.clear(); analyze_stack.push(p);
-    int top = analyze_toclear.size();
-    while (analyze_stack.size() > 0){
-        assert(assignmentTrail.reason(var(analyze_stack.last())) != CRef_Undef);
-        Clause& c = ca[assignmentTrail.reason(var(analyze_stack.last()))]; analyze_stack.pop();
-
-        for (int i = 1; i < c.size(); i++){
-            Lit p = c[i];
-            if (seen[var(p)] || assignmentTrail.level(var(p)) == 0) continue;
-
-            if (assignmentTrail.reason(var(p)) != CRef_Undef && (assignmentTrail.abstractLevel(var(p)) & abstract_levels) != 0){
-                seen[var(p)] = 1;
-                analyze_stack.push(p);
-                analyze_toclear.push(p);
-            } else {
-                for (int j = top; j < analyze_toclear.size(); j++)
-                    seen[var(analyze_toclear[j])] = 0;
-                analyze_toclear.shrink(analyze_toclear.size() - top);
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
-
-/*_________________________________________________________________________________________________
-|
-|  analyzeFinal : (p : Lit)  ->  [void]
-|  
-|  Description:
-|    Specialized analysis procedure to express the final conflict in terms of assumptions.
-|    Calculates the (possibly empty) set of assumptions that led to the assignment of 'p', and
-|    stores the result in 'out_conflict'.
-|________________________________________________________________________________________________@*/
-void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
-    out_conflict.clear();
-    out_conflict.push(p);
-
-    if (assignmentTrail.decisionLevel() == 0)
-        return;
-
-    seen[var(p)] = 1;
-
-    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--) {
-        Var x = var(assignmentTrail[i]);
-        if (seen[x]) {
-            if (assignmentTrail.reason(x) == CRef_Undef){
-                assert(assignmentTrail.level(x) > 0);
-                out_conflict.push(~assignmentTrail[i]);
-            } else {
-                Clause& c = ca[assignmentTrail.reason(x)];
-                for (int j = 1; j < c.size(); j++)
-                    if (assignmentTrail.level(var(c[j])) > 0)
-                        seen[var(c[j])] = 1;
-            }
-            seen[x] = 0;
-        }
-    }
-
-    seen[var(p)] = 0;
-}
-
 
 int min(int a, int b) {
     return a < b ? a : b;
@@ -415,7 +220,7 @@ lbool Solver::search(int nof_conflicts) {
 
             // Generate a learnt clause from the conflict graph
             learnt_clause.clear();
-            analyze(confl, learnt_clause, backtrack_level);
+            conflictAnalyzer.analyze(confl, learnt_clause, backtrack_level);
 
             // Backjump
             assignmentTrail.cancelUntil(backtrack_level);
@@ -487,7 +292,7 @@ lbool Solver::search(int nof_conflicts) {
                     // Dummy decision level:
                     assignmentTrail.newDecisionLevel();
                 } else if (variableDatabase.value(p) == l_False) {
-                    analyzeFinal(~p, conflict);
+                    conflictAnalyzer.analyzeFinal(~p, conflict);
                     return l_False;
                 } else {
                     next = p;

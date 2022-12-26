@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/UnitPropagator.h"
 #include "core/BranchingHeuristicManager.h"
 #include "core/ClauseDatabase.h"
+#include "core/ConflictAnalyzer.h"
 
 namespace Minisat {
 
@@ -99,7 +100,6 @@ public:
     double    clause_decay;
 #endif
     bool      luby_restart;
-    int       ccmin_mode;         // Controls conflict clause minimization (0=none, 1=basic, 2=deep).
 
     int       restart_first;      // The initial restart limit.                                                                (default 100)
     double    restart_inc;        // The factor with which the restart limit is multiplied in each restart.                    (default 1.5)
@@ -112,7 +112,6 @@ public:
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, conflicts;
-    uint64_t max_literals, tot_literals;
 
     uint64_t lbd_calls;
     vec<uint64_t> lbd_seen;
@@ -131,12 +130,8 @@ protected:
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
     double              progress_estimate;// Set by 'search()'.
 
-    // Temporaries (to reduce allocation overhead). Each variable is prefixed by the method in which it is
-    // used, exept 'seen' wich is used in several places.
-    //
-    vec<char>           seen;
-    vec<Lit>            analyze_stack;
-    vec<Lit>            analyze_toclear;
+    vec<char> seen;
+    vec<Lit> analyze_toclear;
 
     double              max_learnts;
     double              learntsize_adjust_confl;
@@ -150,10 +145,6 @@ protected:
 
     // Main internal methods:
     //
-    void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel);    // (bt = backtrack)
-    void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
-    bool     litRedundant     (Lit p, uint32_t abstract_levels);                       // (helper method for 'analyze()')
-
     template<class V> int lbd (const V& clause) {
         lbd_calls++;
         int lbd = 0;
@@ -196,12 +187,14 @@ public:
     UnitPropagator            unitPropagator;
     BranchingHeuristicManager branchingHeuristicManager;
     ClauseDatabase            clauseDatabase;
+    ConflictAnalyzer          conflictAnalyzer;
 
 private:
     friend AssignmentTrail;
     friend ClauseDatabase;
     friend UnitPropagator;
     friend BranchingHeuristicManager;
+    friend ConflictAnalyzer;
 };
 
 
