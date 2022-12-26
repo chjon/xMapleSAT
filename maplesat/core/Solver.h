@@ -244,6 +244,19 @@ inline bool     Solver::solve         (const vec<Lit>& assumps){ budgetOff(); as
 inline lbool    Solver::solveLimited  (const vec<Lit>& assumps){ assumps.copyTo(assumptions); return solve_(); }
 inline bool     Solver::okay          ()      const   { return ok; }
 
+//=================================================================================================
+// Garbage Collection methods:
+
+inline void Solver::relocAll(ClauseAllocator& to) {
+    // All watchers:
+    unitPropagator.relocAll(to);
+
+    // All reasons:
+    assignmentTrail.relocAll(to);
+
+    // All clauses:
+    clauseDatabase.relocAll(to);
+}
 
 //=================================================================================================
 // Debug etc:

@@ -145,7 +145,7 @@ bool Solver::addClause(vec<Lit>& ps) {
 
     // Add variable directly to trail if the clause is unit
     if (ps.size() == 1) {
-        assignmentTrail.uncheckedEnqueue(ps[0]);
+        propagationQueue.enqueue(ps[0]);
         return ok = (unitPropagator.propagate() == CRef_Undef);
     }
 
@@ -424,6 +424,7 @@ lbool Solver::search(int nof_conflicts) {
             CRef cr = clauseDatabase.addLearntClause(learnt_clause);
 
             // Update clause activity
+            // TODO: the solver appears to perform better if we move this block after enqueuing
             if (cr != CRef_Undef) {
             #if LBD_BASED_CLAUSE_DELETION
                 Clause& clause = ca[cr];
@@ -494,7 +495,7 @@ lbool Solver::search(int nof_conflicts) {
                 }
             }
 
-            if (next == lit_Undef){
+            if (next == lit_Undef) {
                 // New variable decision:
                 next = branchingHeuristicManager.pickBranchLit();
 
@@ -579,27 +580,14 @@ lbool Solver::solve_() {
         printf("===============================================================================\n");
 
 
-    if (status == l_True){
+    if (status == l_True) {
         // Extend & copy model:
         model.growTo(variableDatabase.nVars());
         for (int i = 0; i < variableDatabase.nVars(); i++) model[i] = variableDatabase.value(i);
-    }else if (status == l_False && conflict.size() == 0)
+    } else if (status == l_False && conflict.size() == 0) {
         ok = false;
+    }
 
     assignmentTrail.cancelUntil(0);
     return status;
-}
-
-//=================================================================================================
-// Garbage Collection methods:
-
-void Solver::relocAll(ClauseAllocator& to) {
-    // All watchers:
-    unitPropagator.relocAll(to);
-
-    // All reasons:
-    assignmentTrail.relocAll(to);
-
-    // All clauses:
-    clauseDatabase.relocAll(to);
 }
