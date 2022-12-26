@@ -142,7 +142,17 @@ namespace Minisat {
         // CONSTRUCTORS //
         //////////////////
 
+        /**
+         * @brief Construct a new ClauseDatabase object
+         * 
+         * @param s Pointer to main solver object - must not be nullptr
+         */
         ClauseDatabase(Solver* s);
+
+        /**
+         * @brief Destroy the ClauseDatabase object
+         * 
+         */
         ~ClauseDatabase() = default;
 
         ////////////////
