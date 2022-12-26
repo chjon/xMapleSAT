@@ -82,7 +82,7 @@ struct reduceDB_lt {
 };
 
 void ClauseDatabase::reduceDB() {
-    int i, j;
+    // Sort clauses by activity
 #if LBD_BASED_CLAUSE_DELETION
     sort(learnts, reduceDB_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
 #else
@@ -92,6 +92,7 @@ void ClauseDatabase::reduceDB() {
 
     // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
     // and clauses with activity smaller than 'extra_lim':
+    int i, j;
     for (i = j = 0; i < learnts.size(); i++){
         Clause& c = ca[learnts[i]];
 #if LBD_BASED_CLAUSE_DELETION
@@ -104,6 +105,8 @@ void ClauseDatabase::reduceDB() {
             learnts[j++] = learnts[i];
     }
     learnts.shrink(i - j);
+
+    // Perform garbage collection if needed
     checkGarbage(garbage_frac);
 }
 
