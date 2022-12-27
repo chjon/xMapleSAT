@@ -181,7 +181,7 @@ void BranchingHeuristicManager::rebuildPriorityQueue() {
 #endif
 }
 
-void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause) {
+void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause, vec<bool>& seen) {
 #if ALMOST_CONFLICT
     // Iterate through every reason clause immediately before the learnt clause
     for (int i = learnt_clause.size() - 1; i >= 0; i--) {
@@ -190,23 +190,23 @@ void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_
         if (rea == CRef_Undef) continue;
         Clause& reaC = ca[rea];
 
-        // Iterate through every unique variable in the reason clauses
+        // Iterate through every unique variable in the reason clauses, ignoring
+        // variables in the learnt clause
         for (int j = 0; j < reaC.size(); j++) {
             Var x = var(reaC[j]);
-            if (solver->seen[x]) continue;
+            if (seen[x]) continue;
 
             // Increment the 'almost_conflicted' counter
             almost_conflicted[x]++;
 
             // Mark the variable as seen
-            solver->seen[x] = true;
+            seen[x] = true;
             toClear.push(x);
         }
     }
 
-    // Clear 'seen[]'
-    for (int j = 0; j < toClear.size(); j++)
-        solver->seen[toClear[j]] = false;
+    // Undo all the changes to seen[]
+    for (int j = 0; j < toClear.size(); j++) seen[toClear[j]] = false;
     toClear.clear();
 #endif
 

@@ -52,16 +52,23 @@ namespace Minisat {
         // Controls conflict clause minimization
         ConflictClauseMinimizationMode ccmin_mode;
 
-        //////////////////////
-        // MEMBER VARIABLES //
-        //////////////////////
+        /////////////////////////
+        // TEMPORARY VARIABLES //
+        /////////////////////////
+        // these variables are allocated here to avoid repeated allocation costs
 
+        // A learnt clause
         vec<Lit> firstUIPClause;
 
         // Work stack for @code{litRedundant}: holds list of reason clauses to be examined
         vec<CRef> workStack;
 
-        vec<Var> toClear; // Temporary variable -- only used by @code{litRedundant}
+        // Marks whether a variable has already been seen
+        vec<bool> seen;
+
+        // Stores variables whose values have been set in @code{seen} and need to be cleared.
+        // Currently only used by @code{litRedundant}
+        vec<Var> toClear;
 
     public:
         ////////////////
@@ -94,6 +101,9 @@ namespace Minisat {
          * @return true if p is redundant and can be removed, false otherwise
          * 
          * @note this is a helper method for @code{simplifyClauseDeep}
+         * @pre the @code{workStack} vector is empty
+         * @post the @code{workStack} vector is empty
+         * 
          */
         bool litRedundant(Lit p, uint32_t abstract_levels);
 
@@ -109,12 +119,12 @@ namespace Minisat {
          * @brief Check whether a reason clause is subsumed by a set of variables
          * 
          * @param c the reason clause for a variable in the learnt clause
-         * @param inLearnt true if a variable appears in the learnt clause
          * @return true if the reason clause is subsumed, false otherwise
          * 
-         * @note this is a helper method for @code{simplifyClauseBasic}
+         * @note This is a helper method for @code{simplifyClauseBasic}
+         * @note Precondition: @code{seen} is true for the variables in the learnt clause
          */
-        bool reasonSubsumed(const Clause& c, vec<char>& inLearnt);
+        bool reasonSubsumed(const Clause& c);
 
         /**
          * @brief Simplify a learnt clause
@@ -153,13 +163,28 @@ namespace Minisat {
         // CONSTRUCTORS //
         //////////////////
 
+        /**
+         * @brief Construct a new ConflictAnalyzer object
+         * 
+         * @param s Pointer to main solver object - must not be nullptr
+         */
         ConflictAnalyzer(Solver* s);
+
+        /**
+         * @brief Destroy the ConflictAnalyzer object
+         * 
+         */
         ~ConflictAnalyzer() = default;
 
         ////////////////
         // PUBLIC API //
         ////////////////
 
+        /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @param v the variable to register
+         */
         void newVar(Var v);
 
         void analyze     (CRef confl, vec<Lit>& out_learnt, int& out_btlevel); // (bt = backtrack)
@@ -167,6 +192,7 @@ namespace Minisat {
     };
 
     inline void ConflictAnalyzer::newVar(Var v) {
+        seen.push(false);
     }
 }
 

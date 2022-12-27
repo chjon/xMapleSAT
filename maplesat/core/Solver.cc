@@ -112,7 +112,6 @@ Var Solver::newVar(bool sign, bool dvar) {
     unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
     conflictAnalyzer         .newVar(v);
-    seen.push(0);
     lbd_seen.push(0);
     return v;
 }

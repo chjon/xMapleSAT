@@ -130,8 +130,6 @@ protected:
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
     double              progress_estimate;// Set by 'search()'.
 
-    vec<char> seen;
-
     double              max_learnts;
     double              learntsize_adjust_confl;
     int                 learntsize_adjust_cnt;
