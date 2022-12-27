@@ -181,11 +181,8 @@ void BranchingHeuristicManager::rebuildPriorityQueue() {
 #endif
 }
 
-void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause, vec<Lit>& toClear) {
+void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause) {
 #if ALMOST_CONFLICT
-    // Skip the asserting literal
-    solver->seen[var(learnt_clause[0])] = true;
-
     // Iterate through every reason clause immediately before the learnt clause
     for (int i = learnt_clause.size() - 1; i >= 0; i--) {
         Var v = var(learnt_clause[i]);
@@ -195,17 +192,22 @@ void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_
 
         // Iterate through every unique variable in the reason clauses
         for (int j = 0; j < reaC.size(); j++) {
-            Lit l = reaC[j];
-            if (solver->seen[var(l)]) continue;
+            Var x = var(reaC[j]);
+            if (solver->seen[x]) continue;
 
             // Increment the 'almost_conflicted' counter
-            almost_conflicted[var(l)]++;
+            almost_conflicted[x]++;
 
             // Mark the variable as seen
-            solver->seen[var(l)] = true;
-            toClear.push(l);
+            solver->seen[x] = true;
+            toClear.push(x);
         }
     }
+
+    // Clear 'seen[]'
+    for (int j = 0; j < toClear.size(); j++)
+        solver->seen[toClear[j]] = false;
+    toClear.clear();
 #endif
 
 #ifdef POLARITY_VOTING

@@ -57,8 +57,11 @@ namespace Minisat {
         //////////////////////
 
         vec<Lit> firstUIPClause;
-        vec<Var> toClear;
-        vec<CRef> analyze_stack;
+
+        // Work stack for @code{litRedundant}: holds list of reason clauses to be examined
+        vec<CRef> workStack;
+
+        vec<Var> toClear; // Temporary variable -- only used by @code{litRedundant}
 
     public:
         ////////////////
@@ -83,6 +86,18 @@ namespace Minisat {
         //////////////////////
 
         /**
+         * @brief Check whether a literal is redundant and can be removed.
+         * 
+         * @param p the literal to check for redundancy
+         * @param abstract_levels an abstraction of decision levels, used to abort early if the algorithm
+         * is visiting literals at levels that cannot be removed later.
+         * @return true if p is redundant and can be removed, false otherwise
+         * 
+         * @note this is a helper method for @code{simplifyClauseDeep}
+         */
+        bool litRedundant(Lit p, uint32_t abstract_levels);
+
+        /**
          * @brief Simplify a learnt clause
          * 
          * @param learntClause the learnt clause to modify.
@@ -94,12 +109,11 @@ namespace Minisat {
          * 
          * @param c the reason clause for a variable in the learnt clause
          * @param inLearnt true if a variable appears in the learnt clause
-         * @return true iff the reason clause is subsumed
+         * @return true if the reason clause is subsumed, false otherwise
+         * 
+         * @note this is a helper method for @code{simplifyClauseBasic}
          */
         bool reasonSubsumed(const Clause& c, vec<char>& inLearnt);
-
-        // (x -a1 -a2)
-        // (-x -b1 -b2 -b3)
 
         /**
          * @brief Simplify a learnt clause
@@ -130,8 +144,6 @@ namespace Minisat {
          * @param learntClause the learnt clause to modify.
          */
         void enforceWatcherInvariant(vec<Lit>& learntClause);
-
-        bool litRedundant(Lit p, uint32_t abstract_levels); // (helper method for 'analyze()')
 
     public:
         //////////////////
