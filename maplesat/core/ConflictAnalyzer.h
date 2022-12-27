@@ -100,9 +100,10 @@ namespace Minisat {
         /**
          * @brief Simplify a learnt clause
          * 
-         * @param learntClause the learnt clause to modify.
+         * @param simplified the output simplified clause.
+         * @param toSimplify the clause to simplify.
          */
-        void simplifyClauseDeep(vec<Lit>& learntClause);
+        void simplifyClauseDeep(vec<Lit>& simplified, const vec<Lit>& toSimplify);
 
         /**
          * @brief Check whether a reason clause is subsumed by a set of variables
@@ -118,9 +119,10 @@ namespace Minisat {
         /**
          * @brief Simplify a learnt clause
          * 
+         * @param simplified the output simplified clause.
          * @param learntClause the learnt clause to modify.
          */
-        void simplifyClauseBasic(vec<Lit>& learntClause);
+        void simplifyClauseBasic(vec<Lit>& simplified, const vec<Lit>& toSimplify);
 
         /**
          * @brief Learn a clause according to the first UIP learning scheme.
@@ -132,9 +134,10 @@ namespace Minisat {
         /**
          * @brief Simplify a learnt clause
          * 
-         * @param learntClause the learnt clause to modify.
+         * @param simplified the output simplified clause.
+         * @param toSimplify the learnt clause to modify.
          */
-        void simplifyClause(vec<Lit>& learntClause);
+        void simplifyClause(vec<Lit>& simplified, const vec<Lit>& toSimplify);
         
         /**
          * @brief Enforce the watcher invariant for a learnt clause. Assumes that the variable with

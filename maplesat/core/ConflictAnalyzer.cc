@@ -72,23 +72,22 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
     return true;
 }
 
-inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& learntClause) {
+inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& simplified, const vec<Lit>& toSimplify) {
     // Initialize abstraction of levels involved in conflict
     uint32_t abstract_level = 0;
-    for (int i = 1; i < learntClause.size(); i++)
-        abstract_level |= assignmentTrail.abstractLevel(var(learntClause[i]));
+    for (int i = 1; i < toSimplify.size(); i++)
+        abstract_level |= assignmentTrail.abstractLevel(var(toSimplify[i]));
 
-    int i, j;
-    for (i = j = 1; i < learntClause.size(); i++) {
-        if (// Keep decision variables
-            assignmentTrail.reason(var(learntClause[i])) == CRef_Undef ||
+    // Copy non-redundant literals
+    simplified.push(toSimplify[0]);
+    for (int i = 1; i < toSimplify.size(); i++) {
+        if (// Keep decision literals
+            assignmentTrail.reason(var(toSimplify[i])) == CRef_Undef ||
             
-            // Keep variables that are not redundant
-            !litRedundant(learntClause[i], abstract_level)
-        ) learntClause[j++] = learntClause[i];
+            // Keep literals that are not redundant
+            !litRedundant(toSimplify[i], abstract_level)
+        ) simplified.push(toSimplify[i]);
     }
-
-    learntClause.shrink(i - j);
 }
 
 inline bool ConflictAnalyzer::reasonSubsumed(const Clause& c, vec<char>& inLearnt) {
@@ -102,20 +101,18 @@ inline bool ConflictAnalyzer::reasonSubsumed(const Clause& c, vec<char>& inLearn
     return true;
 }
 
-inline void ConflictAnalyzer::simplifyClauseBasic(vec<Lit>& learntClause) {
+inline void ConflictAnalyzer::simplifyClauseBasic(vec<Lit>& simplified, const vec<Lit>& toSimplify) {
     // Iterate through every variable in the learnt clause (excluding the asserting literal)
-    int i, j;
-    for (i = j = 1; i < learntClause.size(); i++){
-        const CRef reason = assignmentTrail.reason(var(learntClause[i]));
+    simplified.push(toSimplify[0]);
+    for (int i = 1; i < toSimplify.size(); i++){
+        const CRef reason = assignmentTrail.reason(var(toSimplify[i]));
         if (// Keep decision variables
             reason == CRef_Undef ||
 
             // Keep variables whose reason clauses are not subsumed by the learnt clause
             !reasonSubsumed(ca[reason], solver->seen)
-        ) learntClause[j++] = learntClause[i];
+        ) simplified.push(toSimplify[i]);
     }
-
-    learntClause.shrink(i - j);
 }
 
 inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClause) {
@@ -175,10 +172,10 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
     // Note: at this point, seen[v] is true iff v is in the learnt clause
 }
 
-inline void ConflictAnalyzer::simplifyClause(vec<Lit>& learntClause) {
+inline void ConflictAnalyzer::simplifyClause(vec<Lit>& simplified, const vec<Lit>& toSimplify) {
     switch (ccmin_mode) {
-        case ConflictClauseMinimizationMode::DEEP:  return simplifyClauseDeep(learntClause);
-        case ConflictClauseMinimizationMode::BASIC: return simplifyClauseBasic(learntClause);
+        case ConflictClauseMinimizationMode::DEEP:  return simplifyClauseDeep(simplified, toSimplify);
+        case ConflictClauseMinimizationMode::BASIC: return simplifyClauseBasic(simplified, toSimplify);
         default: return;
     }
 }
@@ -217,12 +214,12 @@ inline void ConflictAnalyzer::enforceWatcherInvariant(vec<Lit>& learntClause) {
 |________________________________________________________________________________________________@*/
 void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
     // Generate conflict clause:
-    getFirstUIPClause(confl, out_learnt);
-    max_literals += out_learnt.size();
+    firstUIPClause.clear();
+    getFirstUIPClause(confl, firstUIPClause);
+    max_literals += firstUIPClause.size();
 
     // Simplify conflict clause:
-    out_learnt.copyTo(firstUIPClause);
-    simplifyClause(out_learnt);
+    simplifyClause(out_learnt, firstUIPClause);
     tot_literals += out_learnt.size();
 
     // Enforce watcher invariant
@@ -235,7 +232,7 @@ void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btleve
     branchingHeuristicManager.handleEventLearnedClause(out_learnt);
 
     // Clean up
-    // TODO: can this be moved before updating the branching heuristic?
+    // TODO: can this be moved before updating the branching heuristic? it is currently polluted by simplifyClause
     for (int j = 0; j < toClear.size(); j++)
         solver->seen[toClear[j]] = 0;
     toClear.clear();

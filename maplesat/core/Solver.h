@@ -131,7 +131,6 @@ protected:
     double              progress_estimate;// Set by 'search()'.
 
     vec<char> seen;
-    vec<Lit> analyze_toclear;
 
     double              max_learnts;
     double              learntsize_adjust_confl;
