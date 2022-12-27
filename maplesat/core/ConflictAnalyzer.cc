@@ -30,6 +30,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver* s)
 
 bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
     // Initialize local data structures
+    const int top = toClear.size();
     workStack.push(assignmentTrail.reason(var(p)));
 
     // Iterate through reason clauses
@@ -50,9 +51,9 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
                 (assignmentTrail.abstractLevel(v) & abstract_levels) == 0
             ) {
                 // Clean up
-                for (int j = 0; j < toClear.size(); j++)
+                for (int j = top; j < toClear.size(); j++)
                     solver->seen[toClear[j]] = 0;
-                toClear.clear();
+                toClear.shrink(toClear.size() - top);
                 workStack.clear();
 
                 return false;
@@ -62,17 +63,10 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
             solver->seen[v] = 1;
             toClear.push(v);
             workStack.push(reason);
-
-            solver->analyze_toclear.push(c[i]);
         }
     }
 
     // Clean up
-    
-    // TODO: the solver performs better if we clean up here
-    // for (int j = 0; j < toClear.size(); j++) solver->seen[toClear[j]] = 0;
-
-    toClear.clear();
     workStack.clear();
 
     return true;
@@ -85,13 +79,14 @@ inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& learntClause) {
         abstract_level |= assignmentTrail.abstractLevel(var(learntClause[i]));
 
     int i, j;
-    for (i = j = 1; i < learntClause.size(); i++)
+    for (i = j = 1; i < learntClause.size(); i++) {
         if (// Keep decision variables
             assignmentTrail.reason(var(learntClause[i])) == CRef_Undef ||
             
             // Keep variables that are not redundant
             !litRedundant(learntClause[i], abstract_level)
         ) learntClause[j++] = learntClause[i];
+    }
 
     learntClause.shrink(i - j);
 }
@@ -226,7 +221,7 @@ void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btleve
     max_literals += out_learnt.size();
 
     // Simplify conflict clause:
-    out_learnt.copyTo(solver->analyze_toclear);
+    out_learnt.copyTo(firstUIPClause);
     simplifyClause(out_learnt);
     tot_literals += out_learnt.size();
 
@@ -239,9 +234,15 @@ void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btleve
     // Update data structures for branching heuristics
     branchingHeuristicManager.handleEventLearnedClause(out_learnt);
 
+    // Clean up
+    // TODO: can this be moved before updating the branching heuristic?
+    for (int j = 0; j < toClear.size(); j++)
+        solver->seen[toClear[j]] = 0;
+    toClear.clear();
+
     // Clear 'seen[]'
-    for (int j = 0; j < solver->analyze_toclear.size(); j++)
-        solver->seen[var(solver->analyze_toclear[j])] = 0;
+    for (int j = 0; j < firstUIPClause.size(); j++)
+        solver->seen[var(firstUIPClause[j])] = 0;
 }
 
 /*_________________________________________________________________________________________________
