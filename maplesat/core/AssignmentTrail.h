@@ -37,14 +37,39 @@ namespace Minisat {
     class Solver;
     class PropagationQueue;
 
+    /**
+     * @brief This class keeps a record of the variable assignment order, the decision levels, and
+     * the reasons for each of the assignments. 
+     * 
+     */
     class AssignmentTrail {
     protected:
-        struct VarData { CRef reason; int level; };
+        /**
+         * @brief A wrapper to store the reason and level for a variable
+         * 
+         */
+        struct VarData {
+            CRef reason; // The reason clause for the variable assignment
+            int level;   // The decision level at which the variable was assigned
+        };
+
+        /**
+         * @brief Constructor for the VarData object.
+         * 
+         * @param cr The reason clause for the variable assignment
+         * @param l The decision level at which the variable was assigned
+         * @return A VarData object containing the arguments.
+         */
         static inline VarData mkVarData(CRef cr, int l) { VarData d = {cr, l}; return d; }
 
-        vec<Lit>     trail;     // Assignment stack; stores all assigments made in the order they were made.
-        vec<int>     trail_lim; // Separator indices for different decision levels in 'trail'.
-        vec<VarData> vardata;   // Stores reason and level for each variable.
+        // Assignment record; stores all assigments made in the order they were made.
+        vec<Lit> trail;
+
+        // Separator indices for different decision levels in 'trail'.
+        vec<int> trail_lim;
+
+        // Reason and level for each variable.
+        vec<VarData> vardata;
 
     public:
         //////////////////
@@ -58,26 +83,108 @@ namespace Minisat {
         // PUBLIC API //
         ////////////////
 
+        /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @param v the variable to register
+         * @note Assumes that @code{v} has not already been registered
+         */
         void newVar(Var v);
+
+        /**
+         * @brief Relocate all clauses
+         * 
+         * @param to the ClauseAllocator to relocate to
+         */
         void relocAll(ClauseAllocator& to);
 
-        void newDecisionLevel ();                              // Begins a new decision level.
-        void uncheckedEnqueue (Lit p, CRef from = CRef_Undef); // Enqueue a literal. Assumes value of literal is undefined.
-        bool enqueue          (Lit p, CRef from = CRef_Undef); // Test if fact 'p' contradicts current state, enqueue otherwise.
-        void cancelUntil      (int level);                     // Backtrack until a certain level.
+        /**
+         * @brief Begins a new decision level.
+         * 
+         * @note Implemented by storing the index of the assignment trail where the new decision level begins
+         */
+        void newDecisionLevel(void);
 
-        int      decisionLevel()      const; // Gives the current decisionlevel.
-        uint32_t abstractLevel(Var x) const; // Used to represent an abstraction of sets of decision levels.
-        CRef     reason       (Var x) const;
-        int      level        (Var x) const;
+        /**
+         * @brief Assign a variable such that the given literal is true. 
+         * @warning This might not add the literal to the propagation queue! Prefer to use the
+         * PropagationQueue's @code{enqueue} method instead.
+         * 
+         * @param p The literal to assign. Assumes that the current value of the literal is undefined.
+         * @param from The reason for the literal assignment.
+         */
+        void assign(Lit p, CRef from = CRef_Undef);
 
-        bool locked (const Clause& c) const; // Returns TRUE if a clause is a reason for some implication in the current state.
+        /**
+         * @brief Backtrack until a certain decision level.
+         * 
+         * @param level The decision level to which to backtrack.
+         */
+        void cancelUntil(int level);
+
+        /**
+         * @brief Get the current decision level
+         * 
+         * @return The current decision level
+         */
+        int decisionLevel(void) const;
+
+        /**
+         * @brief Return an abstraction of sets of decision levels.
+         * 
+         * @param x The variable for which to get an abstract decision level.
+         * @return A value representing the decision level of the variable 
+         */
+        uint32_t abstractLevel(Var x) const;
+
+        /**
+         * @brief Get the reason for a variable assignment. Assumes that the variable is assigned.
+         * 
+         * @param x The variable for which to get the reason.
+         * @return The reason clause responsible for the variable assignment.
+         */
+        CRef reason(Var x) const;
+
+        /**
+         * @brief Get the decision level of a variable assignment. Assumes that the variable is assigned.
+         * 
+         * @param x The variable for which to get the decision level.
+         * @return The decision level at which the variable was assigned.
+         */
+        int level(Var x) const;
+
+        /**
+         * @brief Determine whether a clause is a reason for some implication in the current state.
+         * 
+         * @param c the clause to check. Assumes that the clause variable ordering satisfies the watcher invariant.
+         * @return true if the clause is reason for some implication in the current state, false otherwise.
+         */
+        bool locked (const Clause& c) const;
+
         void handleEventClauseDeleted(const Clause& c);
 
-        int nAssigns() const; // The current number of assigned literals.
-        int nRootAssigns() const; // The current number of literals assigned at the root level
+        /**
+         * @brief Get the current number of assigned literals.
+         * 
+         * @return the current number of assigned literals. 
+         */
+        int nAssigns(void) const;
 
-        Lit operator[] (int i) const;
+        /**
+         * @brief Get the current number of literals assigned at the root level.
+         * 
+         * @return the current number of literals assigned at the root level. 
+         */
+        int nRootAssigns(void) const;
+
+        /**
+         * @brief Index into the assignment trail
+         * 
+         * @param i the index for which to get the literal
+         * @return the literal at the given index 
+         */
+        Lit operator[](int i) const;
+
         int indexOfDecisionLevel(int l) const;
 
         double progressEstimate () const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
@@ -95,8 +202,7 @@ namespace Minisat {
         trail  .capacity(v + 1);
     }
 
-    inline void     AssignmentTrail::newDecisionLevel()                 { trail_lim.push(trail.size()); }
-    inline bool     AssignmentTrail::enqueue         (Lit p, CRef from) { return variableDatabase.value(p) != l_Undef ? variableDatabase.value(p) != l_False : (uncheckedEnqueue(p, from), true); }
+    inline void     AssignmentTrail::newDecisionLevel(void)             { trail_lim.push(trail.size()); }
     
     inline int      AssignmentTrail::decisionLevel   ()      const      { return trail_lim.size(); }
     inline uint32_t AssignmentTrail::abstractLevel   (Var x) const      { return 1 << (level(x) & 31); }

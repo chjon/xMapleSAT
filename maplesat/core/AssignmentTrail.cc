@@ -9,7 +9,8 @@ AssignmentTrail::AssignmentTrail(Solver* s)
     , solver(s)
 {}
 
-void AssignmentTrail::uncheckedEnqueue(Lit p, CRef from) {
+void AssignmentTrail::assign(Lit p, CRef from) {
+    assert(variableDatabase.value(p) == l_Undef);
     const Var v = var(p);
     solver->branchingHeuristicManager.handleEventLitAssigned(p, solver->conflicts);
     variableDatabase.setVar(v, lbool(!sign(p)));

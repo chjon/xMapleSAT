@@ -158,13 +158,13 @@ namespace Minisat {
 
     inline bool PropagationQueue::enqueue(Lit p, CRef from) {
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        assignmentTrail.uncheckedEnqueue(p, from);
+        assignmentTrail.assign(p, from);
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         if (soft_assigns[var(p)] ^ sign(p) == l_False) {
             // Ensure conflicting literal is on the trail
             if (variableDatabase.value(p) == l_Undef)
-                assignmentTrail.uncheckedEnqueue(~p, reasons[var(p)]);
+                assignmentTrail.assign(~p, reasons[var(p)]);
 
             return false;
         } else if (soft_assigns[var(p)] ^ sign(p) == l_Undef) {
@@ -176,7 +176,7 @@ namespace Minisat {
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
         order_heap.insert(p.x);
-        assignmentTrail.uncheckedEnqueue(p, from);
+        assignmentTrail.assign(p, from);
 
     #endif
 
@@ -213,7 +213,7 @@ namespace Minisat {
             Lit p = Lit(order_heap.removeMin());
 
             // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
-            assignmentTrail.uncheckedEnqueue(p, from);
+            assignmentTrail.assign(p, from);
             return p;
         }
         return lit_Undef;

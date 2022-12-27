@@ -46,7 +46,6 @@ namespace Minisat {
      * 
      */
     class BranchingHeuristicManager {
-    public:
     protected:
         // Comparator for priority queue
         struct VarOrderLt {
@@ -155,7 +154,7 @@ namespace Minisat {
     #endif
     #endif
 
-        // Temporary variable -- only used by @code{litRedundant}
+        // Temporary list of variables whose values need to be cleared
         vec<Var> toClear;
 
     public:
