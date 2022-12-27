@@ -11,7 +11,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver* s)
     /////////////
     // Parameters
 
-    : ccmin_mode(opt_ccmin_mode)
+    : ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
 
     /////////////
     // Statistics
@@ -31,26 +31,39 @@ ConflictAnalyzer::ConflictAnalyzer(Solver* s)
 // Check if 'p' can be removed. 'abstract_levels' is used to abort early if the algorithm is
 // visiting literals at levels that cannot be removed later.
 bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
-    analyze_stack.clear(); analyze_stack.push(p);
-    int top = solver->analyze_toclear.size();
-    while (analyze_stack.size() > 0){
-        assert(assignmentTrail.reason(var(analyze_stack.last())) != CRef_Undef);
-        Clause& c = ca[assignmentTrail.reason(var(analyze_stack.last()))]; analyze_stack.pop();
+    // Initialize local data structures
+    toClear.clear();
+    analyze_stack.clear();
+    analyze_stack.push(assignmentTrail.reason(var(p)));
 
-        for (int i = 1; i < c.size(); i++){
-            Lit p = c[i];
-            if (solver->seen[var(p)] || assignmentTrail.level(var(p)) == 0) continue;
+    // Iterate through reason clauses
+    while (analyze_stack.size() > 0) {
+        assert(analyze_stack.last() != CRef_Undef);
+        Clause& c = ca[analyze_stack.last()]; analyze_stack.pop();
 
-            if (assignmentTrail.reason(var(p)) != CRef_Undef && (assignmentTrail.abstractLevel(var(p)) & abstract_levels) != 0){
-                solver->seen[var(p)] = 1;
-                analyze_stack.push(p);
-                solver->analyze_toclear.push(p);
-            } else {
-                for (int j = top; j < solver->analyze_toclear.size(); j++)
-                    solver->seen[var(solver->analyze_toclear[j])] = 0;
-                solver->analyze_toclear.shrink(solver->analyze_toclear.size() - top);
+        // Iterate through unique reason variables that are not assigned at the root level
+        for (int i = 1; i < c.size(); i++) {
+            const Var v = var(c[i]);
+            if (solver->seen[v] || assignmentTrail.level(v) == 0) continue;
+
+            // Clean up and abort (don't remove literal) if:
+            //     1. a decision variable is the reason variable OR
+            //     2. the literal is at a level that cannot be removed later
+            const CRef reason = assignmentTrail.reason(v);
+            if (reason == CRef_Undef ||
+                (assignmentTrail.abstractLevel(v) & abstract_levels) == 0
+            ) {
+                for (int j = 0; j < toClear.size(); j++) solver->seen[toClear[j]] = 0;
+                toClear.clear();
                 return false;
             }
+
+            // Mark variable as seen and add its reason clause to the work queue
+            solver->seen[v] = 1;
+            toClear.push(v);
+            analyze_stack.push(reason);
+
+            solver->analyze_toclear.push(c[i]);
         }
     }
 
@@ -100,6 +113,8 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
         while (!solver->seen[var(assignmentTrail[index--])]);
         p     = assignmentTrail[index+1];
         confl = assignmentTrail.reason(var(p));
+
+        // Mark variable as unseen: it is either at or after the first UIP
         solver->seen[var(p)] = 0;
         pathC--;
 
@@ -107,38 +122,57 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
 
     // Add first UIP literal at index 0
     learntClause[0] = ~p;
+
+    // Note: at this point, seen[v] is true iff v is in the learnt clause, except for the asserting literal,
+    // for which seen is false.
 }
 
-inline void ConflictAnalyzer::simplifyClause(vec<Lit>& learntClause) {
+inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& learntClause) {
     int i, j;
-    if (ccmin_mode == 2) {
-        uint32_t abstract_level = 0;
-        for (i = 1; i < learntClause.size(); i++)
-            abstract_level |= assignmentTrail.abstractLevel(var(learntClause[i])); // (maintain an abstraction of levels involved in conflict)
+    uint32_t abstract_level = 0;
+    for (i = 1; i < learntClause.size(); i++)
+        abstract_level |= assignmentTrail.abstractLevel(var(learntClause[i])); // (maintain an abstraction of levels involved in conflict)
 
-        for (i = j = 1; i < learntClause.size(); i++)
-            if (assignmentTrail.reason(var(learntClause[i])) == CRef_Undef || !litRedundant(learntClause[i], abstract_level))
-                learntClause[j++] = learntClause[i];
-        
-    } else if (ccmin_mode == 1) {
-        for (i = j = 1; i < learntClause.size(); i++){
-            Var x = var(learntClause[i]);
+    for (i = j = 1; i < learntClause.size(); i++)
+        if (assignmentTrail.reason(var(learntClause[i])) == CRef_Undef || !litRedundant(learntClause[i], abstract_level))
+            learntClause[j++] = learntClause[i];
 
-            if (assignmentTrail.reason(x) == CRef_Undef) {
-                learntClause[j++] = learntClause[i];
-            } else {
-                Clause& c = ca[assignmentTrail.reason(var(learntClause[i]))];
-                for (int k = 1; k < c.size(); k++)
-                    if (!solver->seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0){
-                        learntClause[j++] = learntClause[i];
-                        break; }
-            }
-        }
-    } else {
-        i = j = learntClause.size();
+    learntClause.shrink(i - j);
+}
+
+inline bool ConflictAnalyzer::reasonSubsumed(const Clause& c, vec<char>& inLearnt) {
+    // Iterate through every variable in the reason clause, ignoring the propagated variable
+    for (int k = 1; k < c.size(); k++) {
+        // If a non-root variable is not in the learnt clause, the reason clause is not subsumed!
+        if (!inLearnt[var(c[k])] && assignmentTrail.level(var(c[k])) > 0)
+            return false;
+    }
+
+    return true;
+}
+
+inline void ConflictAnalyzer::simplifyClauseBasic(vec<Lit>& learntClause) {
+    // Iterate through every variable in the learnt clause (excluding the asserting literal)
+    int i, j;
+    for (i = j = 1; i < learntClause.size(); i++){
+        const CRef reason = assignmentTrail.reason(var(learntClause[i]));
+        if (// Keep decision variables
+            reason == CRef_Undef ||
+
+            // Keep variables whose reason clauses are not subsumed by the learnt clause
+            !reasonSubsumed(ca[reason], solver->seen)
+        ) learntClause[j++] = learntClause[i];
     }
 
     learntClause.shrink(i - j);
+}
+
+inline void ConflictAnalyzer::simplifyClause(vec<Lit>& learntClause) {
+    switch (ccmin_mode) {
+        case ConflictClauseMinimizationMode::DEEP:  return simplifyClauseDeep(learntClause);
+        case ConflictClauseMinimizationMode::BASIC: return simplifyClauseBasic(learntClause);
+        default: return;
+    }
 }
 
 inline void ConflictAnalyzer::enforceWatcherInvariant(vec<Lit>& learntClause) {
@@ -190,7 +224,7 @@ void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btleve
     out_btlevel = (out_learnt.size() == 1) ? 0 : assignmentTrail.level(var(out_learnt[1]));
 
     // Update data structures for branching heuristics
-    branchingHeuristicManager.handleEventLearnedClause(out_learnt);
+    branchingHeuristicManager.handleEventLearnedClause(out_learnt, solver->analyze_toclear);
 
     // Clear 'seen[]'
     for (int j = 0; j < solver->analyze_toclear.size(); j++)

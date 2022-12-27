@@ -43,16 +43,24 @@ namespace Minisat {
         ////////////////
         // PARAMETERS //
         ////////////////
+        enum ConflictClauseMinimizationMode: int {
+            NONE  = 0,
+            BASIC = 1,
+            DEEP  = 2,
+        };
         
-        int ccmin_mode; // Controls conflict clause minimization (0=none, 1=basic, 2=deep).
+        // Controls conflict clause minimization
+        ConflictClauseMinimizationMode ccmin_mode;
 
         //////////////////////
         // MEMBER VARIABLES //
         //////////////////////
 
-        vec<Lit> analyze_stack;
+        vec<Lit> firstUIPClause;
+        vec<Var> toClear;
+        vec<CRef> analyze_stack;
 
-public:
+    public:
         ////////////////
         // STATISTICS //
         ////////////////
@@ -60,7 +68,7 @@ public:
         uint64_t max_literals;
         uint64_t tot_literals;
 
-protected:
+    protected:
         ///////////////////////
         // SOLVER REFERENCES //
         ///////////////////////
@@ -73,6 +81,32 @@ protected:
         //////////////////////
         // HELPER FUNCTIONS //
         //////////////////////
+
+        /**
+         * @brief Simplify a learnt clause
+         * 
+         * @param learntClause the learnt clause to modify.
+         */
+        void simplifyClauseDeep(vec<Lit>& learntClause);
+
+        /**
+         * @brief Check whether a reason clause is subsumed by a set of variables
+         * 
+         * @param c the reason clause for a variable in the learnt clause
+         * @param inLearnt true if a variable appears in the learnt clause
+         * @return true iff the reason clause is subsumed
+         */
+        bool reasonSubsumed(const Clause& c, vec<char>& inLearnt);
+
+        // (x -a1 -a2)
+        // (-x -b1 -b2 -b3)
+
+        /**
+         * @brief Simplify a learnt clause
+         * 
+         * @param learntClause the learnt clause to modify.
+         */
+        void simplifyClauseBasic(vec<Lit>& learntClause);
 
         /**
          * @brief Learn a clause according to the first UIP learning scheme.

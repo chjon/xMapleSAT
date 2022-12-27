@@ -318,9 +318,10 @@ namespace Minisat {
         /**
          * @brief Update data structures for branching heuristics after learning a clause
          * 
-         * @param out_learnt  the learnt clause
+         * @param out_learnt the simplified learnt clause
+         * @param toClear literals to clear from solver->seen
          */
-        void handleEventLearnedClause(const vec<Lit>& out_learnt);
+        void handleEventLearnedClause(const vec<Lit>& out_learnt, vec<Lit>& toClear);
 
         ///////////////
         // ACCESSORS //
