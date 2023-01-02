@@ -29,7 +29,7 @@ static const char* _cat = "CORE";
 
 static IntOption opt_ccmin_mode (_cat, "ccmin-mode", "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
 
-ConflictAnalyzer::ConflictAnalyzer(Solver* s)
+ConflictAnalyzer::ConflictAnalyzer(Solver& s)
     /////////////
     // Parameters
 
@@ -44,9 +44,9 @@ ConflictAnalyzer::ConflictAnalyzer(Solver* s)
     ////////////////////
     // Solver references
 
-    , assignmentTrail(s->assignmentTrail)
-    , branchingHeuristicManager(s->branchingHeuristicManager)
-    , ca(s->ca)
+    , assignmentTrail(s.assignmentTrail)
+    , branchingHeuristicManager(s.branchingHeuristicManager)
+    , ca(s.ca)
     , solver(s)
 {}
 
@@ -153,7 +153,7 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
 
 #if LBD_BASED_CLAUSE_DELETION
         if (c.learnt() && c.activity() > 2)
-            c.activity() = solver->lbd(c);
+            c.activity() = solver.lbd(c);
 #else
         if (c.learnt())
             claBumpActivity(c);
@@ -165,7 +165,7 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
             if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
             // Mark variable as seen
-            branchingHeuristicManager.handleEventLitInConflictGraph(q, solver->conflicts);
+            branchingHeuristicManager.handleEventLitInConflictGraph(q, solver.conflicts);
             seen[var(q)] = true;
 
             // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict

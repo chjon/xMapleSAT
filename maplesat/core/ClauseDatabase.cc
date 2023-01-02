@@ -29,7 +29,7 @@ using namespace Minisat;
 static const char* _cat = "CORE";
 static DoubleOption opt_garbage_frac (_cat, "gc-frac", "The fraction of wasted memory allowed before a garbage collection is triggered", 0.20, DoubleRange(0, false, HUGE_VAL, false));
 
-ClauseDatabase::ClauseDatabase(Solver* s)
+ClauseDatabase::ClauseDatabase(Solver& s)
     // Memory management parameters
     : remove_satisfied(true)
     , garbage_frac (opt_garbage_frac)
@@ -47,11 +47,11 @@ ClauseDatabase::ClauseDatabase(Solver* s)
     , learnts_literals(0)
 
     // Solver references
-    , variableDatabase(s->variableDatabase)
-    , ca(s->ca)
-    , assignmentTrail(s->assignmentTrail)
-    , unitPropagator(s->unitPropagator)
-    , branchingHeuristicManager(s->branchingHeuristicManager)
+    , variableDatabase(s.variableDatabase)
+    , ca(s.ca)
+    , assignmentTrail(s.assignmentTrail)
+    , unitPropagator(s.unitPropagator)
+    , branchingHeuristicManager(s.branchingHeuristicManager)
     , solver(s)
 {}
 
@@ -81,7 +81,7 @@ void ClauseDatabase::garbageCollect(void) {
     assignmentTrail.relocAll(to);
     relocAll(to);
 
-    if (solver->verbosity >= 2)
+    if (solver.verbosity >= 2)
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
             ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
     
@@ -135,11 +135,11 @@ void ClauseDatabase::handleEventLearntClause(void) {
     maxNumLearnts *= learntSizeLimitGrowthFactor;
 #endif
 
-    if (solver->verbosity >= 1)
+    if (solver.verbosity >= 1)
         printf(
             "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
-            (int)solver->conflicts, 
-            solver->nFreeVars(),
+            (int)solver.conflicts, 
+            solver.nFreeVars(),
             nClauses(),
             (int)clauses_literals, 
             (int)maxNumLearnts,
@@ -181,7 +181,7 @@ void ClauseDatabase::toDimacs(const char *file, const vec<Lit>& assumps) {
 
 void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
     // Handle case when solver is in contradictory state:
-    if (!solver->ok){
+    if (!solver.ok){
         fprintf(f, "p cnf 1 2\n1 0\n-1 0\n");
         return; }
 
@@ -203,18 +203,18 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
         }
 
     // Assumptions are added as unit clauses:
-    cnt += solver->assumptions.size();
+    cnt += solver.assumptions.size();
 
     fprintf(f, "p cnf %d %d\n", max, cnt);
 
-    for (int i = 0; i < solver->assumptions.size(); i++){
-        assert(variableDatabase.value(solver->assumptions[i]) != l_False);
-        fprintf(f, "%s%d 0\n", sign(solver->assumptions[i]) ? "-" : "", mapVar(var(solver->assumptions[i]), map, max)+1);
+    for (int i = 0; i < solver.assumptions.size(); i++){
+        assert(variableDatabase.value(solver.assumptions[i]) != l_False);
+        fprintf(f, "%s%d 0\n", sign(solver.assumptions[i]) ? "-" : "", mapVar(var(solver.assumptions[i]), map, max)+1);
     }
 
     for (int i = 0; i < clauses.size(); i++)
         toDimacs(f, ca[clauses[i]], map, max);
 
-    if (solver->verbosity > 0)
+    if (solver.verbosity > 0)
         printf("Wrote %d clauses with %d variables.\n", cnt, max);
 }

@@ -96,20 +96,20 @@ namespace Minisat {
         PropagationQueue& propagationQueue;
         ClauseAllocator& ca;
         ClauseDatabase& clauseDatabase;
-        Solver* solver;
+        Solver& solver;
 
     public:
         /**
          * @brief Construct a new UnitPropagator object
          * 
-         * @param s Pointer to main solver object - must not be nullptr
+         * @param s Reference to main solver object
          */
-        UnitPropagator(Solver* s);
+        UnitPropagator(Solver& s);
 
         /**
          * @brief Destroy the UnitPropagator object
          */
-        ~UnitPropagator();
+        ~UnitPropagator() = default;
 
         /**
          * @brief Register watchers for a new variable

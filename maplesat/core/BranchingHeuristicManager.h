@@ -172,16 +172,16 @@ namespace Minisat {
         VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         UnitPropagator& unitPropagator;
-        Solver* solver;
+        Solver& solver;
 
     public:
 
         /**
          * @brief Construct a new BranchingHeuristicManager object
          * 
-         * @param s Pointer to main solver object - must not be nullptr
+         * @param s Reference to main solver object
          */
-        BranchingHeuristicManager(Solver* s);
+        BranchingHeuristicManager(Solver& s);
 
         /**
          * @brief Destroy the BranchingHeuristicManager object

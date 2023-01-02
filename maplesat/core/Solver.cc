@@ -76,12 +76,12 @@ Solver::Solver() :
   , asynch_interrupt   (false)
 
   // Solver components
-  , assignmentTrail(this)
-  , propagationQueue(this)
-  , unitPropagator(this)
-  , branchingHeuristicManager(this)
-  , clauseDatabase(this)
-  , conflictAnalyzer(this)
+  , assignmentTrail          (*this)
+  , propagationQueue         (*this)
+  , unitPropagator           (*this)
+  , branchingHeuristicManager(*this)
+  , clauseDatabase           (*this)
+  , conflictAnalyzer         (*this)
 {}
 
 

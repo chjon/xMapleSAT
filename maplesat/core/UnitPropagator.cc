@@ -25,21 +25,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-    UnitPropagator::UnitPropagator(Solver* s)
-        : watches(s->ca)
+    UnitPropagator::UnitPropagator(Solver& s)
+        : watches(s.ca)
         , propagation_budget(-1)
         , propagations(0)
-        , variableDatabase(s->variableDatabase)
-        , assignmentTrail(s->assignmentTrail)
-        , propagationQueue(s->propagationQueue)
-        , ca(s->ca)
-        , clauseDatabase(s->clauseDatabase)
+        , variableDatabase(s.variableDatabase)
+        , assignmentTrail(s.assignmentTrail)
+        , propagationQueue(s.propagationQueue)
+        , ca(s.ca)
+        , clauseDatabase(s.clauseDatabase)
         , solver(s)
     {}
-
-    UnitPropagator::~UnitPropagator() {
-        solver = nullptr;
-    }
 
     void UnitPropagator::relocAll(ClauseAllocator& to) {
         // Clean watchers
@@ -128,7 +124,7 @@ namespace Minisat {
         }
 
         propagations += num_props;
-        solver->simpDB_props -= num_props;
+        solver.simpDB_props -= num_props;
 
         return confl;
     }

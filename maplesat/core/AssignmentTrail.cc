@@ -25,16 +25,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
-AssignmentTrail::AssignmentTrail(Solver* s)
-    : variableDatabase(s->variableDatabase)
-    , ca(s->ca)
+AssignmentTrail::AssignmentTrail(Solver& s)
+    : variableDatabase(s.variableDatabase)
+    , ca(s.ca)
     , solver(s)
 {}
 
 void AssignmentTrail::assign(Lit p, CRef from) {
     assert(variableDatabase.value(p) == l_Undef);
     const Var v = var(p);
-    solver->branchingHeuristicManager.handleEventLitAssigned(p, solver->conflicts);
+    solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
     variableDatabase.setVar(v, lbool(!sign(p)));
     vardata[v] = mkVarData(from, decisionLevel());
     trail.push_(p);
@@ -55,7 +55,7 @@ void AssignmentTrail::cancelUntil(int level) {
         for (int c = trail.size() - 1; c >= trail_lim[level]; c--){
             Var      x  = var(trail[c]);
             variableDatabase.setVar(x, l_Undef);
-            solver->branchingHeuristicManager.handleEventLitUnassigned(trail[c], solver->conflicts, c > trail_lim.last());
+            solver.branchingHeuristicManager.handleEventLitUnassigned(trail[c], solver.conflicts, c > trail_lim.last());
         }
 
         const int qhead = trail_lim[level];
@@ -63,7 +63,7 @@ void AssignmentTrail::cancelUntil(int level) {
         trail_lim.shrink(trail_lim.size() - level);
 
         // Add the assignments at 'level' to the queue
-        solver->propagationQueue.batchEnqueue(trail, qhead);
+        solver.propagationQueue.batchEnqueue(trail, qhead);
     }
 }
 

@@ -93,7 +93,17 @@ namespace Minisat {
         // CONSTRUCTORS //
         //////////////////
 
-        PropagationQueue(Solver* s);
+        /**
+         * @brief Construct a new PropagationQueue object
+         * 
+         * @param s Reference to main solver object
+         */
+        PropagationQueue(Solver& s);
+
+        /**
+         * @brief Destroy the PropagationQueue object
+         * 
+         */
         ~PropagationQueue() = default;
 
         ////////////////

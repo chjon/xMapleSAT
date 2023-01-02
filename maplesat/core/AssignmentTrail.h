@@ -69,7 +69,17 @@ namespace Minisat {
         // CONSTRUCTORS //
         //////////////////
 
-        AssignmentTrail(Solver* s);
+        /**
+         * @brief Construct a new AssignmentTrail object
+         * 
+         * @param s Reference to main solver object
+         */
+        AssignmentTrail(Solver& s);
+
+        /**
+         * @brief Destroy the AssignmentTrail object
+         * 
+         */
         ~AssignmentTrail() = default;
 
         ////////////////
@@ -185,7 +195,7 @@ namespace Minisat {
     private:
         VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
-        Solver* solver;
+        Solver& solver;
 
         friend PropagationQueue;
     };
@@ -195,12 +205,12 @@ namespace Minisat {
         trail  .capacity(v + 1);
     }
 
-    inline void     AssignmentTrail::newDecisionLevel(void)             { trail_lim.push(trail.size()); }
+    inline void     AssignmentTrail::newDecisionLevel(void) { trail_lim.push(trail.size()); }
     
-    inline int      AssignmentTrail::decisionLevel   ()      const      { return trail_lim.size(); }
-    inline uint32_t AssignmentTrail::abstractLevel   (Var x) const      { return 1 << (level(x) & 31); }
-    inline CRef     AssignmentTrail::reason          (Var x) const      { return vardata[x].reason; }
-    inline int      AssignmentTrail::level           (Var x) const      { return vardata[x].level; }
+    inline int      AssignmentTrail::decisionLevel()      const { return trail_lim.size(); }
+    inline uint32_t AssignmentTrail::abstractLevel(Var x) const { return 1 << (level(x) & 31); }
+    inline CRef     AssignmentTrail::reason       (Var x) const { return vardata[x].reason; }
+    inline int      AssignmentTrail::level        (Var x) const { return vardata[x].level; }
     
     inline bool AssignmentTrail::locked (const Clause& c) const { return variableDatabase.value(c[0]) == l_True && reason(var(c[0])) != CRef_Undef && ca.lea(reason(var(c[0]))) == &c; }
     inline void AssignmentTrail::handleEventClauseDeleted(const Clause& c) { if (locked(c)) vardata[var(c[0])].reason = CRef_Undef; }

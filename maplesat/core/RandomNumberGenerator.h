@@ -37,7 +37,16 @@ namespace Minisat {
 
         double random_seed;
     public:
+        /**
+         * @brief Construct a new RandomNumberGenerator object
+         * 
+         */
         RandomNumberGenerator();
+
+        /**
+         * @brief Destroy the RandomNumberGenerator object
+         * 
+         */
         ~RandomNumberGenerator() = default;
 
         double drand();

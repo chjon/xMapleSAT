@@ -119,7 +119,7 @@ namespace Minisat {
         AssignmentTrail& assignmentTrail;
         UnitPropagator& unitPropagator;
         BranchingHeuristicManager& branchingHeuristicManager;
-        Solver* solver;
+        Solver& solver;
 
         //////////////////////
         // HELPER FUNCTIONS //
@@ -222,9 +222,9 @@ namespace Minisat {
         /**
          * @brief Construct a new ClauseDatabase object
          * 
-         * @param s Pointer to main solver object - must not be nullptr
+         * @param s Reference to main solver object
          */
-        ClauseDatabase(Solver* s);
+        ClauseDatabase(Solver& s);
 
         /**
          * @brief Destroy the ClauseDatabase object

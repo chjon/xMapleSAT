@@ -52,16 +52,16 @@ static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the 
 // Heuristic selection
 static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim", "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
-BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
+BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
 #if PRIORITIZE_ER
 #ifdef EXTLVL_ACTIVITY
-  : order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
+    : order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
 #else
-  : order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
-  , order_heap_degree  (VarOrderLt(activity, degree, true))
+    : order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
+    , order_heap_degree  (VarOrderLt(activity, degree, true))
 #endif
 #else
-  : order_heap         (VarOrderLt(activity))
+    : order_heap         (VarOrderLt(activity))
 #endif
 
     //////////////////////////
@@ -103,11 +103,11 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver* s)
     ////////////////////
     // Solver references
 
-    , assignmentTrail(s->assignmentTrail)
-    , randomNumberGenerator(s->randomNumberGenerator)
-    , variableDatabase(s->variableDatabase)
-    , ca(s->ca)
-    , unitPropagator(s->unitPropagator)
+    , assignmentTrail(s.assignmentTrail)
+    , randomNumberGenerator(s.randomNumberGenerator)
+    , variableDatabase(s.variableDatabase)
+    , ca(s.ca)
+    , unitPropagator(s.unitPropagator)
     , solver(s)
 {
 #ifdef POLARITY_VOTING
@@ -142,16 +142,16 @@ Lit BranchingHeuristicManager::pickBranchLit() {
         } else {
 #if ANTI_EXPLORATION
             next = order_heap[0];
-            uint64_t age = solver->conflicts - canceled[next];
+            uint64_t age = solver.conflicts - canceled[next];
             while (age > 0 && variableDatabase.value(next) == l_Undef) {
                 double decay = pow(0.95, age);
                 activity[next] *= decay;
                 if (order_heap.inHeap(next)) {
                     order_heap.increase(next);
                 }
-                canceled[next] = solver->conflicts;
+                canceled[next] = solver.conflicts;
                 next = order_heap[0];
-                age = solver->conflicts - canceled[next];
+                age = solver.conflicts - canceled[next];
             }
 #endif
             next = order_heap.removeMin();

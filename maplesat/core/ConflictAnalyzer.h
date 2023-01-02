@@ -79,7 +79,7 @@ namespace Minisat {
         AssignmentTrail& assignmentTrail;
         BranchingHeuristicManager& branchingHeuristicManager;
         ClauseAllocator& ca;
-        Solver* solver;
+        Solver& solver;
 
         //////////////////////
         // HELPER FUNCTIONS //
@@ -159,9 +159,9 @@ namespace Minisat {
         /**
          * @brief Construct a new ConflictAnalyzer object
          * 
-         * @param s Pointer to main solver object - must not be nullptr
+         * @param s Reference to main solver object
          */
-        ConflictAnalyzer(Solver* s);
+        ConflictAnalyzer(Solver& s);
 
         /**
          * @brief Destroy the ConflictAnalyzer object
