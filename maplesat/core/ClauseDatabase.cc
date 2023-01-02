@@ -1,3 +1,25 @@
+/*******************************************************************************[ClauseDatabase.cc]
+Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+Copyright (c) 2007-2010, Niklas Sorensson
+
+MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**************************************************************************************************/
+
 #include "core/ClauseDatabase.h"
 #include "core/Solver.h"
 #include "mtl/Sort.h"
@@ -8,8 +30,17 @@ static const char* _cat = "CORE";
 static DoubleOption opt_garbage_frac (_cat, "gc-frac", "The fraction of wasted memory allowed before a garbage collection is triggered", 0.20, DoubleRange(0, false, HUGE_VAL, false));
 
 ClauseDatabase::ClauseDatabase(Solver* s)
+    // Memory management parameters
     : remove_satisfied(true)
     , garbage_frac (opt_garbage_frac)
+
+    // Database growth parameters
+    , learntSizeTimerGrowthFactor   (1.5)
+    , learntSizeLimitGrowthTimer    (100)
+#if !RAPID_DELETION
+    , learntSizeLimitFactorInitial  (1./3.)
+    , learntSizeLimitGrowthFactor   (1.1)
+#endif
 
     // Statistics
     , clauses_literals(0)
@@ -90,6 +121,32 @@ void ClauseDatabase::preprocessReduceDB(void) {
     extra_lim = cla_inc / learnts.size(); // Remove any clause below this activity
     sort(learnts, reduceDB_activityDeletion_lt(ca));
 #endif
+}
+
+void ClauseDatabase::handleEventLearntClause(void) {
+    if (--learntSizeLimitGrowthTimerCounter != 0) return;
+
+    // Compute the next time the clause database should grow
+    learntSizeLimitGrowthTimer       *= learntSizeTimerGrowthFactor;
+    learntSizeLimitGrowthTimerCounter = (int)learntSizeLimitGrowthTimer;
+
+#if ! RAPID_DELETION
+    // Update the maximum size of the clause database
+    maxNumLearnts *= learntSizeLimitGrowthFactor;
+#endif
+
+    if (solver->verbosity >= 1)
+        printf(
+            "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
+            (int)solver->conflicts, 
+            solver->nFreeVars(),
+            nClauses(),
+            (int)clauses_literals, 
+            (int)maxNumLearnts,
+            nLearnts(),
+            (double)learnts_literals / nLearnts(),
+            assignmentTrail.progressEstimate() * 100
+        );
 }
 
 //=================================================================================================

@@ -1,15 +1,8 @@
-/****************************************************************************************[Solver.h]
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010, Niklas Sorensson
-
-Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
+/********************************************************************************[ClauseDatabase.h]
+Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+Copyright (c) 2007-2010, Niklas Sorensson
  
-Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
-Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
-
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search 
-
-xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -61,6 +54,32 @@ namespace Minisat {
         double extra_lim;
 #endif
 
+        /// @brief The maximum number of learnt clauses before clause deletion, which is triggered
+        /// when the number of learnt clauses exceeds this value.
+        double maxNumLearnts;
+
+        /// @brief The exponential growth factor for @code{learntSizeLimitGrowthTimer}.
+        /// (default 1.5)
+        double learntSizeTimerGrowthFactor;
+
+        /// @brief Timer for increasing the maximum size of the clause database. (initially 100
+        /// by default)
+        double learntSizeLimitGrowthTimer;
+
+        /// @brief Number of conflicts remaining before the maximum size of the clause database
+        /// should be increased
+        int learntSizeLimitGrowthTimerCounter;
+
+#if !RAPID_DELETION
+        /// @brief The initial limit for learnt clauses as a factor of the number of original
+        /// clauses. (default 1 / 3)
+        double learntSizeLimitFactorInitial;
+
+        /// @brief The limit for learnt clauses is multiplied with this factor each restart.
+        /// (default 1.1)
+        double learntSizeLimitGrowthFactor;
+#endif
+
         /////////////////////////
         // TEMPORARY VARIABLES //
         /////////////////////////
@@ -108,7 +127,7 @@ namespace Minisat {
 
         /**
          * @brief Determine whether a clause should be deleted. This is a helper function for
-         * @code{reduceDB}.
+         * @code{checkReduceDB}.
          * 
          * @details Remove half of the learnt clauses, minus the clauses locked by the current
          * assignment. Locked clauses are clauses that are reason to some assignment. Binary
@@ -157,14 +176,14 @@ namespace Minisat {
 
         /**
          * @brief Perform preprocessing of clause database to prepare for
-         * clause deletion. This is a helper function for @code{reduceDB}.
+         * clause deletion. This is a helper function for @code{checkReduceDB}.
          * 
          */
         void preprocessReduceDB(void);
 
         /**
          * @brief Remove clauses from a database according to a predicate. This is a helper
-         * function for @code{reduceDB} and @code{removeSatisified}.
+         * function for @code{checkReduceDB} and @code{removeSatisified}.
          * 
          * @tparam DeletionPredicate a function pointer: takes a clause and its index in the
          * database as arguments. Returns true iff the clause should be removed.
@@ -218,6 +237,12 @@ namespace Minisat {
         ////////////////
 
         /**
+         * @brief Initialize the clause database size limit and associated timers.
+         * 
+         */
+        void init(void);
+
+        /**
          * @brief Add a clause to the learnt clause database
          * 
          * @param ps the list of literals to add as a clause
@@ -250,7 +275,13 @@ namespace Minisat {
          * @brief Reduce the set of learnt clauses
          * 
          */
-        void reduceDB(void);
+        void checkReduceDB(void);
+
+        /**
+         * @brief Update clause database size limit data structures upon learning a clause.
+         * 
+         */
+        void handleEventLearntClause(void);
 
         ////////////
         // OUTPUT //
@@ -348,12 +379,25 @@ namespace Minisat {
     // PUBLIC API //
     ////////////////
 
+    inline void ClauseDatabase::init(void) {
+        // Initialize database size limit for clause deletion
+    #if RAPID_DELETION
+        maxNumLearnts = 2000;
+    #else
+        maxNumLearnts = nClauses() * learntSizeLimitFactorInitial;
+    #endif
+
+        // Initialize database growth timer
+        learntSizeLimitGrowthTimerCounter = static_cast<int>(learntSizeLimitGrowthTimer);
+    }
+
     inline CRef ClauseDatabase::addInputClause(vec<Lit>& ps) {
         assert(ps.size() > 1);
         return addClause(ps, clauses, false);
     }
 
     inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
+        handleEventLearntClause();
         return addClause(ps, learnts, true);
     }
 
@@ -367,7 +411,9 @@ namespace Minisat {
             garbageCollect();
     }
 
-    inline void ClauseDatabase::reduceDB() {
+    inline void ClauseDatabase::checkReduceDB() {
+        if (nLearnts() - assignmentTrail.nAssigns() < maxNumLearnts) return;
+
         // Prepare for clause deletion
         preprocessReduceDB();
 
@@ -376,6 +422,10 @@ namespace Minisat {
 
         // Perform garbage collection if needed
         checkGarbage(garbage_frac);
+
+#if RAPID_DELETION
+        maxNumLearnts += 500;
+#endif
     }
 
     inline void ClauseDatabase::removeSatisfied(void) {

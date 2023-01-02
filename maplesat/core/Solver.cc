@@ -2,6 +2,8 @@
 Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
 Copyright (c) 2007-2010, Niklas Sorensson
 
+MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -55,15 +57,6 @@ Solver::Solver() :
   , restart_first    (opt_restart_first)
   , restart_inc      (opt_restart_inc)
 
-    // Parameters (the rest):
-    //
-  , learntsize_factor((double)1/(double)3), learntsize_inc(1.1)
-
-    // Parameters (experimental):
-    //
-  , learntsize_adjust_start_confl (100)
-  , learntsize_adjust_inc         (1.5)
-
     // Statistics: (formerly in 'SolverStats')
     //
   , solves(0), starts(0), conflicts(0)
@@ -75,7 +68,6 @@ Solver::Solver() :
 #endif
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-  , progress_estimate  (0)
 
     // Resource constraints:
     //
@@ -148,10 +140,6 @@ bool Solver::addClause(vec<Lit>& ps) {
     clauseDatabase.addInputClause(ps);
 
     return true;
-}
-
-int min(int a, int b) {
-    return a < b ? a : b;
 }
 
 /*_________________________________________________________________________________________________
@@ -247,26 +235,10 @@ lbool Solver::search(int nof_conflicts) {
 #if ! LBD_BASED_CLAUSE_DELETION
             claDecayActivity();
 #endif
-
-            if (--learntsize_adjust_cnt == 0){
-                learntsize_adjust_confl *= learntsize_adjust_inc;
-                learntsize_adjust_cnt    = (int)learntsize_adjust_confl;
-#if ! RAPID_DELETION
-                max_learnts             *= learntsize_inc;
-#endif
-
-                if (verbosity >= 1)
-                    printf("| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
-                           (int)conflicts, 
-                           nFreeVars(), clauseDatabase.nClauses(), (int)clauseDatabase.clauses_literals, 
-                           (int)max_learnts, clauseDatabase.nLearnts(), (double)clauseDatabase.learnts_literals/clauseDatabase.nLearnts(), assignmentTrail.progressEstimate()*100);
-            }
-
         } else {
             // NO CONFLICT
             if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()) {
                 // Reached bound on number of conflicts:
-                progress_estimate = assignmentTrail.progressEstimate();
                 assignmentTrail.cancelUntil(0);
                 return l_Undef;
             }
@@ -276,12 +248,7 @@ lbool Solver::search(int nof_conflicts) {
                 return l_False;
 
             // Reduce the set of learnt clauses:
-            if (clauseDatabase.nLearnts() - assignmentTrail.nAssigns() >= max_learnts) {
-                clauseDatabase.reduceDB();
-#if RAPID_DELETION
-                max_learnts += 500;
-#endif
-            }
+            clauseDatabase.checkReduceDB();
 
             Lit next = lit_Undef;
             while (assignmentTrail.decisionLevel() < assumptions.size()) {
@@ -351,14 +318,9 @@ lbool Solver::solve_() {
 
     solves++;
 
-#if RAPID_DELETION
-    max_learnts               = 2000;
-#else
-    max_learnts               = nClauses() * learntsize_factor;
-#endif
-    learntsize_adjust_confl   = learntsize_adjust_start_confl;
-    learntsize_adjust_cnt     = (int)learntsize_adjust_confl;
-    lbool   status            = l_Undef;
+    clauseDatabase.init();
+
+    lbool status = l_Undef;
 
     if (verbosity >= 1){
         printf("LBD Based Clause Deletion : %d\n", LBD_BASED_CLAUSE_DELETION);
