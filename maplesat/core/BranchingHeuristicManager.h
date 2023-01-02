@@ -1,15 +1,8 @@
-/****************************************************************************************[Solver.h]
+/*********************************************************************[BranchingHeuristicManager.h]
 MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
            Copyright (c) 2007-2010, Niklas Sorensson
 
-Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
- 
-Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
-Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
-
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search 
-
-xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -242,8 +235,8 @@ namespace Minisat {
         // Phase saving
 
         /**
-         * @brief Declare which polarity the decision heuristic should use for a variable.
-         * Requires mode 'polarity_user'.
+         * @brief Declare which polarity the decision heuristic should use for a variable. Requires
+         * mode 'polarity_user'.
          * 
          * @param v The variable to set
          * @param b The default polarity for v
@@ -251,7 +244,8 @@ namespace Minisat {
         void setPolarity   (Var v, bool b);
 
         /**
-         * @brief Declare whether a variable should be eligible for selection in the decision heuristic.
+         * @brief Declare whether a variable should be eligible for selection in the decision
+         * heuristic.
          * 
          * @param v The variable to set
          * @param b true iff v is a decision variable
@@ -282,7 +276,7 @@ namespace Minisat {
          * 
          * @param l The literal that was unassigned
          * @param conflicts The current number of conflicts in the solver
-         * @param assignedAtLastLevel true if l was assigned at the last decision level, false otherwise
+         * @param assignedAtLastLevel true iff l was assigned at the last decision level
          */
         void handleEventLitUnassigned(Lit l, uint64_t conflicts, bool assignedAtLastLevel);
 
@@ -302,8 +296,8 @@ namespace Minisat {
         void handleEventConflicted(uint64_t conflicts);
 
         /**
-         * @brief Update data structures for branching heuristics when a literal appears in
-         * the conflict graph.
+         * @brief Update data structures for branching heuristics when a literal appears in the
+         * conflict graph.
          * 
          * @param l The literal in the conflict graph
          * @param conflicts the previous total number of conflicts
