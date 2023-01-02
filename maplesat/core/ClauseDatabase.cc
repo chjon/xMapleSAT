@@ -46,7 +46,9 @@ void ClauseDatabase::garbageCollect(void) {
     ClauseAllocator to(ca.size() - ca.wasted()); 
 
     // Reloc all clause references
-    solver->relocAll(to);
+    unitPropagator .relocAll(to);
+    assignmentTrail.relocAll(to);
+    relocAll(to);
 
     if (solver->verbosity >= 2)
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
@@ -56,70 +58,38 @@ void ClauseDatabase::garbageCollect(void) {
     to.moveTo(ca);
 }
 
-/*_________________________________________________________________________________________________
-|
-|  reduceDB : ()  ->  [void]
-|  
-|  Description:
-|    Remove half of the learnt clauses, minus the clauses locked by the current assignment. Locked
-|    clauses are clauses that are reason to some assignment. Binary clauses are never removed.
-|________________________________________________________________________________________________@*/
-struct reduceDB_lt { 
-    ClauseAllocator& ca;
-#if LBD_BASED_CLAUSE_DELETION
+struct reduceDB_lbdDeletion_lt {
+    const ClauseAllocator& ca;
     const vec<double>& activity;
-    reduceDB_lt(ClauseAllocator& ca_,const vec<double>& activity_) : ca(ca_), activity(activity_) {}
-#else
-    reduceDB_lt(ClauseAllocator& ca_) : ca(ca_) {}
-#endif
+    reduceDB_lbdDeletion_lt(ClauseAllocator& ca_,const vec<double>& activity_)
+        : ca(ca_)
+        , activity(activity_)
+    {}
     bool operator () (CRef x, CRef y) { 
-#if LBD_BASED_CLAUSE_DELETION
         return ca[x].activity() > ca[y].activity();
-#else
-        return ca[x].size() > 2 && (ca[y].size() == 2 || ca[x].activity() < ca[y].activity());
-#endif
     }
 };
 
-void ClauseDatabase::reduceDB() {
+struct reduceDB_activityDeletion_lt {
+    const ClauseAllocator& ca;
+    reduceDB_activityDeletion_lt(ClauseAllocator& ca_)
+        : ca(ca_)
+    {}
+    bool operator () (CRef x, CRef y) { 
+        return
+            ca[x].size() > 2 && (ca[y].size() == 2 ||
+            ca[x].activity() < ca[y].activity());
+    }
+};
+
+void ClauseDatabase::preprocessReduceDB(void) {
     // Sort clauses by activity
 #if LBD_BASED_CLAUSE_DELETION
-    sort(learnts, reduceDB_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
+    sort(learnts, reduceDB_lbdDeletion_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
 #else
-    double extra_lim = cla_inc / learnts.size(); // Remove any clause below this activity
-    sort(learnts, reduceDB_lt(ca));
+    extra_lim = cla_inc / learnts.size(); // Remove any clause below this activity
+    sort(learnts, reduceDB_activityDeletion_lt(ca));
 #endif
-
-    // Don't delete binary or locked clauses. From the rest, delete clauses from the first half
-    // and clauses with activity smaller than 'extra_lim':
-    int i, j;
-    for (i = j = 0; i < learnts.size(); i++){
-        Clause& c = ca[learnts[i]];
-#if LBD_BASED_CLAUSE_DELETION
-        if (c.activity() > 2 && !assignmentTrail.locked(c) && i < learnts.size() / 2)
-#else
-        if (c.size() > 2 && !assignmentTrail.locked(c) && (i < learnts.size() / 2 || c.activity() < extra_lim))
-#endif
-            removeClause(learnts[i]);
-        else
-            learnts[j++] = learnts[i];
-    }
-    learnts.shrink(i - j);
-
-    // Perform garbage collection if needed
-    checkGarbage(garbage_frac);
-}
-
-void ClauseDatabase::removeSatisfied(vec<CRef>& cs) {
-    int i, j;
-    for (i = j = 0; i < cs.size(); i++) {
-        Clause& c = ca[cs[i]];
-        if (variableDatabase.satisfied(c))
-            removeClause(cs[i]);
-        else
-            cs[j++] = cs[i];
-    }
-    cs.shrink(i - j);
 }
 
 //=================================================================================================
@@ -135,7 +105,6 @@ static Var mapVar(Var x, vec<Var>& map, Var& max) {
     return map[x];
 }
 
-
 void ClauseDatabase::toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max) {
     if (variableDatabase.satisfied(c)) return;
 
@@ -145,7 +114,6 @@ void ClauseDatabase::toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max) {
     fprintf(f, "0\n");
 }
 
-
 void ClauseDatabase::toDimacs(const char *file, const vec<Lit>& assumps) {
     FILE* f = fopen(file, "wr");
     if (f == NULL)
@@ -153,7 +121,6 @@ void ClauseDatabase::toDimacs(const char *file, const vec<Lit>& assumps) {
     toDimacs(f, assumps);
     fclose(f);
 }
-
 
 void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
     // Handle case when solver is in contradictory state:

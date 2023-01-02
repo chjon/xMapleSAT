@@ -164,13 +164,6 @@ protected:
     void     claBumpActivity  (Clause& c);             // Increase a clause with the current 'bump' value.
 #endif
 
-    /**
-     * @brief Relocate all clause references
-     * 
-     * @param to the ClauseAllocator to relocate to
-     */
-    void relocAll(ClauseAllocator& to);
-
     // Misc:
     //
     bool withinBudget() const;
@@ -208,8 +201,6 @@ inline void Solver::claBumpActivity (Clause& c) {
             cla_inc *= 1e-20; } }
 #endif
 
-// NOTE: enqueue does not set the ok flag! (only public methods do)
-
 inline lbool    Solver::modelValue    (Var x) const   { return model[x]; }
 inline lbool    Solver::modelValue    (Lit p) const   { return model[var(p)] ^ sign(p); }
 inline int      Solver::nFreeVars     ()      const   { return (int)branchingHeuristicManager.dec_vars - assignmentTrail.nRootAssigns(); }
@@ -233,20 +224,6 @@ inline bool     Solver::solve         (Lit p, Lit q, Lit r) { budgetOff(); assum
 inline bool     Solver::solve         (const vec<Lit>& assumps){ budgetOff(); assumps.copyTo(assumptions); return solve_() == l_True; }
 inline lbool    Solver::solveLimited  (const vec<Lit>& assumps){ assumps.copyTo(assumptions); return solve_(); }
 inline bool     Solver::okay          ()      const   { return ok; }
-
-//=================================================================================================
-// Garbage Collection methods:
-
-inline void Solver::relocAll(ClauseAllocator& to) {
-    // All watchers:
-    unitPropagator.relocAll(to);
-
-    // All reasons:
-    assignmentTrail.relocAll(to);
-
-    // All clauses:
-    clauseDatabase.relocAll(to);
-}
 
 //=================================================================================================
 // Debug etc:
