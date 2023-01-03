@@ -68,11 +68,11 @@ namespace Minisat {
 
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         int qhead;
-        vec<Lit>& queue;
+        const vec<Lit>& queue;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         int qhead;
-        vec<Lit>& queue;
+        const vec<Lit>& queue;
         Heap< LitOrderLt<double> > order_heap;
         vec<lbool> soft_assigns;
         vec<CRef>  reasons;

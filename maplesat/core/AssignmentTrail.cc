@@ -25,47 +25,17 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
 AssignmentTrail::AssignmentTrail(Solver& s)
     : variableDatabase(s.variableDatabase)
     , ca(s.ca)
     , solver(s)
 {}
 
-void AssignmentTrail::assign(Lit p, CRef from) {
-    assert(variableDatabase.value(p) == l_Undef);
-    const Var v = var(p);
-    solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
-    variableDatabase.setVar(v, lbool(!sign(p)));
-    vardata[v] = mkVarData(from, decisionLevel());
-    trail.push_(p);
-}
-
-void AssignmentTrail::relocAll(ClauseAllocator& to) {
-    for (int i = 0; i < trail.size(); i++) {
-        Var v = var(trail[i]);
-        if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            ca.reloc(vardata[v].reason, to);
-    }
-}
-
-// Revert to the state at given level (keeping all assignment at 'level' but not beyond).
-//
-void AssignmentTrail::cancelUntil(int level) {
-    if (decisionLevel() > level){
-        for (int c = trail.size() - 1; c >= trail_lim[level]; c--){
-            Var      x  = var(trail[c]);
-            variableDatabase.setVar(x, l_Undef);
-            solver.branchingHeuristicManager.handleEventLitUnassigned(trail[c], solver.conflicts, c > trail_lim.last());
-        }
-
-        const int qhead = trail_lim[level];
-        trail.shrink(trail.size() - trail_lim[level]);
-        trail_lim.shrink(trail_lim.size() - level);
-
-        // Add the assignments at 'level' to the queue
-        solver.propagationQueue.batchEnqueue(trail, qhead);
-    }
-}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// ACCESSORS
 
 double AssignmentTrail::progressEstimate() const {
     double progress = 0;
@@ -78,4 +48,40 @@ double AssignmentTrail::progressEstimate() const {
     }
 
     return progress / variableDatabase.nVars();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// STATE MODIFICATION
+
+void AssignmentTrail::assign(Lit p, CRef from) {
+    assert(variableDatabase.value(p) == l_Undef);
+    const Var v = var(p);
+    solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
+    variableDatabase.setVar(v, lbool(!sign(p)));
+    vardata[v] = VarData{from, decisionLevel()};
+    trail.push_(p);
+}
+
+void AssignmentTrail::cancelUntil(int level) {
+    // Do nothing if the trail is already set at the correct level
+    if (decisionLevel() <= level) return;
+
+    // Clear the values of the variables
+    for (int c = trail.size() - 1; c >= trail_lim[level]; c--){
+        Var x = var(trail[c]);
+        variableDatabase.setVar(x, l_Undef);
+        solver.branchingHeuristicManager.handleEventLitUnassigned(
+            trail[c],
+            solver.conflicts,
+            c > trail_lim.last()
+        );
+    }
+
+    // Decrease the size of the trail
+    const int qhead = trail_lim[level];
+    trail.shrink(trail.size() - trail_lim[level]);
+    trail_lim.shrink(trail_lim.size() - level);
+
+    // Add the assignments at 'level' to the queue
+    solver.propagationQueue.batchEnqueue(trail, qhead);
 }

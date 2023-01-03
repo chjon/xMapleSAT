@@ -28,11 +28,11 @@ using namespace Minisat;
 PropagationQueue::PropagationQueue(Solver& s)
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
     : qhead(0)
-    , queue(s.assignmentTrail.trail) 
+    , queue(s.assignmentTrail.getTrail()) 
 
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     : qhead(0)
-    , queue(s.assignmentTrail.trail) 
+    , queue(s.assignmentTrail.getTrail()) 
     , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivityVSIDS()))
 
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
