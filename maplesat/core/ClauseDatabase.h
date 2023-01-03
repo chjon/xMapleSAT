@@ -25,25 +25,33 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <stdio.h>
 #include "core/SolverTypes.h"
-#include "core/VariableDatabase.h"
 #include "core/UnitPropagator.h"
+#include "core/VariableDatabase.h"
 
 namespace Minisat {
+    // Forward declarations
     class Solver;
     class AssignmentTrail;
     class BranchingHeuristicManager;
 
+    /**
+     * @brief This class manages clauses and clause deletion.
+     * 
+     */
     class ClauseDatabase {
     protected:
         //////////////////////
         // MEMBER VARIABLES //
         //////////////////////
 
-        vec<CRef> clauses; // List of problem clauses.
-        vec<CRef> learnts; // List of learnt clauses.
+        /// @brief List of input problem clauses.
+        vec<CRef> clauses;
+
+        /// @brief List of learnt clauses.
+        vec<CRef> learnts;
 
         /// @brief Indicates whether possibly inefficient linear scan for satisfied clauses should
-        /// be performed in 'simplify'.
+        /// be performed in 'removeSatisfied'.
         bool remove_satisfied;
 
         /// @brief The fraction of wasted memory allowed before a garbage collection is triggered.
@@ -397,8 +405,9 @@ namespace Minisat {
     }
 
     inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
+        const CRef cr = addClause(ps, learnts, true);
         handleEventLearntClause();
-        return addClause(ps, learnts, true);
+        return cr;
     }
 
     inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
