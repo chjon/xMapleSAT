@@ -24,73 +24,143 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_ConflictAnalyzer_h
 
 #include "core/SolverTypes.h"
-#include "core/AssignmentTrail.h"
-#include "core/BranchingHeuristicManager.h"
 
 namespace Minisat {
     // Forward declarations
     class Solver;
+    class AssignmentTrail;
+    class BranchingHeuristicManager;
 
+    /**
+     * @brief This class is responsible for analyzing conflict graphs to generate and simplify
+     * learnt clauses.
+     * 
+     */
     class ConflictAnalyzer {
     protected:
-        ////////////////
-        // PARAMETERS //
-        ////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER TYPES
+
         enum ConflictClauseMinimizationMode: int {
             NONE  = 0,
             BASIC = 1,
             DEEP  = 2,
         };
-        
-        // Controls conflict clause minimization
-        ConflictClauseMinimizationMode ccmin_mode;
 
-        /////////////////////////
-        // TEMPORARY VARIABLES //
-        /////////////////////////
-        // these variables are allocated here to avoid repeated allocation costs
-
-        // A learnt clause
-        vec<Lit> firstUIPClause;
-
-        // Work stack for @code{litRedundant}: holds list of reason clauses to be examined
-        vec<CRef> workStack;
-
-        // Marks whether a variable has already been seen
-        vec<bool> seen;
-
-        // Stores variables whose values have been set in @code{seen} and need to be cleared.
-        // Currently only used by @code{litRedundant}
-        vec<Var> toClear;
-
-    public:
-        ////////////////
-        // STATISTICS //
-        ////////////////
-
-        uint64_t max_literals;
-        uint64_t tot_literals;
-
-    protected:
-        ///////////////////////
-        // SOLVER REFERENCES //
-        ///////////////////////
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // SOLVER REFERENCES
 
         AssignmentTrail& assignmentTrail;
         BranchingHeuristicManager& branchingHeuristicManager;
         ClauseAllocator& ca;
         Solver& solver;
 
-        //////////////////////
-        // HELPER FUNCTIONS //
-        //////////////////////
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PARAMETERS
+        
+        /// @brief Controls conflict clause minimization
+        ConflictClauseMinimizationMode ccmin_mode;
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // TEMPORARY VARIABLES
+        //
+        // these variables are allocated here to avoid repeated allocation costs
+
+        /// @brief A learnt clause
+        vec<Lit> firstUIPClause;
+
+        /// @brief Work stack for @code{litRedundant}: holds list of reason clauses to be examined
+        vec<CRef> workStack;
+
+        /// @brief Marks whether a variable has already been seen
+        vec<bool> seen;
+
+        /// @brief Stores variables whose values have been set in @code{seen} and need to be
+        /// cleared. Currently only used by @code{litRedundant}
+        vec<Var> toClear;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATISTICS
+
+        /// @brief The total number of literals in from first UIP learnt clauses
+        uint64_t max_literals;
+
+        /// @brief The total number of literals in learnt clauses after clause simplification and
+        /// minimization
+        uint64_t tot_literals;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
+
+        /**
+         * @brief Construct a new ConflictAnalyzer object
+         * 
+         * @param s Reference to main solver object
+         */
+        ConflictAnalyzer(Solver& s);
+
+        /**
+         * @brief Destroy the ConflictAnalyzer object
+         * 
+         */
+        ~ConflictAnalyzer() = default;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATE MODIFICATION
+
+        /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @param v the variable to register
+         */
+        void newVar(Var v);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PUBLIC API
+
+        /**
+         * @brief Analyze the current conflict graph and generate a learnt clause and its
+         * associated backtrack level.
+         * 
+         * @param confl The clause responsible for the current conflict
+         * @param out_learnt Output: the learnt clause
+         * @param out_btlevel Output: the backtrack level for the learnt clause
+         * 
+         * @pre 'out_learnt' is assumed to be cleared
+         * @pre Current decision level must be greater than root level
+         * 
+         * @post 'out_learnt[0]' is the asserting literal at level 'out_btlevel'.
+         * @post If out_learnt.size() > 1 then 'out_learnt[1]' has the greatest decision level of
+         * the rest of the literals. There may be others from the same level.
+         */
+        void analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel);
+
+        /**
+         * @brief Specialized analysis procedure to express the final conflict in terms of
+         * assumptions. Calculates the (possibly empty) set of assumptions that led to the
+         * assignment of 'p'.
+         * 
+         * @param p the conflicting literal
+         * @param out_conflict the set of assumptions leading to the assignment of @code{p}
+         */
+        void analyzeFinal(Lit p, vec<Lit>& out_conflict);
+
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER FUNCTIONS
 
         /**
          * @brief Check whether a literal is redundant and can be removed.
          * 
          * @param p the literal to check for redundancy
-         * @param abstract_levels an abstraction of decision levels, used to abort early if the algorithm
-         * is visiting literals at levels that cannot be removed later.
+         * @param abstract_levels an abstraction of decision levels, used to abort early if the
+         * algorithm is visiting literals at levels that cannot be removed later.
          * @return true if p is redundant and can be removed, false otherwise
          * 
          * @note this is a helper method for @code{simplifyClauseDeep}
@@ -150,39 +220,10 @@ namespace Minisat {
          * @param learntClause the learnt clause to modify.
          */
         void enforceWatcherInvariant(vec<Lit>& learntClause);
-
-    public:
-        //////////////////
-        // CONSTRUCTORS //
-        //////////////////
-
-        /**
-         * @brief Construct a new ConflictAnalyzer object
-         * 
-         * @param s Reference to main solver object
-         */
-        ConflictAnalyzer(Solver& s);
-
-        /**
-         * @brief Destroy the ConflictAnalyzer object
-         * 
-         */
-        ~ConflictAnalyzer() = default;
-
-        ////////////////
-        // PUBLIC API //
-        ////////////////
-
-        /**
-         * @brief Set up internal data structures for a new variable
-         * 
-         * @param v the variable to register
-         */
-        void newVar(Var v);
-
-        void analyze     (CRef confl, vec<Lit>& out_learnt, int& out_btlevel); // (bt = backtrack)
-        void analyzeFinal(Lit p, vec<Lit>& out_conflict);                      // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
     };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE METHODS
 
     inline void ConflictAnalyzer::newVar(Var v) {
         seen.push(false);

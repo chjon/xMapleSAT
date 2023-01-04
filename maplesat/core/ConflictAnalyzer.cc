@@ -29,11 +29,22 @@ static const char* _cat = "CORE";
 
 static IntOption opt_ccmin_mode (_cat, "ccmin-mode", "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
 ConflictAnalyzer::ConflictAnalyzer(Solver& s)
+    ////////////////////
+    // Solver references
+
+    : assignmentTrail(s.assignmentTrail)
+    , branchingHeuristicManager(s.branchingHeuristicManager)
+    , ca(s.ca)
+    , solver(s)
+
     /////////////
     // Parameters
 
-    : ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
+    , ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
 
     /////////////
     // Statistics
@@ -41,14 +52,78 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
     , max_literals(0)
     , tot_literals(0)
 
-    ////////////////////
-    // Solver references
-
-    , assignmentTrail(s.assignmentTrail)
-    , branchingHeuristicManager(s.branchingHeuristicManager)
-    , ca(s.ca)
-    , solver(s)
 {}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// PUBLIC API
+
+void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
+    // Generate conflict clause:
+    firstUIPClause.clear();
+    getFirstUIPClause(confl, firstUIPClause);
+    max_literals += firstUIPClause.size();
+
+    // Simplify conflict clause:
+    simplifyClause(out_learnt, firstUIPClause);
+    tot_literals += out_learnt.size();
+
+    // Enforce watcher invariant
+    enforceWatcherInvariant(out_learnt);
+
+    // Find backtrack level:
+    out_btlevel = (out_learnt.size() == 1) ? 0 : assignmentTrail.level(var(out_learnt[1]));
+
+    // Update data structures for branching heuristics
+    branchingHeuristicManager.handleEventLearnedClause(out_learnt, seen);
+
+    // Clean up
+    // TODO: can this be moved before updating the branching heuristic?
+    // it is currently polluted by simplifyClause
+    for (int j = 0; j < toClear.size(); j++)
+        seen[toClear[j]] = false;
+    toClear.clear();
+
+    // Clear 'seen[]'
+    for (int j = 0; j < firstUIPClause.size(); j++)
+        seen[var(firstUIPClause[j])] = false;
+}
+
+void ConflictAnalyzer::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
+    out_conflict.clear();
+    out_conflict.push(p);
+
+    // Return an empty set of assumptions
+    if (assignmentTrail.decisionLevel() == 0) return;
+
+    // Mark the conflicting literal as seen
+    seen[var(p)] = true;
+
+    // Iterate through every variable in the conflict graph
+    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--) {
+        Var x = var(assignmentTrail[i]);
+        if (!seen[x]) continue;
+
+        if (assignmentTrail.reason(x) == CRef_Undef){
+            // Add variable to conflict clause
+            assert(assignmentTrail.level(x) > 0);
+            out_conflict.push(~assignmentTrail[i]);
+        } else {
+            // Queue variables to be analyzed
+            Clause& c = ca[assignmentTrail.reason(x)];
+            for (int j = 1; j < c.size(); j++)
+                if (assignmentTrail.level(var(c[j])) > 0)
+                    seen[var(c[j])] = true;
+        }
+        
+        seen[x] = false;
+    }
+
+    // Clear seen variables
+    seen[var(p)] = false;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// HELPER FUNCTIONS
 
 bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
     // Initialize local data structures
@@ -215,88 +290,4 @@ inline void ConflictAnalyzer::enforceWatcherInvariant(vec<Lit>& learntClause) {
 
     // Swap-in this literal at index 1:
     std::swap(learntClause[1], learntClause[max_i]);
-}
-
-/*_________________________________________________________________________________________________
-|
-|  analyze : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
-|  
-|  Description:
-|    Analyze conflict and produce a reason clause.
-|  
-|    Pre-conditions:
-|      * 'out_learnt' is assumed to be cleared.
-|      * Current decision level must be greater than root level.
-|  
-|    Post-conditions:
-|      * 'out_learnt[0]' is the asserting literal at level 'out_btlevel'.
-|      * If out_learnt.size() > 1 then 'out_learnt[1]' has the greatest decision level of the 
-|        rest of literals. There may be others from the same level though.
-|  
-|________________________________________________________________________________________________@*/
-void ConflictAnalyzer::analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel) {
-    // Generate conflict clause:
-    firstUIPClause.clear();
-    getFirstUIPClause(confl, firstUIPClause);
-    max_literals += firstUIPClause.size();
-
-    // Simplify conflict clause:
-    simplifyClause(out_learnt, firstUIPClause);
-    tot_literals += out_learnt.size();
-
-    // Enforce watcher invariant
-    enforceWatcherInvariant(out_learnt);
-
-    // Find backtrack level:
-    out_btlevel = (out_learnt.size() == 1) ? 0 : assignmentTrail.level(var(out_learnt[1]));
-
-    // Update data structures for branching heuristics
-    branchingHeuristicManager.handleEventLearnedClause(out_learnt, seen);
-
-    // Clean up
-    // TODO: can this be moved before updating the branching heuristic? it is currently polluted by simplifyClause
-    for (int j = 0; j < toClear.size(); j++)
-        seen[toClear[j]] = false;
-    toClear.clear();
-
-    // Clear 'seen[]'
-    for (int j = 0; j < firstUIPClause.size(); j++)
-        seen[var(firstUIPClause[j])] = false;
-}
-
-/*_________________________________________________________________________________________________
-|
-|  analyzeFinal : (p : Lit)  ->  [void]
-|  
-|  Description:
-|    Specialized analysis procedure to express the final conflict in terms of assumptions.
-|    Calculates the (possibly empty) set of assumptions that led to the assignment of 'p', and
-|    stores the result in 'out_conflict'.
-|________________________________________________________________________________________________@*/
-void ConflictAnalyzer::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
-    out_conflict.clear();
-    out_conflict.push(p);
-
-    if (assignmentTrail.decisionLevel() == 0)
-        return;
-
-    seen[var(p)] = true;
-
-    for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--) {
-        Var x = var(assignmentTrail[i]);
-        if (seen[x]) {
-            if (assignmentTrail.reason(x) == CRef_Undef){
-                assert(assignmentTrail.level(x) > 0);
-                out_conflict.push(~assignmentTrail[i]);
-            } else {
-                Clause& c = ca[assignmentTrail.reason(x)];
-                for (int j = 1; j < c.size(); j++)
-                    if (assignmentTrail.level(var(c[j])) > 0)
-                        seen[var(c[j])] = true;
-            }
-            seen[x] = false;
-        }
-    }
-
-    seen[var(p)] = false;
 }
