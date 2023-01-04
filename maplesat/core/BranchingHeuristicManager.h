@@ -26,13 +26,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <math.h>
 #include "core/AssignmentTrail.h"
 #include "core/RandomNumberGenerator.h"
-#include "core/UnitPropagator.h"
 #include "core/VariableDatabase.h"
 #include "mtl/Heap.h"
 
 namespace Minisat {
     // Forward declarations
     class Solver;
+    class UnitPropagator;
 
     /**
      * @brief This class selects decision variables for branching and manages data structures for

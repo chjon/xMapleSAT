@@ -26,7 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <stdio.h>
 #include "core/AssignmentTrail.h"
 #include "core/UnitPropagator.h"
-#include "core/VariableDatabase.h"
 
 namespace Minisat {
     // Forward declarations
