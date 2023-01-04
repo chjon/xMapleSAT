@@ -24,19 +24,22 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_RandomNumberGenerator_h
 
 namespace Minisat {
+    /**
+     * @brief This class generates random numbers.
+     * 
+     */
     class RandomNumberGenerator {
     private:
-        // Static helpers:
-        //
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // MEMBER VARIABLES
 
-        // Returns a random float 0 <= x < 1. Seed must never be 0.
-        static double drand(double& seed);
-
-        // Returns a random integer 0 <= x < size. Seed must never be 0.
-        static int irand(double& seed, int size);
-
+        /// @brief The seed for generating pseudorandom numbers
         double random_seed;
+
     public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
+
         /**
          * @brief Construct a new RandomNumberGenerator object
          * 
@@ -49,9 +52,52 @@ namespace Minisat {
          */
         ~RandomNumberGenerator() = default;
 
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATIC HELPER FUNCTIONS
+
+        /**
+         * @brief Get a random float 0 <= x < 1
+         * 
+         * @param seed The seed for generating the next pseudorandom number
+         * @return A pseudorandom float 0 <= x < 1
+         * 
+         * @pre seed is not 0
+         */
+        static double drand(double& seed);
+
+        /**
+         * @brief Get a random integer 0 <= x < size
+         * 
+         * @param seed The seed for generating the next pseudorandom number
+         * @param size The limit for the generated value
+         * @return a pseudorandom integer 0 <= x < size 
+         */
+        static int irand(double& seed, int size);
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PUBLIC API
+
+        /**
+         * @brief Get a random float 0 <= x < 1
+         * 
+         * @return A pseudorandom float 0 <= x < 1 
+         */
         double drand();
-        int    irand(int size);
+
+        /**
+         * @brief Get a random integer 0 <= x < size
+         * 
+         * @param size The limit for the generated value
+         * @return a pseudorandom integer 0 <= x < size 
+         */
+        int irand(int size);
     };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE FUNCTIONS
+
+    ////////////////////////////
+    // STATIC HELPER FUNCTIONS
 
     inline double RandomNumberGenerator::drand(double& seed) {
         seed *= 1389796;
@@ -60,13 +106,20 @@ namespace Minisat {
         return seed / 2147483647;
     }
 
-    // Returns a random integer 0 <= x < size. Seed must never be 0.
     inline int RandomNumberGenerator::irand(double& seed, int size) {
         return (int)(drand(seed) * size);
     }
 
-    inline double RandomNumberGenerator::drand()         { return drand(random_seed); }
-    inline int    RandomNumberGenerator::irand(int size) { return irand(random_seed, size); }
+    ///////////////
+    // PUBLIC API
+
+    inline double RandomNumberGenerator::drand() {
+        return drand(random_seed);
+    }
+
+    inline int RandomNumberGenerator::irand(int size) {
+        return irand(random_seed, size);
+    }
 }
 
 #endif
