@@ -134,7 +134,7 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
 
 void ClauseDatabase::removeClause(CRef cr) {
     Clause& c = ca[cr];
-    unitPropagator.detachClause(c, cr);
+    unitPropagator.detachClause(cr);
 
     // Update stats
     if (c.learnt()) learnts_literals -= c.size();

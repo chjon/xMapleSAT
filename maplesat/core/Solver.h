@@ -129,7 +129,6 @@ protected:
     // Resource contraints:
     //
     int64_t             conflict_budget;    // -1 means no budget.
-    int64_t             propagation_budget; // -1 means no budget.
     bool                asynch_interrupt;
 
     // Main internal methods:
@@ -199,7 +198,7 @@ inline int      Solver::nFreeVars     ()      const   { return (int)branchingHeu
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::interrupt(){ asynch_interrupt = true; }
 inline void     Solver::clearInterrupt(){ asynch_interrupt = false; }
-inline void     Solver::budgetOff(){ conflict_budget = propagation_budget = -1; }
+inline void     Solver::budgetOff(){ conflict_budget = -1; unitPropagator.budgetOff(); }
 inline bool     Solver::withinBudget() const {
     return !asynch_interrupt &&
         (conflict_budget    < 0 || conflicts < (uint64_t)conflict_budget) &&

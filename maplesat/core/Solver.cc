@@ -72,7 +72,6 @@ Solver::Solver() :
     // Resource constraints:
     //
   , conflict_budget    (-1)
-  , propagation_budget (-1)
   , asynch_interrupt   (false)
 
   // Solver components

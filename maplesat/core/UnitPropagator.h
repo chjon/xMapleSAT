@@ -23,82 +23,54 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_UnitPropagator_h
 #define Minisat_UnitPropagator_h
 
-#include "core/SolverTypes.h"
-#include "core/VariableDatabase.h"
-#include "core/AssignmentTrail.h"
-#include "core/PropagationQueue.h"
-#include <mtl/Heap.h>
 #include <map>
-
-// Making some internal methods visible for testing
-#ifdef TESTING
-#define protected public
-#endif
+#include "core/SolverTypes.h"
+#include "mtl/Heap.h"
 
 namespace Minisat {
     // Forward declarations
     class Solver;
-    class ClauseDatabase;
+    class PropagationQueue;
+    class VariableDatabase;
 
     /**
      * @brief This class handles literal propagation.
      */
     class UnitPropagator {
     private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // SOLVER REFERENCES
 
-        //////////////////////
-        // HELPER FUNCTIONS //
-        //////////////////////
-
-        /**
-         * @brief Perform all propagations for a single literal
-         * 
-         * @param p the literal to propagate
-         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
-         */
-        CRef propagateSingle(Lit p);
-
-        /**
-         * @brief Relocate watcher CRefs to new ClauseAllocator
-         * 
-         * @param ws The watchers for which to relocate CRefs
-         * @param to The ClauseAllocator into which to reloc 
-         */
-        void relocWatchers(vec<Watcher>& ws, ClauseAllocator& to);
-
-        //////////////////////
-        // MEMBER VARIABLES //
-        //////////////////////
-
-        // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
-        OccLists<Lit, vec<Watcher>, WatcherDeleted> watches;
-
-        //////////////////////////
-        // RESOURCE CONSTRAINTS //
-        //////////////////////////
-
-        int64_t propagation_budget; // -1 means no budget.
-
-    public:
-        ////////////////
-        // STATISTICS //
-        ////////////////
-
-        uint64_t propagations  ; // Total number of propagations performed by @code{propagate}
-
-    protected:
-        ///////////////////////
-        // SOLVER REFERENCES //
-        ///////////////////////
-
-        VariableDatabase& variableDatabase;
-        AssignmentTrail& assignmentTrail;
         PropagationQueue& propagationQueue;
+        VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
-        ClauseDatabase& clauseDatabase;
         Solver& solver;
 
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // MEMBER VARIABLES
+
+        /// @brief is a list of constraints watching 'lit' (will go there if literal becomes true).
+        OccLists<Lit, vec<Watcher>, WatcherDeleted> watches;
+
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PARAMETERS
+
+        /// @brief The number of allowed propagations. -1 means no budget.
+        int64_t propagation_budget;
+
     public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATISTICS
+
+        /// @brief Total number of propagations performed by @code{propagate}
+        uint64_t propagations;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
+
         /**
          * @brief Construct a new UnitPropagator object
          * 
@@ -111,6 +83,46 @@ namespace Minisat {
          */
         ~UnitPropagator() = default;
 
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // ACCESSORS
+        
+        /**
+         * @brief Get list of clause watchers for a given literal
+         * 
+         * @param l the literal whose watchers should be returned
+         * @return clause watchers for @code{l}
+         */
+        const vec<Watcher>& getWatchers(Lit l) const;
+
+        /**
+         * @brief Check whether the solver can still propagate within the budget.
+         * 
+         * @return false if the solver has exceeded the budget, true otherwise
+         */
+        bool withinBudget() const;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PARAMETER MODIFICATION
+
+        /**
+         * @brief Set the propagation budget.
+         * 
+         * @param x The number of times left to propagate.
+         */
+        void setPropBudget(int64_t x);
+
+        /**
+         * @brief Set the solver to ignore the propagation budget. 
+         * 
+         */
+        void budgetOff();
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATE MODIFICATION
+
         /**
          * @brief Register watchers for a new variable
          * 
@@ -122,30 +134,9 @@ namespace Minisat {
         /**
          * @brief Attach a clause to watcher lists.
          * 
-         * @param c The clause to attach.
-         * @param cr The CRef of the clause to attach. Must match @code{c}.
-         * 
-         * @note c and cr are provided separately to enable compiler optimization at the caller.
-         */
-        void attachClause(const Clause& c, CRef cr);
-
-        /**
-         * @brief Attach a clause to watcher lists.
-         * 
          * @param cr The CRef of the clause to attach.
          */
         void attachClause(CRef cr);
-
-        /**
-         * @brief Detach a clause from watcher lists.
-         * 
-         * @param c The clause to detach.
-         * @param cr The CRef of the clause to detach. Must match @code{c}.
-         * @param strict False to use lazy detaching, true otherwise
-         * 
-         * @note c and cr are provided separately to enable compiler optimization at the caller.
-         */
-        void detachClause(const Clause& c, CRef cr, bool strict = false);
 
         /**
          * @brief Detach a clause from watcher lists.
@@ -169,60 +160,93 @@ namespace Minisat {
          */
         CRef propagate();
 
-        /**
-         * @brief Get list of non-binary clause watchers for a given literal
-         * 
-         * @param l the literal whose watchers should be returned
-         * @return non-binary clause watchers for @code{l}
-         */
-        const vec<Watcher>& getWatchers(Lit l) const;
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER FUNCTIONS
 
         /**
-         * @brief Get list of binary clause watchers for a given literal
+         * @brief Attach a clause to watcher lists.
          * 
-         * @param l the literal whose watchers should be returned
-         * @return binary clause watchers for @code{l}
+         * @param c The clause to attach.
+         * @param cr The CRef of the clause to attach. Must match @code{c}.
+         * 
+         * @note c and cr are provided separately to enable compiler optimization at the caller.
          */
-        // const vec<Watcher>& getBinaryWatchers(Lit l) const;
+        void attachClause(const Clause& c, CRef cr);
 
         /**
-         * @brief Move undefined literal to index 0, ensuring that watcher invariants are satisfied
+         * @brief Detach a clause from watcher lists.
          * 
-         * @param cr The CRef of the asserting clause
-         * @param i_undef The index of the undefined literal in the clause
-         * @param i_max The index of the literal in the clause with the highest decision level
+         * @param c The clause to detach.
+         * @param cr The CRef of the clause to detach. Must match @code{c}.
+         * @param strict False to use lazy detaching, true otherwise
+         * 
+         * @note c and cr are provided separately to enable compiler optimization at the caller.
          */
-        void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
-
-        //////////////////////////
-        // RESOURCE CONSTRAINTS //
-        //////////////////////////
+        void detachClause(const Clause& c, CRef cr, bool strict = false);
 
         /**
-         * @brief Set the propagation budget.
+         * @brief Perform all propagations for a single literal
          * 
-         * @param x The number of times left to propagate.
+         * @param p the literal to propagate
+         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
          */
-        void setPropBudget(int64_t x);
+        CRef propagateSingle(Lit p);
 
         /**
-         * @brief Set the solver to ignore the propagation budget. 
+         * @brief Relocate watcher CRefs to new ClauseAllocator
          * 
+         * @param ws The watchers for which to relocate CRefs
+         * @param to The ClauseAllocator into which to reloc 
          */
-        void budgetOff();
-
-        /**
-         * @brief Check whether the solver can still propagate within the budget.
-         * 
-         * @return false if the solver has exceeded the budget, true otherwise
-         */
-        bool withinBudget() const;
+        void relocWatchers(vec<Watcher>& ws, ClauseAllocator& to);
     };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE METHODS
+
+    //////////////
+    // ACCESSORS
+
+    inline const vec<Watcher>& UnitPropagator::getWatchers(Lit l) const {
+        return watches[l];
+    }
+
+    inline bool UnitPropagator::withinBudget() const {
+        return
+            propagation_budget < 0 ||
+            propagations < (uint64_t) propagation_budget;
+    }
+
+    ///////////////////////////
+    // PARAMETER MODIFICATION
+
+    inline void UnitPropagator::setPropBudget(int64_t x) {
+        propagation_budget = propagations + x;
+    }
+
+    inline void UnitPropagator::budgetOff() {
+        propagation_budget = -1;
+    }
+
+    ///////////////////////
+    // STATE MODIFICATION
 
     inline void UnitPropagator::newVar(Var v) {
         watches.init(mkLit(v, false));
         watches.init(mkLit(v, true ));
     }
+
+    inline void UnitPropagator::attachClause(CRef cr) {
+        attachClause(ca[cr], cr);
+    }
+
+    inline void UnitPropagator::detachClause(CRef cr, bool strict) {
+        detachClause(ca[cr], cr, strict);
+    }
+
+    /////////////////////
+    // HELPER FUNCTIONS
 
     inline void UnitPropagator::attachClause(const Clause& c, CRef cr) {
         assert(c.size() > 1);
@@ -230,7 +254,6 @@ namespace Minisat {
         ws[~c[0]].push(Watcher(cr, c[1]));
         ws[~c[1]].push(Watcher(cr, c[0]));
     }
-    inline void UnitPropagator::attachClause(CRef cr) { attachClause(ca[cr], cr); }
 
     inline void UnitPropagator::detachClause(const Clause& c, CRef cr, bool strict) {
         assert(c.size() > 1);
@@ -244,18 +267,10 @@ namespace Minisat {
             ws.smudge(~c[1]);
         }
     }
-    inline void UnitPropagator::detachClause(CRef cr, bool strict) { detachClause(ca[cr], cr, strict); }
 
     inline void UnitPropagator::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
         for (int i = 0; i < ws.size(); i++) ca.reloc(ws[i].cref, to);
     }
-
-    inline const vec<Watcher>& UnitPropagator::getWatchers(Lit l) const { return watches    [l]; }
-
-    inline void UnitPropagator::setPropBudget(int64_t x) { propagation_budget = propagations + x; }
-    inline void UnitPropagator::budgetOff() { propagation_budget = -1; }
-    inline bool UnitPropagator::withinBudget() const { return propagation_budget < 0 || propagations < (uint64_t) propagation_budget; }
-
 } // namespace Minisat
 
 #endif
