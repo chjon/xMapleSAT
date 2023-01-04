@@ -24,31 +24,54 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_ClauseDatabase_h
 
 #include <stdio.h>
-#include "core/SolverTypes.h"
+#include "core/AssignmentTrail.h"
 #include "core/UnitPropagator.h"
 #include "core/VariableDatabase.h"
 
 namespace Minisat {
     // Forward declarations
     class Solver;
-    class AssignmentTrail;
-    class BranchingHeuristicManager;
 
     /**
      * @brief This class manages clauses and clause deletion.
      * 
      */
     class ClauseDatabase {
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // SOLVER REFERENCES
+        
+        VariableDatabase& variableDatabase;
+        ClauseAllocator& ca;
+        AssignmentTrail& assignmentTrail;
+        UnitPropagator& unitPropagator;
+        Solver& solver;
+
     protected:
-        //////////////////////
-        // MEMBER VARIABLES //
-        //////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // MEMBER VARIABLES
 
         /// @brief List of input problem clauses.
         vec<CRef> clauses;
 
         /// @brief List of learnt clauses.
         vec<CRef> learnts;
+
+        /// @brief The maximum number of learnt clauses before clause deletion, which is triggered
+        /// when the number of learnt clauses exceeds this value.
+        double maxNumLearnts;
+
+        /// @brief Timer for increasing the maximum size of the clause database. (initially 100
+        /// by default)
+        double learntSizeLimitGrowthTimer;
+
+        /// @brief Number of conflicts remaining before the maximum size of the clause database
+        /// should be increased
+        int learntSizeLimitGrowthTimerCounter;
+
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // PARAMETERS
 
         /// @brief Indicates whether possibly inefficient linear scan for satisfied clauses should
         /// be performed in 'removeSatisfied'.
@@ -62,21 +85,9 @@ namespace Minisat {
         double extra_lim;
 #endif
 
-        /// @brief The maximum number of learnt clauses before clause deletion, which is triggered
-        /// when the number of learnt clauses exceeds this value.
-        double maxNumLearnts;
-
         /// @brief The exponential growth factor for @code{learntSizeLimitGrowthTimer}.
         /// (default 1.5)
         double learntSizeTimerGrowthFactor;
-
-        /// @brief Timer for increasing the maximum size of the clause database. (initially 100
-        /// by default)
-        double learntSizeLimitGrowthTimer;
-
-        /// @brief Number of conflicts remaining before the maximum size of the clause database
-        /// should be increased
-        int learntSizeLimitGrowthTimerCounter;
 
 #if !RAPID_DELETION
         /// @brief The initial limit for learnt clauses as a factor of the number of original
@@ -88,20 +99,36 @@ namespace Minisat {
         double learntSizeLimitGrowthFactor;
 #endif
 
-        /////////////////////////
-        // TEMPORARY VARIABLES //
-        /////////////////////////
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATISTICS
 
-        // Used to to reduce allocation overhead when adding new clauses
-        vec<Lit> add_tmp;
+        /// @brief The current total number of literals in original (input) clauses 
+        uint64_t clauses_literals;
+
+        /// @brief The current total number of literals in learnt clauses 
+        uint64_t learnts_literals;
 
     public:
-        ////////////////
-        // STATISTICS //
-        ////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
 
-        uint64_t clauses_literals;
-        uint64_t learnts_literals;
+        /**
+         * @brief Construct a new ClauseDatabase object
+         * 
+         * @param s Reference to main solver object
+         */
+        ClauseDatabase(Solver& s);
+
+        /**
+         * @brief Destroy the ClauseDatabase object
+         * 
+         */
+        ~ClauseDatabase() = default;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // ACCESSORS
 
         /**
          * @brief Get the current number of original (input) clauses.
@@ -117,21 +144,66 @@ namespace Minisat {
          */
         int nLearnts(void) const;
 
-    protected:
-        ///////////////////////
-        // SOLVER REFERENCES //
-        ///////////////////////
-        
-        VariableDatabase& variableDatabase;
-        ClauseAllocator& ca;
-        AssignmentTrail& assignmentTrail;
-        UnitPropagator& unitPropagator;
-        BranchingHeuristicManager& branchingHeuristicManager;
-        Solver& solver;
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATE MODIFICATION
 
-        //////////////////////
-        // HELPER FUNCTIONS //
-        //////////////////////
+        /**
+         * @brief Initialize the clause database size limit and associated timers.
+         * 
+         */
+        void init(void);
+
+        /**
+         * @brief Add a clause to the learnt clause database
+         * 
+         * @param ps the list of literals to add as a clause
+         * @return The CRef of the clause; CRef_Undef if ps is a unit clause
+         */
+        CRef addLearntClause(vec<Lit>& ps);
+
+        /**
+         * @brief Add a clause to the input clause database
+         * 
+         * @param ps the list of literals to add as a clause (at least two literals)
+         * @return The CRef of the clause
+         */
+        CRef addInputClause(vec<Lit>& ps);
+
+        /**
+         * @brief Remove satisfied clauses from clause database.
+         * 
+         */
+        void removeSatisfied(void);
+
+        /**
+         * @brief Reduce the set of learnt clauses
+         * 
+         */
+        void checkReduceDB(void);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // OUTPUT
+
+        ////////////////////////////////////////
+        // Write CNF to file in DIMACS-format.
+
+        void toDimacs(FILE* f, const vec<Lit>& assumps);
+        void toDimacs(const char *file, const vec<Lit>& assumps);
+        void toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max);
+
+        //////////////////////////////////////////
+        // Convenience versions of 'toDimacs()':
+        
+        void toDimacs(const char* file);
+        void toDimacs(const char* file, Lit p);
+        void toDimacs(const char* file, Lit p, Lit q);
+        void toDimacs(const char* file, Lit p, Lit q, Lit r);
+
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER FUNCTIONS
 
         /**
          * @brief Determine whether a clause should be deleted. This is a helper function for
@@ -183,6 +255,12 @@ namespace Minisat {
         CRef addClause(vec<Lit>& ps, vec<CRef>& db, bool learnt);
 
         /**
+         * @brief Update clause database size limit data structures upon learning a clause.
+         * 
+         */
+        void handleEventLearntClause(void);
+
+        /**
          * @brief Perform preprocessing of clause database to prepare for
          * clause deletion. This is a helper function for @code{checkReduceDB}.
          * 
@@ -222,105 +300,86 @@ namespace Minisat {
          */
         void checkGarbage(double gf);
 
-    public:
-        //////////////////
-        // CONSTRUCTORS //
-        //////////////////
-
-        /**
-         * @brief Construct a new ClauseDatabase object
-         * 
-         * @param s Reference to main solver object
-         */
-        ClauseDatabase(Solver& s);
-
-        /**
-         * @brief Destroy the ClauseDatabase object
-         * 
-         */
-        ~ClauseDatabase() = default;
-
-        ////////////////
-        // PUBLIC API //
-        ////////////////
-
-        /**
-         * @brief Initialize the clause database size limit and associated timers.
-         * 
-         */
-        void init(void);
-
-        /**
-         * @brief Add a clause to the learnt clause database
-         * 
-         * @param ps the list of literals to add as a clause
-         * @return The CRef of the clause; CRef_Undef if ps is a unit clause
-         */
-        CRef addLearntClause(vec<Lit>& ps);
-
-        /**
-         * @brief Add a clause to the input clause database
-         * 
-         * @param ps the list of literals to add as a clause (at least two literals)
-         * @return The CRef of the clause
-         */
-        CRef addInputClause(vec<Lit>& ps);
-
         /**
          * @brief Relocate all clauses
          * 
          * @param to the ClauseAllocator to relocate to
          */
         void relocAll(ClauseAllocator& to);
-
-        /**
-         * @brief Remove satisfied clauses from clause database.
-         * 
-         */
-        void removeSatisfied(void);
-
-        /**
-         * @brief Reduce the set of learnt clauses
-         * 
-         */
-        void checkReduceDB(void);
-
-        /**
-         * @brief Update clause database size limit data structures upon learning a clause.
-         * 
-         */
-        void handleEventLearntClause(void);
-
-        ////////////
-        // OUTPUT //
-        ////////////
-
-        // Write CNF to file in DIMACS-format.
-        void toDimacs(FILE* f, const vec<Lit>& assumps);
-        void toDimacs(const char *file, const vec<Lit>& assumps);
-        void toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max);
-
-        // Convenience versions of 'toDimacs()':
-        void toDimacs(const char* file);
-        void toDimacs(const char* file, Lit p);
-        void toDimacs(const char* file, Lit p, Lit q);
-        void toDimacs(const char* file, Lit p, Lit q, Lit r);
     };
 
-    //////////////////////////////////////
-    // IMPLEMENTATION OF INLINE METHODS //
-    //////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE METHODS
 
-    ////////////////
-    // STATISTICS //
-    ////////////////
+    //////////////
+    // ACCESSORS
 
     inline int ClauseDatabase::nClauses() const { return clauses.size(); }
     inline int ClauseDatabase::nLearnts() const { return learnts.size(); }
 
-    //////////////////////
-    // HELPER FUNCTIONS //
-    //////////////////////
+    ///////////////////////
+    // STATE MODIFICATION
+
+    inline void ClauseDatabase::init(void) {
+        // Initialize database size limit for clause deletion
+    #if RAPID_DELETION
+        maxNumLearnts = 2000;
+    #else
+        maxNumLearnts = nClauses() * learntSizeLimitFactorInitial;
+    #endif
+
+        // Initialize database growth timer
+        learntSizeLimitGrowthTimerCounter = static_cast<int>(learntSizeLimitGrowthTimer);
+    }
+
+    inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
+        const CRef cr = addClause(ps, learnts, true);
+        handleEventLearntClause();
+        return cr;
+    }
+
+    inline CRef ClauseDatabase::addInputClause(vec<Lit>& ps) {
+        assert(ps.size() > 1);
+        return addClause(ps, clauses, false);
+    }
+
+    inline void ClauseDatabase::removeSatisfied(void) {
+        // Remove satisfied clauses:
+        reduceDBWithPredicate(learnts, shouldRemoveSatisfied);
+        if (remove_satisfied)
+            reduceDBWithPredicate(clauses, shouldRemoveSatisfied);
+
+        // Perform garbage collection if needed
+        checkGarbage(garbage_frac);
+    }
+
+    inline void ClauseDatabase::checkReduceDB() {
+        if (nLearnts() - assignmentTrail.nAssigns() < maxNumLearnts) return;
+
+        // Prepare for clause deletion
+        preprocessReduceDB();
+
+        // Perform clause deletion
+        reduceDBWithPredicate(learnts, shouldRemoveReduceDB);
+
+        // Perform garbage collection if needed
+        checkGarbage(garbage_frac);
+
+    #if RAPID_DELETION
+        maxNumLearnts += 500;
+    #endif
+    }
+
+    ///////////
+    // OUTPUT
+
+    inline void ClauseDatabase::toDimacs(const char* file){ vec<Lit> as; toDimacs(file, as); }
+    inline void ClauseDatabase::toDimacs(const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }
+    inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
+    inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
+
+    /////////////////////
+    // HELPER FUNCTIONS
 
     inline bool ClauseDatabase::shouldRemoveReduceDB(
         const ClauseDatabase& cdb,
@@ -383,33 +442,6 @@ namespace Minisat {
         return cr;
     }
 
-    ////////////////
-    // PUBLIC API //
-    ////////////////
-
-    inline void ClauseDatabase::init(void) {
-        // Initialize database size limit for clause deletion
-    #if RAPID_DELETION
-        maxNumLearnts = 2000;
-    #else
-        maxNumLearnts = nClauses() * learntSizeLimitFactorInitial;
-    #endif
-
-        // Initialize database growth timer
-        learntSizeLimitGrowthTimerCounter = static_cast<int>(learntSizeLimitGrowthTimer);
-    }
-
-    inline CRef ClauseDatabase::addInputClause(vec<Lit>& ps) {
-        assert(ps.size() > 1);
-        return addClause(ps, clauses, false);
-    }
-
-    inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
-        const CRef cr = addClause(ps, learnts, true);
-        handleEventLearntClause();
-        return cr;
-    }
-
     inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
         for (int i = 0; i < learnts.size(); i++) ca.reloc(learnts[i], to);
         for (int i = 0; i < clauses.size(); i++) ca.reloc(clauses[i], to);
@@ -419,42 +451,6 @@ namespace Minisat {
         if (ca.wasted() > ca.size() * gf)
             garbageCollect();
     }
-
-    inline void ClauseDatabase::checkReduceDB() {
-        if (nLearnts() - assignmentTrail.nAssigns() < maxNumLearnts) return;
-
-        // Prepare for clause deletion
-        preprocessReduceDB();
-
-        // Perform clause deletion
-        reduceDBWithPredicate(learnts, shouldRemoveReduceDB);
-
-        // Perform garbage collection if needed
-        checkGarbage(garbage_frac);
-
-#if RAPID_DELETION
-        maxNumLearnts += 500;
-#endif
-    }
-
-    inline void ClauseDatabase::removeSatisfied(void) {
-        // Remove satisfied clauses:
-        reduceDBWithPredicate(learnts, shouldRemoveSatisfied);
-        if (remove_satisfied)
-            reduceDBWithPredicate(clauses, shouldRemoveSatisfied);
-
-        // Perform garbage collection if needed
-        checkGarbage(garbage_frac);
-    }
-
-    ////////////
-    // OUTPUT //
-    ////////////
-
-    inline void ClauseDatabase::toDimacs(const char* file){ vec<Lit> as; toDimacs(file, as); }
-    inline void ClauseDatabase::toDimacs(const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }
-    inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
-    inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
 }
 
 #endif

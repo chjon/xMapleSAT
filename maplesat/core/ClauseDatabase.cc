@@ -29,14 +29,26 @@ using namespace Minisat;
 static const char* _cat = "CORE";
 static DoubleOption opt_garbage_frac (_cat, "gc-frac", "The fraction of wasted memory allowed before a garbage collection is triggered", 0.20, DoubleRange(0, false, HUGE_VAL, false));
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
 ClauseDatabase::ClauseDatabase(Solver& s)
+    // Solver references
+    : variableDatabase(s.variableDatabase)
+    , ca(s.ca)
+    , assignmentTrail(s.assignmentTrail)
+    , unitPropagator(s.unitPropagator)
+    , solver(s)
+
+    // Database growth timer
+    , learntSizeLimitGrowthTimer    (100)
+    
     // Memory management parameters
-    : remove_satisfied(true)
+    , remove_satisfied(true)
     , garbage_frac (opt_garbage_frac)
 
     // Database growth parameters
     , learntSizeTimerGrowthFactor   (1.5)
-    , learntSizeLimitGrowthTimer    (100)
 #if !RAPID_DELETION
     , learntSizeLimitFactorInitial  (1./3.)
     , learntSizeLimitGrowthFactor   (1.1)
@@ -45,113 +57,11 @@ ClauseDatabase::ClauseDatabase(Solver& s)
     // Statistics
     , clauses_literals(0)
     , learnts_literals(0)
-
-    // Solver references
-    , variableDatabase(s.variableDatabase)
-    , ca(s.ca)
-    , assignmentTrail(s.assignmentTrail)
-    , unitPropagator(s.unitPropagator)
-    , branchingHeuristicManager(s.branchingHeuristicManager)
-    , solver(s)
 {}
 
-void ClauseDatabase::removeClause(CRef cr) {
-    Clause& c = ca[cr];
-    unitPropagator.detachClause(c, cr);
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// OUTPUT
 
-    // Update stats
-    if (c.learnt()) learnts_literals -= c.size();
-    else            clauses_literals -= c.size();
-
-    // Don't leave pointers to free'd memory!
-    assignmentTrail.handleEventClauseDeleted(c);
-
-    // Mark clause as deleted
-    c.mark(1); 
-    ca.free(cr);
-}
-
-void ClauseDatabase::garbageCollect(void) {
-    // Initialize the next region to a size corresponding to the estimated utilization degree. This
-    // is not precise but should avoid some unnecessary reallocations for the new region:
-    ClauseAllocator to(ca.size() - ca.wasted()); 
-
-    // Reloc all clause references
-    unitPropagator .relocAll(to);
-    assignmentTrail.relocAll(to);
-    relocAll(to);
-
-    if (solver.verbosity >= 2)
-        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
-            ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
-    
-    // Transfer ownership of memory
-    to.moveTo(ca);
-}
-
-struct reduceDB_lbdDeletion_lt {
-    const ClauseAllocator& ca;
-    const vec<double>& activity;
-    reduceDB_lbdDeletion_lt(ClauseAllocator& ca_,const vec<double>& activity_)
-        : ca(ca_)
-        , activity(activity_)
-    {}
-    bool operator () (CRef x, CRef y) { 
-        return ca[x].activity() > ca[y].activity();
-    }
-};
-
-struct reduceDB_activityDeletion_lt {
-    const ClauseAllocator& ca;
-    reduceDB_activityDeletion_lt(ClauseAllocator& ca_)
-        : ca(ca_)
-    {}
-    bool operator () (CRef x, CRef y) { 
-        return
-            ca[x].size() > 2 && (ca[y].size() == 2 ||
-            ca[x].activity() < ca[y].activity());
-    }
-};
-
-void ClauseDatabase::preprocessReduceDB(void) {
-    // Sort clauses by activity
-#if LBD_BASED_CLAUSE_DELETION
-    sort(learnts, reduceDB_lbdDeletion_lt(ca, branchingHeuristicManager.getActivityVSIDS()));
-#else
-    extra_lim = cla_inc / learnts.size(); // Remove any clause below this activity
-    sort(learnts, reduceDB_activityDeletion_lt(ca));
-#endif
-}
-
-void ClauseDatabase::handleEventLearntClause(void) {
-    if (--learntSizeLimitGrowthTimerCounter != 0) return;
-
-    // Compute the next time the clause database should grow
-    learntSizeLimitGrowthTimer       *= learntSizeTimerGrowthFactor;
-    learntSizeLimitGrowthTimerCounter = (int)learntSizeLimitGrowthTimer;
-
-#if ! RAPID_DELETION
-    // Update the maximum size of the clause database
-    maxNumLearnts *= learntSizeLimitGrowthFactor;
-#endif
-
-    if (solver.verbosity >= 1)
-        printf(
-            "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
-            (int)solver.conflicts, 
-            solver.nFreeVars(),
-            nClauses(),
-            (int)clauses_literals, 
-            (int)maxNumLearnts,
-            nLearnts(),
-            (double)learnts_literals / nLearnts(),
-            assignmentTrail.progressEstimate() * 100
-        );
-}
-
-//=================================================================================================
-// Writing CNF to DIMACS:
-// 
 // FIXME: this needs to be rewritten completely.
 
 static Var mapVar(Var x, vec<Var>& map, Var& max) {
@@ -217,4 +127,101 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
 
     if (solver.verbosity > 0)
         printf("Wrote %d clauses with %d variables.\n", cnt, max);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// HELPER FUNCTIONS
+
+void ClauseDatabase::removeClause(CRef cr) {
+    Clause& c = ca[cr];
+    unitPropagator.detachClause(c, cr);
+
+    // Update stats
+    if (c.learnt()) learnts_literals -= c.size();
+    else            clauses_literals -= c.size();
+
+    // Don't leave pointers to free'd memory!
+    assignmentTrail.handleEventClauseDeleted(c);
+
+    // Mark clause as deleted
+    c.mark(1); 
+    ca.free(cr);
+}
+
+void ClauseDatabase::garbageCollect(void) {
+    // Initialize the next region to a size corresponding to the estimated utilization degree. This
+    // is not precise but should avoid some unnecessary reallocations for the new region:
+    ClauseAllocator to(ca.size() - ca.wasted()); 
+
+    // Reloc all clause references
+    unitPropagator .relocAll(to);
+    assignmentTrail.relocAll(to);
+    relocAll(to);
+
+    if (solver.verbosity >= 2)
+        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
+            ca.size() * ClauseAllocator::Unit_Size, to.size() * ClauseAllocator::Unit_Size);
+    
+    // Transfer ownership of memory
+    to.moveTo(ca);
+}
+
+void ClauseDatabase::handleEventLearntClause(void) {
+    if (--learntSizeLimitGrowthTimerCounter != 0) return;
+
+    // Compute the next time the clause database should grow
+    learntSizeLimitGrowthTimer       *= learntSizeTimerGrowthFactor;
+    learntSizeLimitGrowthTimerCounter = (int)learntSizeLimitGrowthTimer;
+
+#if ! RAPID_DELETION
+    // Update the maximum size of the clause database
+    maxNumLearnts *= learntSizeLimitGrowthFactor;
+#endif
+
+    if (solver.verbosity >= 1)
+        printf(
+            "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
+            (int)solver.conflicts, 
+            solver.nFreeVars(),
+            nClauses(),
+            (int)clauses_literals, 
+            (int)maxNumLearnts,
+            nLearnts(),
+            (double)learnts_literals / nLearnts(),
+            assignmentTrail.progressEstimate() * 100
+        );
+}
+
+struct reduceDB_lbdDeletion_lt {
+    const ClauseAllocator& ca;
+    const vec<double>& activity;
+    reduceDB_lbdDeletion_lt(ClauseAllocator& ca_,const vec<double>& activity_)
+        : ca(ca_)
+        , activity(activity_)
+    {}
+    bool operator () (CRef x, CRef y) { 
+        return ca[x].activity() > ca[y].activity();
+    }
+};
+
+struct reduceDB_activityDeletion_lt {
+    const ClauseAllocator& ca;
+    reduceDB_activityDeletion_lt(ClauseAllocator& ca_)
+        : ca(ca_)
+    {}
+    bool operator () (CRef x, CRef y) { 
+        return
+            ca[x].size() > 2 && (ca[y].size() == 2 ||
+            ca[x].activity() < ca[y].activity());
+    }
+};
+
+void ClauseDatabase::preprocessReduceDB(void) {
+    // Sort clauses by activity
+#if LBD_BASED_CLAUSE_DELETION
+    sort(learnts, reduceDB_lbdDeletion_lt(ca, solver.branchingHeuristicManager.getActivityVSIDS()));
+#else
+    extra_lim = cla_inc / learnts.size(); // Remove any clause below this activity
+    sort(learnts, reduceDB_activityDeletion_lt(ca));
+#endif
 }
