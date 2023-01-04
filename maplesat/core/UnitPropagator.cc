@@ -32,7 +32,7 @@ UnitPropagator::UnitPropagator(Solver& s)
     //////////////////////
     // Solver references
     : propagationQueue(s.propagationQueue)
-    , variableDatabase(s.variableDatabase)
+    , assignmentTrail(s.assignmentTrail)
     , ca(s.ca)
     , solver(s)
     
@@ -51,7 +51,7 @@ void UnitPropagator::relocAll(ClauseAllocator& to) {
     watches.cleanAll();
 
     // Reloc clauses in watchers
-    for (int v = 0; v < variableDatabase.nVars(); v++) {
+    for (int v = 0; v < assignmentTrail.nVars(); v++) {
         Lit p = mkLit(v);
         relocWatchers(watches[ p], to);
         relocWatchers(watches[~p], to);
@@ -92,7 +92,7 @@ inline CRef UnitPropagator::propagateSingle(Lit p) {
     while (i != end) {
         // Try to avoid inspecting the clause:
         Lit blocker = i->blocker;
-        if (variableDatabase.value(blocker) == l_True) {
+        if (assignmentTrail.value(blocker) == l_True) {
             *j++ = *i++;
             continue;
         }
@@ -106,14 +106,14 @@ inline CRef UnitPropagator::propagateSingle(Lit p) {
         // If 0th watch is true, then clause is already satisfied.
         const Lit first = c[0];
         Watcher w = Watcher(cr, first);
-        if (first != blocker && variableDatabase.value(first) == l_True) {
+        if (first != blocker && assignmentTrail.value(first) == l_True) {
             *j++ = w;
             continue;
         }
 
         // Look for new watch:
         for (int k = 2; k < c.size(); k++) {
-            if (variableDatabase.value(c[k]) != l_False) {
+            if (assignmentTrail.value(c[k]) != l_False) {
                 std::swap(c[1], c[k]);
                 watches[~c[1]].push(w);
                 goto NextClause;
@@ -123,7 +123,7 @@ inline CRef UnitPropagator::propagateSingle(Lit p) {
         // Did not find watch -- clause is unit under assignment:
         *j++ = w;
         if (
-            variableDatabase.value(first) == l_False ||
+            assignmentTrail.value(first) == l_False ||
             !propagationQueue.enqueue(first, cr)
         ) {
             // All literals falsified!

@@ -29,8 +29,7 @@ using namespace Minisat;
 // CONSTRUCTORS
 
 AssignmentTrail::AssignmentTrail(Solver& s)
-    : variableDatabase(s.variableDatabase)
-    , ca(s.ca)
+    : ca(s.ca)
     , solver(s)
 {}
 
@@ -39,7 +38,7 @@ AssignmentTrail::AssignmentTrail(Solver& s)
 
 double AssignmentTrail::progressEstimate() const {
     double progress = 0;
-    double F = 1.0 / variableDatabase.nVars();
+    double F = 1.0 / nVars();
 
     for (int i = 0; i <= decisionLevel(); i++){
         int beg = i == 0 ? 0 : trail_lim[i - 1];
@@ -47,17 +46,17 @@ double AssignmentTrail::progressEstimate() const {
         progress += pow(F, i) * (end - beg);
     }
 
-    return progress / variableDatabase.nVars();
+    return progress / nVars();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // STATE MODIFICATION
 
 void AssignmentTrail::assign(Lit p, CRef from) {
-    assert(variableDatabase.value(p) == l_Undef);
+    assert(value(p) == l_Undef);
     const Var v = var(p);
     solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
-    variableDatabase.setVar(v, lbool(!sign(p)));
+    assigns[v] = lbool(!sign(p));
     vardata[v] = VarData{from, decisionLevel()};
     trail.push_(p);
 }
@@ -69,7 +68,7 @@ void AssignmentTrail::cancelUntil(int level) {
     // Clear the values of the variables
     for (int c = trail.size() - 1; c >= trail_lim[level]; c--){
         Var x = var(trail[c]);
-        variableDatabase.setVar(x, l_Undef);
+        assigns[x] = l_Undef;
         solver.branchingHeuristicManager.handleEventLitUnassigned(
             trail[c],
             solver.conflicts,

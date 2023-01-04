@@ -97,8 +97,7 @@ Solver::~Solver()
 // used as a decision variable (NOTE! This has effects on the meaning of a SATISFIABLE result).
 //
 Var Solver::newVar(bool sign, bool dvar) {
-    int v = variableDatabase .newVar();
-    assignmentTrail          .newVar(v);
+    int v = assignmentTrail  .newVar();
     propagationQueue         .newVar(v);
     unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
@@ -117,9 +116,9 @@ bool Solver::addClause(vec<Lit>& ps) {
     sort(ps);
     Lit p; int i, j;
     for (i = j = 0, p = lit_Undef; i < ps.size(); i++) {
-        if (variableDatabase.value(ps[i]) == l_True || ps[i] == ~p)
+        if (assignmentTrail.value(ps[i]) == l_True || ps[i] == ~p)
             return true;
-        else if (variableDatabase.value(ps[i]) != l_False && ps[i] != p)
+        else if (assignmentTrail.value(ps[i]) != l_False && ps[i] != p)
             ps[j++] = p = ps[i];
     }
     ps.shrink(i - j);
@@ -253,10 +252,10 @@ lbool Solver::search(int nof_conflicts) {
             while (assignmentTrail.decisionLevel() < assumptions.size()) {
                 // Perform user provided assumption:
                 Lit p = assumptions[assignmentTrail.decisionLevel()];
-                if (variableDatabase.value(p) == l_True) {
+                if (assignmentTrail.value(p) == l_True) {
                     // Dummy decision level:
                     assignmentTrail.newDecisionLevel();
-                } else if (variableDatabase.value(p) == l_False) {
+                } else if (assignmentTrail.value(p) == l_False) {
                     conflictAnalyzer.analyzeFinal(~p, conflict);
                     return l_False;
                 } else {
@@ -347,8 +346,8 @@ lbool Solver::solve_() {
 
     if (status == l_True) {
         // Extend & copy model:
-        model.growTo(variableDatabase.nVars());
-        for (int i = 0; i < variableDatabase.nVars(); i++) model[i] = variableDatabase.value(i);
+        model.growTo(assignmentTrail.nVars());
+        for (int i = 0; i < assignmentTrail.nVars(); i++) model[i] = assignmentTrail.value(i);
     } else if (status == l_False && conflict.size() == 0) {
         ok = false;
     }

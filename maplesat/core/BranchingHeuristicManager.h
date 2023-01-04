@@ -26,7 +26,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <math.h>
 #include "core/AssignmentTrail.h"
 #include "core/RandomNumberGenerator.h"
-#include "core/VariableDatabase.h"
 #include "mtl/Heap.h"
 
 namespace Minisat {
@@ -293,7 +292,6 @@ namespace Minisat {
 
         AssignmentTrail& assignmentTrail;
         RandomNumberGenerator& randomNumberGenerator;
-        VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         UnitPropagator& unitPropagator;
         Solver& solver;
@@ -620,7 +618,7 @@ namespace Minisat {
             }
         #endif
             // Rescale:
-            for (int i = 0; i < variableDatabase.nVars(); i++) {
+            for (int i = 0; i < assignmentTrail.nVars(); i++) {
                 activity[i] /= RESCALE_THRESHOLD;
         #if PRIORITIZE_ER && defined(EXTLVL_ACTIVITY)
                 extensionLevelActivity[extensionLevel[i]] += activity[i];
@@ -816,7 +814,7 @@ namespace Minisat {
     #if ANTI_EXPLORATION
         Var next = order_heap[0];
         uint64_t age = conflicts - canceled[next];
-        while (age > 0 && variableDatabase.value(next) == l_Undef) {
+        while (age > 0 && assignmentTrail.value(next) == l_Undef) {
             double decay = pow(0.95, age);
             activity[next] *= decay;
             if (order_heap.inHeap(next)) {

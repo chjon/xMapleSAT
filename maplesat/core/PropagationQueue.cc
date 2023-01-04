@@ -32,8 +32,7 @@ PropagationQueue::PropagationQueue(Solver& s)
     ////////////////////
     // Solver references
     
-    : variableDatabase(s.variableDatabase)
-    , assignmentTrail(s.assignmentTrail)
+    : assignmentTrail(s.assignmentTrail)
 
     ///////////////////
     // Member variables

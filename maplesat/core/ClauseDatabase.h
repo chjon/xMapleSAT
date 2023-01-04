@@ -40,7 +40,6 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // SOLVER REFERENCES
         
-        VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         AssignmentTrail& assignmentTrail;
         UnitPropagator& unitPropagator;
@@ -405,7 +404,7 @@ namespace Minisat {
         const Clause& c,
         const int index
     ) {
-        return cdb.variableDatabase.satisfied(c);
+        return cdb.assignmentTrail.satisfied(c);
     }
 
     template <typename DeletionPredicate>

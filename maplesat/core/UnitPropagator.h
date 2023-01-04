@@ -31,7 +31,7 @@ namespace Minisat {
     // Forward declarations
     class Solver;
     class PropagationQueue;
-    class VariableDatabase;
+    class AssignmentTrail;
 
     /**
      * @brief This class handles literal propagation.
@@ -42,7 +42,7 @@ namespace Minisat {
         // SOLVER REFERENCES
 
         PropagationQueue& propagationQueue;
-        VariableDatabase& variableDatabase;
+        AssignmentTrail& assignmentTrail;
         ClauseAllocator& ca;
         Solver& solver;
 

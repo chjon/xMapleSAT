@@ -67,7 +67,6 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // SOLVER REFERENCES
 
-        VariableDatabase& variableDatabase;
         AssignmentTrail& assignmentTrail;
 
     protected:
@@ -186,7 +185,7 @@ namespace Minisat {
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         if (soft_assigns[var(p)] ^ sign(p) == l_False) {
             // Ensure conflicting literal is on the trail
-            if (variableDatabase.value(p) == l_Undef)
+            if (assignmentTrail.value(p) == l_Undef)
                 assignmentTrail.assign(~p, reasons[var(p)]);
 
             return false;

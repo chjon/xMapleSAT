@@ -112,7 +112,6 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
 
     , assignmentTrail(s.assignmentTrail)
     , randomNumberGenerator(s.randomNumberGenerator)
-    , variableDatabase(s.variableDatabase)
     , ca(s.ca)
     , unitPropagator(s.unitPropagator)
     , solver(s)
@@ -136,13 +135,13 @@ Lit BranchingHeuristicManager::pickBranchLit() {
     #endif
         if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
             next = order_heap[randomNumberGenerator.irand(order_heap.size())];
-            if (variableDatabase.value(next) == l_Undef && decision[next])
+            if (assignmentTrail.value(next) == l_Undef && decision[next])
                 rnd_decisions++;
         }
     }
 
     // Activity based decision:
-    while (next == var_Undef || variableDatabase.value(next) != l_Undef || !decision[next]) {
+    while (next == var_Undef || assignmentTrail.value(next) != l_Undef || !decision[next]) {
     #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
         auto& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
     #endif
@@ -182,14 +181,14 @@ Lit BranchingHeuristicManager::pickBranchLit() {
 // VARIABLE SELECTION HEURISTIC STATE MODIFICATION
 
 void BranchingHeuristicManager::rebuildPriorityQueue() {
-    const int numVars = variableDatabase.nVars();
+    const int numVars = assignmentTrail.nVars();
 
     // Build the priority queue
 #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
     order_heap_extlvl.clear();
     order_heap_degree.clear();
     for (Var v = 0; v < numVars; v++) {
-        if (decision[v] && variableDatabase.value(v) == l_Undef) {
+        if (decision[v] && assignmentTrail.value(v) == l_Undef) {
             order_heap_degree.insert(v);
             if (extensionLevel[v]) order_heap_extlvl.insert(v);
         }
@@ -197,7 +196,7 @@ void BranchingHeuristicManager::rebuildPriorityQueue() {
 #else
     vec<Var> vs;
     for (Var v = 0; v < numVars; v++) {
-        if (decision[v] && variableDatabase.value(v) == l_Undef) {
+        if (decision[v] && assignmentTrail.value(v) == l_Undef) {
             vs.push(v);
         }
     }

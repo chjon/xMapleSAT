@@ -29,7 +29,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
-#include "core/VariableDatabase.h"
 #include "core/RandomNumberGenerator.h"
 #include "core/AssignmentTrail.h"
 #include "core/PropagationQueue.h"
@@ -160,7 +159,6 @@ protected:
     bool withinBudget() const;
 
 public:
-    VariableDatabase          variableDatabase;
     ClauseAllocator           ca; // Memory manager for allocating/deallocating clauses
     RandomNumberGenerator     randomNumberGenerator;
     AssignmentTrail           assignmentTrail;

@@ -34,8 +34,7 @@ static DoubleOption opt_garbage_frac (_cat, "gc-frac", "The fraction of wasted m
 
 ClauseDatabase::ClauseDatabase(Solver& s)
     // Solver references
-    : variableDatabase(s.variableDatabase)
-    , ca(s.ca)
+    : ca(s.ca)
     , assignmentTrail(s.assignmentTrail)
     , unitPropagator(s.unitPropagator)
     , solver(s)
@@ -73,10 +72,10 @@ static Var mapVar(Var x, vec<Var>& map, Var& max) {
 }
 
 void ClauseDatabase::toDimacs(FILE* f, Clause& c, vec<Var>& map, Var& max) {
-    if (variableDatabase.satisfied(c)) return;
+    if (assignmentTrail.satisfied(c)) return;
 
     for (int i = 0; i < c.size(); i++)
-        if (variableDatabase.value(c[i]) != l_False)
+        if (assignmentTrail.value(c[i]) != l_False)
             fprintf(f, "%s%d ", sign(c[i]) ? "-" : "", mapVar(var(c[i]), map, max)+1);
     fprintf(f, "0\n");
 }
@@ -101,14 +100,14 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
     // to deallocate them at this point. Could be improved.
     int cnt = 0;
     for (int i = 0; i < clauses.size(); i++)
-        if (!variableDatabase.satisfied(ca[clauses[i]]))
+        if (!assignmentTrail.satisfied(ca[clauses[i]]))
             cnt++;
         
     for (int i = 0; i < clauses.size(); i++)
-        if (!variableDatabase.satisfied(ca[clauses[i]])){
+        if (!assignmentTrail.satisfied(ca[clauses[i]])){
             Clause& c = ca[clauses[i]];
             for (int j = 0; j < c.size(); j++)
-                if (variableDatabase.value(c[j]) != l_False)
+                if (assignmentTrail.value(c[j]) != l_False)
                     mapVar(var(c[j]), map, max);
         }
 
@@ -118,7 +117,7 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
     fprintf(f, "p cnf %d %d\n", max, cnt);
 
     for (int i = 0; i < solver.assumptions.size(); i++){
-        assert(variableDatabase.value(solver.assumptions[i]) != l_False);
+        assert(assignmentTrail.value(solver.assumptions[i]) != l_False);
         fprintf(f, "%s%d 0\n", sign(solver.assumptions[i]) ? "-" : "", mapVar(var(solver.assumptions[i]), map, max)+1);
     }
 

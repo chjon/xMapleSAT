@@ -24,7 +24,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_AssignmentTrail_h
 
 #include "core/SolverTypes.h"
-#include "core/VariableDatabase.h"
 
 namespace Minisat {
     // Forward declarations
@@ -53,6 +52,9 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // MEMBER VARIABLES
 
+        /// @brief The current variable assignments
+        vec<lbool> assigns;
+
         /// @brief Assignment record; stores all assigments made in the order they were made.
         vec<Lit> trail;
 
@@ -66,7 +68,6 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // SOLVER REFERENCES
 
-        VariableDatabase& variableDatabase;
         ClauseAllocator& ca;
         Solver& solver;
 
@@ -89,10 +90,30 @@ namespace Minisat {
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
-        // PUBLIC API
-
-        //////////////
         // ACCESSORS
+
+        /**
+         * @brief Get the current number of variables
+         * 
+         * @return the current number of variables
+         */
+        int nVars (void) const;
+
+        /**
+         * @brief Get the truth assignment of a variable
+         * 
+         * @param x the variable whose truth assignment should be returned
+         * @return l_True, l_False, or l_Undef, depending on the variable assignment
+         */
+        lbool value (Var x) const;
+
+        /**
+         * @brief Get the truth assignment of a literal
+         * 
+         * @param x the literal whose truth assignment should be returned
+         * @return l_True, l_False, or l_Undef, depending on the underlying variable assignment
+         */
+        lbool value (Lit p) const;
 
         /**
          * @brief Get a view-only reference to the trail
@@ -170,11 +191,20 @@ namespace Minisat {
          * @return true if the clause is reason for some implication in the current state, false
          * otherwise.
          */
-        bool locked (const Clause& c) const;
+        bool locked(const Clause& c) const;
+
+        /**
+         * @brief Check whether a clause is satisfied under the current variable assignment
+         * 
+         * @param c the clause to check
+         * @return true iff a literal in the clause is satisfied
+         */
+        bool satisfied(const Clause& c) const;
 
         double progressEstimate () const; // DELETE THIS ?? IT'S NOT VERY USEFUL ...
 
-        ///////////////////////
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
         // STATE MODIFICATION
 
         /**
@@ -182,8 +212,10 @@ namespace Minisat {
          * 
          * @param v the variable to register
          * @note Assumes that @code{v} has not already been registered
+         * 
+         * @return the ID of the new variable
          */
-        void newVar(Var v);
+        Var newVar(void);
 
         /**
          * @brief Begins a new decision level.
@@ -233,11 +265,23 @@ namespace Minisat {
     //////////////
     // ACCESSORS
 
+    inline int AssignmentTrail::nVars() const {
+        return assigns.size();
+    }
+
+    inline lbool AssignmentTrail::value(Var x) const {
+        return assigns[x];
+    }
+
+    inline lbool AssignmentTrail::value(Lit p) const {
+        return assigns[var(p)] ^ sign(p);
+    }
+
     inline const vec<Lit>& AssignmentTrail::getTrail(void) const {
         return trail;
     }
 
-    inline Lit AssignmentTrail::operator[] (int i) const {
+    inline Lit AssignmentTrail::operator[](int i) const {
         return trail[i];
     }
 
@@ -253,15 +297,15 @@ namespace Minisat {
         return 1 << (level(x) & 31);
     }
 
-    inline CRef AssignmentTrail::reason (Var x) const {
+    inline CRef AssignmentTrail::reason(Var x) const {
         return vardata[x].reason;
     }
 
-    inline int AssignmentTrail::level (Var x) const {
+    inline int AssignmentTrail::level(Var x) const {
         return vardata[x].level;
     }
 
-    inline int AssignmentTrail::nAssigns () const {
+    inline int AssignmentTrail::nAssigns() const {
         return trail.size();
     }
 
@@ -269,20 +313,32 @@ namespace Minisat {
         return trail_lim.size() == 0 ? trail.size() : trail_lim[0];
     }
 
-    inline bool AssignmentTrail::locked (const Clause& c) const {
+    inline bool AssignmentTrail::locked(const Clause& c) const {
         return
-            variableDatabase.value(c[0]) == l_True &&
+            value(c[0]) == l_True &&
             reason(var(c[0])) != CRef_Undef &&
             ca.lea(reason(var(c[0]))) == &c;
+    }
+
+    inline bool AssignmentTrail::satisfied(const Clause& c) const {
+        for (int i = 0; i < c.size(); i++)
+            if (value(c[i]) == l_True) return true;
+        return false;
     }
 
     ///////////////////////
     // STATE MODIFICATION
 
-    inline void AssignmentTrail::newDecisionLevel(void) { trail_lim.push(trail.size()); }
-    inline void AssignmentTrail::newVar(Var v) {
+    inline Var AssignmentTrail::newVar(void) {
+        const Var v = nVars();
+        assigns.push(l_Undef);
         vardata.push(VarData{CRef_Undef, 0});
         trail  .capacity(v + 1);
+        return v;
+    }
+
+    inline void AssignmentTrail::newDecisionLevel(void) {
+        trail_lim.push(trail.size());
     }
 
     inline void AssignmentTrail::handleEventClauseDeleted(const Clause& c) {

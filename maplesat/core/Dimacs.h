@@ -41,7 +41,7 @@ static void readClause(B& in, Solver& S, vec<Lit>& lits) {
         parsed_lit = parseInt(in);
         if (parsed_lit == 0) break;
         var = abs(parsed_lit)-1;
-        while (var >= S.variableDatabase.nVars()) S.newVar();
+        while (var >= S.assignmentTrail.nVars()) S.newVar();
         lits.push( (parsed_lit > 0) ? mkLit(var) : ~mkLit(var) );
     }
 }
@@ -92,7 +92,7 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             S.addClause(lits);
         }
     }
-    if (vars != S.variableDatabase.nVars())
+    if (vars != S.assignmentTrail.nVars())
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of variables.\n");
     if (cnt  != clauses)
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of clauses.\n");
