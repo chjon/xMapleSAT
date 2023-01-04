@@ -40,62 +40,47 @@ static BoolOption   opt_luby_restart (_cat, "luby",   "Use the Luby restart sequ
 static IntOption    opt_restart_first(_cat, "rfirst", "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption opt_restart_inc  (_cat, "rinc",   "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
 
-//=================================================================================================
-// Constructor/Destructor:
+Solver::Solver()
+    // Member variables
+    : ok(true)
+    , asynch_interrupt(false)
 
-
-Solver::Solver() :
-
-    // Parameters (user settable):
-    //
-    verbosity        (0)
+    // Parameters
+    , luby_restart(opt_luby_restart)
+    , restart_first(opt_restart_first)
+    , restart_inc(opt_restart_inc)
 #if ! LBD_BASED_CLAUSE_DELETION
-  , clause_decay     (opt_clause_decay)
+    , clause_decay(opt_clause_decay)
+    , cla_inc(1)
 #endif
-  , luby_restart     (opt_luby_restart)
-  , restart_first    (opt_restart_first)
-  , restart_inc      (opt_restart_inc)
+    , conflict_budget(-1)
+    , verbosity(0)
 
-    // Statistics: (formerly in 'SolverStats')
-    //
-  , solves(0), starts(0), conflicts(0)
-  , lbd_calls(0)
+    // Statistics
+    , solves(0)
+    , starts(0)
+    , conflicts(0)
+    , lbd_calls(0)
+    , simpDB_assigns(-1)
+    , simpDB_props(0)
 
-  , ok                 (true)
-#if ! LBD_BASED_CLAUSE_DELETION
-  , cla_inc            (1)
-#endif
-  , simpDB_assigns     (-1)
-  , simpDB_props       (0)
-
-    // Resource constraints:
-    //
-  , conflict_budget    (-1)
-  , asynch_interrupt   (false)
-
-  // Solver components
-  , assignmentTrail          (*this)
-  , propagationQueue         (*this)
-  , unitPropagator           (*this)
-  , branchingHeuristicManager(*this)
-  , clauseDatabase           (*this)
-  , conflictAnalyzer         (*this)
+    // Solver components
+    , assignmentTrail          (*this)
+    , propagationQueue         (*this)
+    , unitPropagator           (*this)
+    , branchingHeuristicManager(*this)
+    , clauseDatabase           (*this)
+    , conflictAnalyzer         (*this)
 {}
 
+Solver::~Solver() {}
 
-Solver::~Solver()
-{
-}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// PROBLEM SPECIFICATION
 
-
-//=================================================================================================
-// Minor methods:
-
-
-// Creates a new SAT variable in the solver. If 'decision' is cleared, variable will not be
-// used as a decision variable (NOTE! This has effects on the meaning of a SATISFIABLE result).
-//
 Var Solver::newVar(bool sign, bool dvar) {
     int v = assignmentTrail  .newVar();
     propagationQueue         .newVar(v);
@@ -140,15 +125,10 @@ bool Solver::addClause(vec<Lit>& ps) {
     return true;
 }
 
-/*_________________________________________________________________________________________________
-|
-|  simplify : [void]  ->  [bool]
-|  
-|  Description:
-|    Simplify the clause database according to the current top-level assigment. Currently, the only
-|    thing done here is the removal of satisfied clauses, but more things can be put here.
-|________________________________________________________________________________________________@*/
-bool Solver::simplify() {
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// HELPER FUNCTIONS
+
+bool Solver::simplify(void) {
     assert(assignmentTrail.decisionLevel() == 0);
 
     // Don't need to simplify if the formula is already UNSAT
@@ -164,30 +144,17 @@ bool Solver::simplify() {
     // Add variables back to queue of decision variables
     branchingHeuristicManager.rebuildPriorityQueue();
 
+    // Update stats (shouldn't depend on stats really, but it will do for now)
     simpDB_assigns = assignmentTrail.nAssigns();
-    simpDB_props   = clauseDatabase.clauses_literals + clauseDatabase.learnts_literals;   // (shouldn't depend on stats really, but it will do for now)
+    simpDB_props   = clauseDatabase.clauses_literals + clauseDatabase.learnts_literals;
 
     return true;
 }
 
-/*_________________________________________________________________________________________________
-|
-|  search : (nof_conflicts : int) (params : const SearchParams&)  ->  [lbool]
-|  
-|  Description:
-|    Search for a model the specified number of conflicts. 
-|    NOTE! Use negative value for 'nof_conflicts' indicate infinity.
-|  
-|  Output:
-|    'l_True' if a partial assigment that is consistent with respect to the clauseset is found. If
-|    all variables are decision variables, this means that the clause set is satisfiable. 'l_False'
-|    if the clause set is unsatisfiable. 'l_Undef' if the bound on number of conflicts is reached.
-|________________________________________________________________________________________________@*/
 lbool Solver::search(int nof_conflicts) {
     assert(ok);
-    int         backtrack_level;
-    int         conflictC = 0;
-    vec<Lit>    learnt_clause;
+    int backtrack_level;
+    int conflictC = 0;
     starts++;
 
     for (;;) {
@@ -195,13 +162,14 @@ lbool Solver::search(int nof_conflicts) {
 
         branchingHeuristicManager.handleEventPropagated(conflicts, confl == CRef_Undef);
 
-        if (confl != CRef_Undef){
+        if (confl != CRef_Undef) {
             // CONFLICT
             conflicts++; conflictC++;
-            branchingHeuristicManager.handleEventConflicted(conflicts);
 
             // Check for root-level conflict
             if (assignmentTrail.decisionLevel() == 0) return l_False;
+            
+            branchingHeuristicManager.handleEventConflicted(conflicts);
 
             // Generate a learnt clause from the conflict graph
             learnt_clause.clear();
@@ -289,11 +257,9 @@ lbool Solver::search(int nof_conflicts) {
   3: 1 1 2 1 1 2 4 1 1 2 1 1 2 4 8
   ...
 
-
  */
 
-static double luby(double y, int x){
-
+static double luby(double y, int x) {
     // Find the finite subsequence that contains index 'x', and the
     // size of that subsequence:
     int size, seq;
