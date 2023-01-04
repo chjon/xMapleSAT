@@ -25,20 +25,29 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
 PropagationQueue::PropagationQueue(Solver& s)
+    ////////////////////
+    // Solver references
+    
+    : variableDatabase(s.variableDatabase)
+    , assignmentTrail(s.assignmentTrail)
+
+    ///////////////////
+    // Member variables
 #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-    : qhead(0)
+    , qhead(0)
     , queue(s.assignmentTrail.getTrail()) 
 
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    : qhead(0)
+    , qhead(0)
     , queue(s.assignmentTrail.getTrail()) 
     , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivityVSIDS()))
 
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-    : order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivityVSIDS()))
+    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivityVSIDS()))
 
 #endif
-    , variableDatabase(s.variableDatabase)
-    , assignmentTrail(s.assignmentTrail)
 {}

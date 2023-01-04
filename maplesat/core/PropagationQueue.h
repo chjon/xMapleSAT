@@ -33,8 +33,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
 #endif
 
-#include "core/SolverTypes.h"
 #include "core/AssignmentTrail.h"
+#include "core/SolverTypes.h"
 #include "mtl/Heap.h"
 
 namespace Minisat {
@@ -47,11 +47,12 @@ namespace Minisat {
      */
     class PropagationQueue {
     protected:
-        ////////////////////
-        // HELPER STRUCTS //
-        ////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER TYPES
 
-        // Comparator for BCP priority queue
+        /**
+         * @brief Comparator for BCP priority queue
+         */
         template<class T>
         struct LitOrderLt {
             const vec<T>&  activity;
@@ -62,36 +63,48 @@ namespace Minisat {
             LitOrderLt(const vec<T>&  act) : activity(act) { }
         };
 
-        //////////////////////
-        // MEMBER VARIABLES //
-        //////////////////////
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // SOLVER REFERENCES
 
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        int qhead;
-        const vec<Lit>& queue;
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        int qhead;
-        const vec<Lit>& queue;
-        Heap< LitOrderLt<double> > order_heap;
-        vec<lbool> soft_assigns;
-        vec<CRef>  reasons;
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        Heap< LitOrderLt<double> > order_heap;
-
-    #endif
         VariableDatabase& variableDatabase;
         AssignmentTrail& assignmentTrail;
 
-        //////////////////////
-        // HELPER FUNCTIONS //
-        //////////////////////
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // MEMBER VARIABLES
+
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+        /// @brief The head of the propagation queue as an index into the assignment trail
+        int qhead;
+
+        /// @brief A view-only reference to the assignment trail
+        const vec<Lit>& queue;
+
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        /// @brief The head of the propagation queue as an index into the assignment trail
+        int qhead;
+
+        /// @brief A view-only reference to the assignment trail
+        const vec<Lit>& queue;
+
+        /// @brief The priority queue for selecting variables to propagate during BCP
+        Heap< LitOrderLt<double> > order_heap;
+
+        /// @brief The polarities of queued variables
+        vec<lbool> soft_assigns;
+
+        /// @brief The reason clauses for queuing variables for BCP
+        vec<CRef> reasons;
+
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+        /// @brief The priority queue for selecting variables to propagate during BCP
+        Heap< LitOrderLt<double> > order_heap;
+    #endif
 
     public:
-        //////////////////
-        // CONSTRUCTORS //
-        //////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
 
         /**
          * @brief Construct a new PropagationQueue object
@@ -106,10 +119,15 @@ namespace Minisat {
          */
         ~PropagationQueue() = default;
 
-        ////////////////
-        // PUBLIC API //
-        ////////////////
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATE MODIFICATION
 
+        /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @param v the variable to register
+         */
         void newVar(Var v);
 
         /**
@@ -148,9 +166,11 @@ namespace Minisat {
     // Explicitly instantiate required templates
     template class PropagationQueue::LitOrderLt<double>;
 
-    ////////////////////////////////////////
-    // IMPLEMENTATION OF INLINE FUNCTIONS //
-    ////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE FUNCTIONS
+
+    ///////////////////////
+    // STATE MODIFICATION
 
     inline void PropagationQueue::newVar(Var v) {
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
