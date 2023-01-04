@@ -151,17 +151,15 @@ lbool Solver::search(int nof_conflicts) {
 
     for (;;) {
         CRef confl = unitPropagator.propagate();
-
         branchingHeuristicManager.handleEventPropagated(conflicts, confl == CRef_Undef);
 
         if (confl != CRef_Undef) {
             // CONFLICT
             conflicts++; conflictC++;
+            branchingHeuristicManager.handleEventConflicted(conflicts);
 
             // Check for root-level conflict
             if (assignmentTrail.decisionLevel() == 0) return l_False;
-            
-            branchingHeuristicManager.handleEventConflicted(conflicts);
 
             // Generate a learnt clause from the conflict graph
             learnt_clause.clear();
@@ -176,9 +174,6 @@ lbool Solver::search(int nof_conflicts) {
             // First UIP learnt clauses are asserting after backjumping -- propagate!
             propagationQueue.enqueue(learnt_clause[0], cr);
 
-#if BRANCHING_HEURISTIC == VSIDS
-            branchingHeuristicManager.decayActivityVSIDS();
-#endif
         } else {
             // NO CONFLICT
             if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()) {

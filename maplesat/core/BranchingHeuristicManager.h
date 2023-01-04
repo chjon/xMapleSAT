@@ -605,7 +605,9 @@ namespace Minisat {
     // VARIABLE SELECTION HEURISTIC STATE MODIFICATION
 
 #if BRANCHING_HEURISTIC == VSIDS
-    inline void BranchingHeuristicManager::decayActivityVSIDS() { var_inc *= (1 / var_decay); }
+    inline void BranchingHeuristicManager::decayActivityVSIDS() {
+        var_inc *= (1 / var_decay);
+    }
 
     inline void BranchingHeuristicManager::bumpActivityVSIDS(Var v) {
         const double RESCALE_THRESHOLD = 1e100;
@@ -701,7 +703,9 @@ namespace Minisat {
     }
 
     inline void BranchingHeuristicManager::handleEventConflicted(uint64_t conflicts) {
-    #if BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
+    #if BRANCHING_HEURISTIC == VSIDS
+        decayActivityVSIDS();
+    #elif BRANCHING_HEURISTIC == CHB || BRANCHING_HEURISTIC == LRB
         if (step_size > min_step_size)
             step_size -= step_size_dec;
     #endif
