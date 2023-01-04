@@ -226,13 +226,7 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& learntClau
         assert(confl != CRef_Undef); // (otherwise should be UIP)
         Clause& c = ca[confl];
 
-#if LBD_BASED_CLAUSE_DELETION
-        if (c.learnt() && c.activity() > 2)
-            c.activity() = solver.lbd(c);
-#else
-        if (c.learnt())
-            claBumpActivity(c);
-#endif
+        solver.clauseDatabase.handleEventClauseInConflictGraph(c);
 
         // Iterate through every literal that participates in the conflict graph
         for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){

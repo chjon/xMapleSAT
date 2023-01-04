@@ -58,9 +58,6 @@ private:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // TEMPORARY VARIABLES
 
-    /// @brief Used to keep track of variables when computing LBD
-    vec<uint64_t> lbd_seen;
-
     /// @brief Used to reduce reallocation overhead associated with learning a new clause
     vec<Lit> learnt_clause;
 
@@ -76,14 +73,6 @@ protected:
 
     /// @brief The factor by which the restart limit is multiplied in each restart. (default 1.5)
     double restart_inc;
-
-#if ! LBD_BASED_CLAUSE_DELETION
-    /// @brief Amount by which to decay clause activities
-    double clause_decay;
-
-    /// @brief Amount by which to bump the next clause
-    double cla_inc;
-#endif
 
     /// @brief Current set of assumptions provided to solve by the user.
     vec<Lit> assumptions;
@@ -118,9 +107,6 @@ public:
     
     /// @brief The total number of conflicts encountered during search.
     uint64_t conflicts;
-
-    /// @brief The total number of calls to LBD
-    uint64_t lbd_calls;
 
     /// @brief Number of top-level assignments since last execution of 'simplify()'.
     int simpDB_assigns;
@@ -357,34 +343,6 @@ private:
     lbool solve_(void);
 
     /**
-     * @brief Compute the LBD of a clause
-     * 
-     * @param clause the clause for which to compute LBD
-     * @return the LBD of the clause
-     */
-    template<class V>
-    int lbd (const V& clause);
-
-    // Maintaining Variable/Clause activity:
-    //
-#if ! LBD_BASED_CLAUSE_DELETION
-    /**
-     * @brief Decay all clauses with the specified factor. 
-     * 
-     * @details Implemented by increasing the 'bump' value instead.
-     * 
-     */
-    void claDecayActivity();
-    
-    /**
-     * @brief Increase a clause with the current 'bump' value.
-     * 
-     * @param c the clause whose activity should be bumped
-     */
-    void claBumpActivity(Clause& c);
-#endif
-
-    /**
      * @brief Check whether the solver should exit searching early
      * 
      * @return true if the solver should stop searching.
@@ -462,36 +420,6 @@ inline lbool    Solver::solveLimited  (const vec<Lit>& assumps){ assumps.copyTo(
 
 /////////////////////
 // HELPER FUNCTIONS
-
-#if ! LBD_BASED_CLAUSE_DELETION
-inline void Solver::claDecayActivity() {
-    cla_inc *= (1 / clause_decay);
-}
-
-inline void Solver::claBumpActivity (Clause& c) {
-    const double RESCALE_THRESHOLD = 1e20;
-    if ((c.activity() += cla_inc) <= RESCALE_THRESHOLD) continue;
-
-    // Rescale:
-    for (int i = 0; i < learnts.size(); i++)
-        ca[learnts[i]].activity() /= RESCALE_THRESHOLD;
-    cla_inc /= RESCALE_THRESHOLD;
-}
-#endif
-
-template<class V>
-inline int Solver::lbd (const V& clause) {
-    lbd_calls++;
-    int lbd = 0;
-    for (int i = 0; i < clause.size(); i++) {
-        int l = assignmentTrail.level(var(clause[i]));
-        if (lbd_seen[l] != lbd_calls) {
-            lbd++;
-            lbd_seen[l] = lbd_calls;
-        }
-    }
-    return lbd;
-}
 
 inline bool Solver::withinBudget() const {
     return !asynch_interrupt &&

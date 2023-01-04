@@ -45,7 +45,7 @@ namespace Minisat {
         UnitPropagator& unitPropagator;
         Solver& solver;
 
-    protected:
+    private:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // MEMBER VARIABLES
 
@@ -67,6 +67,13 @@ namespace Minisat {
         /// should be increased
         int learntSizeLimitGrowthTimerCounter;
 
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////////
+        // TEMPORARY VARIABLES
+
+        /// @brief Used to keep track of variables when computing LBD
+        vec<uint64_t> lbd_seen;
+
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // PARAMETERS
@@ -81,6 +88,12 @@ namespace Minisat {
 #if !LBD_BASED_CLAUSE_DELETION
         /// @brief A threshold activity for deleting clauses 
         double extra_lim;
+
+        /// @brief Amount by which to decay clause activities
+        double clause_decay;
+
+        /// @brief Amount by which to bump the next clause
+        double cla_inc;
 #endif
 
         /// @brief The exponential growth factor for @code{learntSizeLimitGrowthTimer}.
@@ -106,6 +119,9 @@ namespace Minisat {
 
         /// @brief The current total number of literals in learnt clauses 
         uint64_t learnts_literals;
+        
+        /// @brief The total number of calls to LBD
+        uint64_t lbd_calls;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -153,6 +169,13 @@ namespace Minisat {
         void init(void);
 
         /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @param v the variable to register
+         */
+        void newVar(Var v);
+
+        /**
          * @brief Add a clause to the learnt clause database
          * 
          * @param ps the list of literals to add as a clause
@@ -182,6 +205,18 @@ namespace Minisat {
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
+        // EVENT HANDLERS
+
+        /**
+         * @brief Update data structures for deletion heuristics when a clause appears in the
+         * conflict graph.
+         * 
+         * @param c the clause that appears in the conflict graph
+         */
+        void handleEventClauseInConflictGraph(Clause& c);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
         // OUTPUT
 
         ////////////////////////////////////////
@@ -200,6 +235,35 @@ namespace Minisat {
         void toDimacs(const char* file, Lit p, Lit q, Lit r);
 
     private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // DELETION HEURISTIC STATE MODIFICATION
+
+        /**
+         * @brief Compute the LBD of a clause
+         * 
+         * @param clause the clause for which to compute LBD
+         * @return the LBD of the clause
+         */
+        template<class V>
+        int lbd (const V& clause);
+
+    #if ! LBD_BASED_CLAUSE_DELETION
+        /**
+         * @brief Decay all clauses with the specified factor. 
+         * 
+         * @details Implemented by increasing the 'bump' value instead.
+         * 
+         */
+        void claDecayActivity();
+        
+        /**
+         * @brief Increase a clause with the current 'bump' value.
+         * 
+         * @param c the clause whose activity should be bumped
+         */
+        void claBumpActivity(Clause& c);
+    #endif
+
         ///////////////////////////////////////////////////////////////////////////////////////////
         // HELPER FUNCTIONS
 
@@ -255,8 +319,10 @@ namespace Minisat {
         /**
          * @brief Update clause database size limit data structures upon learning a clause.
          * 
+         * @param cr the learnt clause
+         * 
          */
-        void handleEventLearntClause(void);
+        void handleEventLearntClause(CRef cr);
 
         /**
          * @brief Perform preprocessing of clause database to prepare for
@@ -318,6 +384,10 @@ namespace Minisat {
     ///////////////////////
     // STATE MODIFICATION
 
+    inline void ClauseDatabase::newVar(Var v) {
+        lbd_seen.push(0);
+    }
+
     inline void ClauseDatabase::init(void) {
         // Initialize database size limit for clause deletion
     #if RAPID_DELETION
@@ -332,7 +402,7 @@ namespace Minisat {
 
     inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
         const CRef cr = addClause(ps, learnts, true);
-        handleEventLearntClause();
+        handleEventLearntClause(cr);
         return cr;
     }
 
@@ -368,6 +438,19 @@ namespace Minisat {
     #endif
     }
 
+    ///////////////////
+    // EVENT HANDLERS
+
+    inline void ClauseDatabase::handleEventClauseInConflictGraph(Clause& c) {
+    #if LBD_BASED_CLAUSE_DELETION
+        if (c.learnt() && c.activity() > 2)
+            c.activity() = lbd(c);
+    #else
+        if (c.learnt())
+            claBumpActivity(c);
+    #endif
+    }
+
     ///////////
     // OUTPUT
 
@@ -375,6 +458,39 @@ namespace Minisat {
     inline void ClauseDatabase::toDimacs(const char* file, Lit p){ vec<Lit> as; as.push(p); toDimacs(file, as); }
     inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q){ vec<Lit> as; as.push(p); as.push(q); toDimacs(file, as); }
     inline void ClauseDatabase::toDimacs(const char* file, Lit p, Lit q, Lit r){ vec<Lit> as; as.push(p); as.push(q); as.push(r); toDimacs(file, as); }
+
+    //////////////////////////////////////////
+    // DELETION HEURISTIC STATE MODIFICATION
+
+    template<class V>
+    inline int ClauseDatabase::lbd (const V& clause) {
+        lbd_calls++;
+        int lbd = 0;
+        for (int i = 0; i < clause.size(); i++) {
+            int l = assignmentTrail.level(var(clause[i]));
+            if (lbd_seen[l] != lbd_calls) {
+                lbd++;
+                lbd_seen[l] = lbd_calls;
+            }
+        }
+        return lbd;
+    }
+
+#if ! LBD_BASED_CLAUSE_DELETION
+    inline void Solver::claDecayActivity() {
+        cla_inc *= (1 / clause_decay);
+    }
+
+    inline void Solver::claBumpActivity (Clause& c) {
+        const double RESCALE_THRESHOLD = 1e20;
+        if ((c.activity() += cla_inc) <= RESCALE_THRESHOLD) continue;
+
+        // Rescale:
+        for (int i = 0; i < learnts.size(); i++)
+            ca[learnts[i]].activity() /= RESCALE_THRESHOLD;
+        cla_inc /= RESCALE_THRESHOLD;
+    }
+#endif
 
     /////////////////////
     // HELPER FUNCTIONS

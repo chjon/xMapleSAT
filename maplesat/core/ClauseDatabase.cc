@@ -28,6 +28,9 @@ using namespace Minisat;
 
 static const char* _cat = "CORE";
 static DoubleOption opt_garbage_frac (_cat, "gc-frac", "The fraction of wasted memory allowed before a garbage collection is triggered", 0.20, DoubleRange(0, false, HUGE_VAL, false));
+#if ! LBD_BASED_CLAUSE_DELETION
+static DoubleOption opt_clause_decay (_cat, "cla-decay", "The clause activity decay factor", 0.999, DoubleRange(0, false, 1, false));
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -46,6 +49,12 @@ ClauseDatabase::ClauseDatabase(Solver& s)
     , remove_satisfied(true)
     , garbage_frac (opt_garbage_frac)
 
+    // Clause deletion heuristic parameters
+#if ! LBD_BASED_CLAUSE_DELETION
+    , clause_decay(opt_clause_decay)
+    , cla_inc(1)
+#endif
+
     // Database growth parameters
     , learntSizeTimerGrowthFactor   (1.5)
 #if !RAPID_DELETION
@@ -56,6 +65,7 @@ ClauseDatabase::ClauseDatabase(Solver& s)
     // Statistics
     , clauses_literals(0)
     , learnts_literals(0)
+    , lbd_calls(0)
 {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,30 +175,44 @@ void ClauseDatabase::garbageCollect(void) {
     to.moveTo(ca);
 }
 
-void ClauseDatabase::handleEventLearntClause(void) {
-    if (--learntSizeLimitGrowthTimerCounter != 0) return;
+void ClauseDatabase::handleEventLearntClause(CRef cr) {
+    // Update data structures for clause database growth
+    if (--learntSizeLimitGrowthTimerCounter == 0) {
+        // Compute the next time the clause database should grow
+        learntSizeLimitGrowthTimer       *= learntSizeTimerGrowthFactor;
+        learntSizeLimitGrowthTimerCounter = (int)learntSizeLimitGrowthTimer;
 
-    // Compute the next time the clause database should grow
-    learntSizeLimitGrowthTimer       *= learntSizeTimerGrowthFactor;
-    learntSizeLimitGrowthTimerCounter = (int)learntSizeLimitGrowthTimer;
+    #if ! RAPID_DELETION
+        // Update the maximum size of the clause database
+        maxNumLearnts *= learntSizeLimitGrowthFactor;
+    #endif
 
-#if ! RAPID_DELETION
-    // Update the maximum size of the clause database
-    maxNumLearnts *= learntSizeLimitGrowthFactor;
+        if (solver.verbosity >= 1)
+            printf(
+                "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
+                (int)solver.conflicts, 
+                solver.nFreeVars(),
+                nClauses(),
+                (int)clauses_literals, 
+                (int)maxNumLearnts,
+                nLearnts(),
+                (double)learnts_literals / nLearnts(),
+                assignmentTrail.progressEstimate() * 100
+            );
+    }
+
+    // Update data structures for clause deletion heuristic
+#if LBD_BASED_CLAUSE_DELETION
+    if (cr != CRef_Undef) {
+        Clause& clause = ca[cr];
+        clause.activity() = lbd(clause);
+    }
+#else
+    if (cr != CRef_Undef) {
+        claBumpActivity(ca[cr]);
+    }
+    claDecayActivity();
 #endif
-
-    if (solver.verbosity >= 1)
-        printf(
-            "| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
-            (int)solver.conflicts, 
-            solver.nFreeVars(),
-            nClauses(),
-            (int)clauses_literals, 
-            (int)maxNumLearnts,
-            nLearnts(),
-            (double)learnts_literals / nLearnts(),
-            assignmentTrail.progressEstimate() * 100
-        );
 }
 
 struct reduceDB_lbdDeletion_lt {

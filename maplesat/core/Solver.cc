@@ -33,9 +33,6 @@ using namespace Minisat;
 
 static const char* _cat = "CORE";
 
-#if ! LBD_BASED_CLAUSE_DELETION
-static DoubleOption opt_clause_decay (_cat, "cla-decay", "The clause activity decay factor", 0.999, DoubleRange(0, false, 1, false));
-#endif
 static BoolOption   opt_luby_restart (_cat, "luby",   "Use the Luby restart sequence", true);
 static IntOption    opt_restart_first(_cat, "rfirst", "The base restart interval", 100, IntRange(1, INT32_MAX));
 static DoubleOption opt_restart_inc  (_cat, "rinc",   "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
@@ -52,10 +49,6 @@ Solver::Solver()
     , luby_restart(opt_luby_restart)
     , restart_first(opt_restart_first)
     , restart_inc(opt_restart_inc)
-#if ! LBD_BASED_CLAUSE_DELETION
-    , clause_decay(opt_clause_decay)
-    , cla_inc(1)
-#endif
     , conflict_budget(-1)
     , verbosity(0)
 
@@ -63,7 +56,6 @@ Solver::Solver()
     , solves(0)
     , starts(0)
     , conflicts(0)
-    , lbd_calls(0)
     , simpDB_assigns(-1)
     , simpDB_props(0)
 
@@ -83,11 +75,11 @@ Solver::~Solver() {}
 
 Var Solver::newVar(bool sign, bool dvar) {
     int v = assignmentTrail  .newVar();
+    clauseDatabase           .newVar(v);
     propagationQueue         .newVar(v);
     unitPropagator           .newVar(v);
     branchingHeuristicManager.newVar(v, sign, dvar);
     conflictAnalyzer         .newVar(v);
-    lbd_seen.push(0);
     return v;
 }
 
@@ -181,25 +173,11 @@ lbool Solver::search(int nof_conflicts) {
             // Add the learnt clause to the clause database
             CRef cr = clauseDatabase.addLearntClause(learnt_clause);
 
-            // Update clause activity
-            // TODO: the solver appears to perform better if we move this block after enqueuing
-            if (cr != CRef_Undef) {
-            #if LBD_BASED_CLAUSE_DELETION
-                Clause& clause = ca[cr];
-                clause.activity() = lbd(clause);
-            #else
-                claBumpActivity(ca[cr]);
-            #endif
-            }
-
             // First UIP learnt clauses are asserting after backjumping -- propagate!
             propagationQueue.enqueue(learnt_clause[0], cr);
 
 #if BRANCHING_HEURISTIC == VSIDS
             branchingHeuristicManager.decayActivityVSIDS();
-#endif
-#if ! LBD_BASED_CLAUSE_DELETION
-            claDecayActivity();
 #endif
         } else {
             // NO CONFLICT
