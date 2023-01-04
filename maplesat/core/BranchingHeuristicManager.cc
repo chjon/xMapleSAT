@@ -52,16 +52,23 @@ static IntOption     opt_phase_saving      (_cat, "phase-saving", "Controls the 
 // Heuristic selection
 static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim", "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// CONSTRUCTORS
+
 BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
 #if PRIORITIZE_ER
 #ifdef EXTLVL_ACTIVITY
-    : order_heap         (VarOrderLt(extensionLevelActivity), VarOrderLt(activity), extensionLevel)
+    : order_heap(
+        VarOrderLt<double>{extensionLevelActivity, false},
+        VarOrderLt<double>{activity, false},
+        extensionLevel
+    )
 #else
-    : order_heap_extlvl  (VarOrderLt(activity, extensionLevel, false))
-    , order_heap_degree  (VarOrderLt(activity, degree, true))
+    : order_heap_extlvl(VarOrderLt2<uint64_t, double>{extensionLevel, true, activity, false})
+    , order_heap_degree(VarOrderLt2<uint64_t, double>{degree, true, activity, false})
 #endif
 #else
-    : order_heap         (VarOrderLt(activity))
+    : order_heap(VarOrderLt<double>{activity, false})
 #endif
 
     //////////////////////////
@@ -81,7 +88,7 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
 #endif
 
 #if BRANCHING_HEURISTIC == CHB
-    , action(0)
+    , prev_trail_index(0)
     , reward_multiplier(opt_reward_multiplier)
 #endif
 
@@ -91,7 +98,7 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
     , rnd_init_act   (opt_rnd_init_act)
 
     // Phase saving
-    , phase_saving(opt_phase_saving)
+    , phase_saving(static_cast<PhaseSavingLevel>(static_cast<int>(opt_phase_saving)))
 
     /////////////
     // Statistics
@@ -115,6 +122,9 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
 #endif
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// STATE MODIFICATION
+
 Lit BranchingHeuristicManager::pickBranchLit() {
     decisions++;
     Var next = var_Undef;
@@ -122,7 +132,7 @@ Lit BranchingHeuristicManager::pickBranchLit() {
     // Random decision:
     {
     #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
+        auto& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
     #endif
         if (randomNumberGenerator.drand() < random_var_freq && !order_heap.empty()){
             next = order_heap[randomNumberGenerator.irand(order_heap.size())];
@@ -133,27 +143,16 @@ Lit BranchingHeuristicManager::pickBranchLit() {
 
     // Activity based decision:
     while (next == var_Undef || variableDatabase.value(next) != l_Undef || !decision[next]) {
-#if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        Heap<VarOrderLt>& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
-#endif
+    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
+        auto& order_heap = order_heap_extlvl.empty() ? order_heap_degree : order_heap_extlvl;
+    #endif
         if (order_heap.empty()){
             next = var_Undef;
             break;
         } else {
-#if ANTI_EXPLORATION
-            next = order_heap[0];
-            uint64_t age = solver.conflicts - canceled[next];
-            while (age > 0 && variableDatabase.value(next) == l_Undef) {
-                double decay = pow(0.95, age);
-                activity[next] *= decay;
-                if (order_heap.inHeap(next)) {
-                    order_heap.increase(next);
-                }
-                canceled[next] = solver.conflicts;
-                next = order_heap[0];
-                age = solver.conflicts - canceled[next];
-            }
-#endif
+        #if BRANCHING_HEURISTIC == LRB
+            handleEventPickBranchLitLRB(solver.conflicts);
+        #endif
             next = order_heap.removeMin();
         }
     }
@@ -161,23 +160,26 @@ Lit BranchingHeuristicManager::pickBranchLit() {
     // No literals remaining! Skip polarity selection
     if (next == var_Undef) return lit_Undef;
 
+    // Check option to select a random polarity
     if (rnd_pol) return mkLit(next, randomNumberGenerator.drand() < 0.5);
 
 #ifdef POLARITY_VOTING
     // Vote for the next branch literal
-    double vote = group_polarity[extensionLevel[next]];
-    bool preferred_polarity = (vote == 0) ? polarity[next] : (vote < 0);
-#else
-    bool preferred_polarity = polarity[next];
-#endif
+    const double vote = group_polarity[extensionLevel[next]];
+    const bool preferred_polarity = (vote == 0) ? polarity[next] : (vote < 0);
 
-#ifdef POLARITY_VOTING
     // Update stats
     group_polarity[extensionLevel[next]] += (preferred_polarity ? (-1) : (+1)) * 0.01;
+#else
+    const bool preferred_polarity = polarity[next];
 #endif
+
+    // Return a literal from the selected variable and polarity
     return mkLit(next, preferred_polarity);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// VARIABLE SELECTION HEURISTIC STATE MODIFICATION
 
 void BranchingHeuristicManager::rebuildPriorityQueue() {
     const int numVars = variableDatabase.nVars();
@@ -203,7 +205,10 @@ void BranchingHeuristicManager::rebuildPriorityQueue() {
 #endif
 }
 
-void BranchingHeuristicManager::handleEventLearnedClause(const vec<Lit>& learnt_clause, vec<bool>& seen) {
+void BranchingHeuristicManager::handleEventLearnedClause(
+    const vec<Lit>& learnt_clause,
+    vec<bool>& seen
+) {
 #if ALMOST_CONFLICT
     // Iterate through every reason clause immediately before the learnt clause
     for (int i = learnt_clause.size() - 1; i >= 0; i--) {
