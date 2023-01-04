@@ -24,11 +24,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_BranchingHeuristicManager_h
 
 #include <math.h>
-#include "core/SolverTypes.h"
 #include "core/AssignmentTrail.h"
 #include "core/RandomNumberGenerator.h"
-#include "core/VariableDatabase.h"
 #include "core/UnitPropagator.h"
+#include "core/VariableDatabase.h"
 #include "mtl/Heap.h"
 
 namespace Minisat {
