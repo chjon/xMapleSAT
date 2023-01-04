@@ -26,31 +26,83 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 
 namespace Minisat {
+    /**
+     * @brief This class keeps track of variable assignments
+     * 
+     */
     struct VariableDatabase {
     protected:
-        //////////////////////
-        // MEMBER VARIABLES //
-        //////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // MEMBER VARIABLES
 
-        vec<lbool> assigns; // The current variable assignments.
+        /// @brief The current variable assignments
+        vec<lbool> assigns;
 
     public:
-        //////////////////
-        // CONSTRUCTORS //
-        //////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // CONSTRUCTORS
 
+        /**
+         * @brief Construct a new VariableDatabase object
+         * 
+         */
         VariableDatabase() = default;
+
+        /**
+         * @brief Destroy the VariableDatabase object
+         * 
+         */
         ~VariableDatabase() = default;
 
-        ////////////////
-        // PUBLIC API //
-        ////////////////
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // ACCESSORS
 
-        int   nVars ()      const     ; // The current number of variables.
-        lbool value (Var x) const     ; // Gets the truth assignment of a variable
-        lbool value (Lit p) const     ; // Gets the truth assignment of a literal
-        Var   newVar()                ; // Introduce a new variable
-        void  setVar(Var x, lbool val); // Set the value of a variable
+        /**
+         * @brief Get the current number of variables
+         * 
+         * @return the current number of variables
+         */
+        int nVars (void) const;
+
+        /**
+         * @brief Get the truth assignment of a variable
+         * 
+         * @param x the variable whose truth assignment should be returned
+         * @return l_True, l_False, or l_Undef, depending on the variable assignment
+         */
+        lbool value (Var x) const;
+
+        /**
+         * @brief Get the truth assignment of a literal
+         * 
+         * @param x the literal whose truth assignment should be returned
+         * @return l_True, l_False, or l_Undef, depending on the underlying variable assignment
+         */
+        lbool value (Lit p) const;
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATE MODIFICATION
+
+        /**
+         * @brief Set up internal data structures for a new variable
+         * 
+         * @return the ID of the new variable
+         */
+        Var newVar(void);
+
+        /**
+         * @brief Set the value of a variable
+         * 
+         * @param x the variable whose value should be set
+         * @param val the truth assignment for the variable
+         */
+        void setVar(Var x, lbool val);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // UTILITY FUNCTIONS
 
         /**
          * @brief Check whether a clause is satisfied under the current variable assignment
@@ -59,33 +111,41 @@ namespace Minisat {
          * @return true iff a literal in the clause is satisfied
          */
         bool satisfied(const Clause& c) const;
-
-    protected:
-#ifdef TESTING
-        inline void set_value(Var x, lbool v, int l);
-#endif
     };
 
-#ifdef TESTING
-    inline void  VariableDatabase::set_value(Var x, lbool v, int l) {
-        auto it = test_value.find(x);
-        if (it == test_value.end()) test_value.insert(std::make_pair(x, std::make_pair(v, l)));
-        else it->second = std::make_pair(v, l);
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // IMPLEMENTATION OF INLINE METHODS
+
+    //////////////
+    // ACCESSORS
+
+    inline int VariableDatabase::nVars () const {
+        return assigns.size();
     }
 
-    inline lbool VariableDatabase::value(Var x) const { auto it = test_value.find(x); return (it == test_value.end()) ? (l_Undef) : (it->second.first ); }
-    inline lbool VariableDatabase::value(Lit p) const { return value(var(p)) ^ sign(p); }
-#else
-    inline int   VariableDatabase::nVars ()      const { return assigns.size(); }
-    inline lbool VariableDatabase::value (Var x) const { return assigns[x]; }
-    inline lbool VariableDatabase::value (Lit p) const { return assigns[var(p)] ^ sign(p); }
-    inline Var   VariableDatabase::newVar() {
+    inline lbool VariableDatabase::value (Var x) const {
+        return assigns[x];
+    }
+
+    inline lbool VariableDatabase::value (Lit p) const {
+        return assigns[var(p)] ^ sign(p);
+    }
+
+    ///////////////////////
+    // STATE MODIFICATION
+
+    inline Var VariableDatabase::newVar() {
         const Var v = nVars();
         assigns.push(l_Undef);
         return v;
     }
-    inline void VariableDatabase::setVar(Var x, lbool val) { assigns[x] = val; }
-#endif
+
+    inline void VariableDatabase::setVar(Var x, lbool val) {
+        assigns[x] = val;
+    }
+
+    //////////////////////
+    // UTILITY FUNCTIONS
 
     inline bool VariableDatabase::satisfied(const Clause& c) const {
         for (int i = 0; i < c.size(); i++)
