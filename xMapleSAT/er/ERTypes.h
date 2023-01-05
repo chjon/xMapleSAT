@@ -17,8 +17,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Minisat_SolverERTypes_h
-#define Minisat_SolverERTypes_h
+#ifndef Minisat_ERTypes_h
+#define Minisat_ERTypes_h
 
 #include <functional>
 #include <tr1/unordered_set>

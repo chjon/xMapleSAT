@@ -22,23 +22,23 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "core/ClauseDatabase.h"
 #include "core/Solver.h"
-#include "core/SolverER.h"
-#include "core/SolverERTypes.h"
+#include "er/ERManager.h"
+#include "er/ERTypes.h"
 #include "mtl/Sort.h"
 
 namespace Minisat {
 
-bool SolverER::user_extFilPredicate_width(CRef cr) {
+bool ERManager::user_extFilPredicate_width(CRef cr) {
     const int sz = ca[cr].size();
     return ext_min_width <= sz && sz <= ext_max_width;
 }
 
-bool SolverER::user_extFilPredicate_lbd(CRef cr) {
+bool ERManager::user_extFilPredicate_lbd(CRef cr) {
     const int lbd = clauseDatabase.lbd(ca[cr]);
     return ext_min_lbd <= lbd && lbd <= ext_max_lbd;
 }
 
-int SolverER::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
+int ERManager::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
     output.clear(); tmp_set.clear();
 
     // Make a set of all the literals in clause 1
@@ -60,7 +60,7 @@ int SolverER::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
     return output.size();
 }
 
-bool SolverER::user_extFilPredicate_ler(CRef cr) {
+bool ERManager::user_extFilPredicate_ler(CRef cr) {
     if (m_filteredClauses_ler.size() > 0) {
         const Clause& c1 = ca[cr];
         const Clause& c2 = ca[m_filteredClauses_ler[m_filteredClauses_ler.size() - 1]];
@@ -74,12 +74,12 @@ bool SolverER::user_extFilPredicate_ler(CRef cr) {
     return true;
 }
 
-void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
+void ERManager::user_extSelHeuristic_all(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
     const int start_index = std::max(0, static_cast<int>(input.size()) - static_cast<int>(numClauses));
     std::copy(input.begin() + start_index, input.end(), std::back_inserter(output));
 }
 
-void SolverER::user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
+void ERManager::user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
     for (unsigned int i = 0; i < input.size(); i++) {
         CRef clauseIndex = input[i], tmp = 0;
         double clauseActivity = ca[clauseIndex].activity();
@@ -120,7 +120,7 @@ inline int partition_count(std::vector<LitPair>& db, std::tr1::unordered_map<Lit
     return i;
 }
 
-void SolverER::quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_map<LitPair, int>& subexpr_count, int l, int r, int k) {
+void ERManager::quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_map<LitPair, int>& subexpr_count, int l, int r, int k) {
     // Ensure we have a valid value of k
     k--;
     if (k <= 0 || k >= r - l + 1) return;
@@ -150,7 +150,7 @@ static inline std::vector<LitSet> getLiteralSets(ClauseAllocator& ca, const std:
     return sets;
 }
 
-inline std::vector<LitPair> SolverER::getFreqSubexprs(std::tr1::unordered_map<LitPair, int>& subexpr_counts, unsigned int numSubexprs) {
+inline std::vector<LitPair> ERManager::getFreqSubexprs(std::tr1::unordered_map<LitPair, int>& subexpr_counts, unsigned int numSubexprs) {
 #define USE_QUICKSELECT_SUBEXPRS
 #ifdef  USE_QUICKSELECT_SUBEXPRS
     // Copy keys
@@ -199,7 +199,7 @@ static inline void addIntersectionToSubexprs(std::tr1::unordered_map<LitPair, in
     }
 }
 
-inline std::tr1::unordered_map<LitPair, int> SolverER::countSubexprs(std::vector<LitSet>& sets) {
+inline std::tr1::unordered_map<LitPair, int> ERManager::countSubexprs(std::vector<LitSet>& sets) {
     // Count subexpressions by looking at intersections
     // Time complexity: O(w k^2)
     std::tr1::unordered_map<LitPair, int> subexprs;
@@ -247,7 +247,7 @@ inline std::tr1::unordered_map<LitPair, int> SolverER::countSubexprs(std::vector
     return subexprs;
 }
 
-void SolverER::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
+void ERManager::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
     // Get the set of literals for each clause
     // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
     // Ideally, we want the solver object to be const when passed into this function
@@ -273,7 +273,7 @@ void SolverER::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDef
     }
 }
 
-void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
+void ERManager::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
     // Total time complexity: O(w k log(w k) + x)
     // w: window size
     // k: clause width
@@ -325,7 +325,7 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     }
 }
 
-void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
+void ERManager::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
     // Add extension variables
     std::tr1::unordered_set<LitPair> generatedPairs;
     Var x = assignmentTrail.nVars() + extVarDefBuffer.size();
@@ -343,7 +343,7 @@ void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, co
     }
 }
 
-bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
+bool ERManager::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
     if (xdm.size() == 0) return false;
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_WIDTH
@@ -359,8 +359,8 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
     return true;
 }
 
-void SolverER::user_extDelPredicateSetup_none() {}
-void SolverER::user_extDelPredicateSetup_activity() {
+void ERManager::user_extDelPredicateSetup_none() {}
+void ERManager::user_extDelPredicateSetup_activity() {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY
     m_threshold_activity = ext_act_threshold;
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
@@ -376,9 +376,9 @@ void SolverER::user_extDelPredicateSetup_activity() {
 #endif
 }
 
-bool SolverER::user_extDelPredicate_none(Var x) { return false; }
-bool SolverER::user_extDelPredicate_all(Var x) { return true; }
-bool SolverER::user_extDelPredicate_activity(Var x) {
+bool ERManager::user_extDelPredicate_none(Var x) { return false; }
+bool ERManager::user_extDelPredicate_all(Var x) { return true; }
+bool ERManager::user_extDelPredicate_activity(Var x) {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     const double activity = solver.branchingHeuristicManager.getActivityVSIDS()[x];
     return activity < m_threshold_activity;

@@ -29,7 +29,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/ConflictAnalyzer.h"
 #include "core/PropagationQueue.h"
 #include "core/RandomNumberGenerator.h"
-#include "core/SolverER.h"
 #include "core/SolverTypes.h"
 #include "core/UnitPropagator.h"
 #include "mtl/Alg.h"
@@ -143,8 +142,6 @@ public:
 
     /// @brief Conflict analyzer
     ConflictAnalyzer conflictAnalyzer;
-
-    SolverER solverER;
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -341,8 +338,6 @@ private:
      * of conflicts is reached.
      */
     lbool search(int nof_conflicts);
-
-
     
     /**
      * @brief Main solve method (assumptions given in 'assumptions')

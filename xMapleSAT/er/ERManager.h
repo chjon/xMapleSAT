@@ -1,4 +1,4 @@
-/*******************************************************************************************[SolverER.h]
+/*******************************************************************************************[ERManager.h]
 xMaple* -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
@@ -17,8 +17,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Minisat_SolverER_h
-#define Minisat_SolverER_h
+#ifndef Minisat_ERManager_h
+#define Minisat_ERManager_h
 
 #include <functional>
 #include <initializer_list>
@@ -32,7 +32,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "core/AssignmentTrail.h"
 #include "core/SolverTypes.h"
-#include "core/SolverERTypes.h"
+#include "er/ERTypes.h"
 #include "mtl/Vec.h"
 #include "mtl/ExtDefMap.h"
 
@@ -50,7 +50,7 @@ class PropagationQueue;
 class RandomNumberGenerator;
 class UnitPropagator;
 
-class SolverER {
+class ERManager {
 protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // HELPER TYPES
@@ -234,17 +234,17 @@ public:
     // CONSTRUCTORS
 
     /**
-     * @brief Construct a new SolverER object
+     * @brief Construct a new ERManager object
      * 
      * @param s a reference to the main solver object
      */
-    SolverER(Solver& s);
+    ERManager(Solver& s);
 
     /**
-     * @brief Destroy the SolverER object
+     * @brief Destroy the ERManager object
      * 
      */
-    ~SolverER() = default;
+    ~ERManager() = default;
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -618,25 +618,25 @@ private:
 ///////////////////////
 // STATE MODIFICATION
 
-inline void SolverER::newVar(Var v) {
+inline void ERManager::newVar(Var v) {
     extensionLevel.push(0);
 }
 
 //////////////
 // ACCESSORS
 
-inline bool SolverER::isExtVar(Var x) const {
+inline bool ERManager::isExtVar(Var x) const {
     return x >= originalNumVars;
 }
 
-inline bool SolverER::isCurrentExtVar(Var x) const {
+inline bool ERManager::isCurrentExtVar(Var x) const {
     return x >= originalNumVars && xdm.containsExt(mkLit(x));
 }
 
 // FIXME: need to handle the case where the pair is currently queued for variable introduction in
 // the extVarDefBuffer. We cannot just add directly to xdm since it might result in substitution
 // before we introduce the new var.
-inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set< std::pair<Lit, Lit> >& generatedPairs) const {
+inline bool ERManager::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set< std::pair<Lit, Lit> >& generatedPairs) const {
     // Ensure literal pair consists of different variables
     if (var(a) == var(b)) return false;
 
@@ -653,11 +653,11 @@ inline bool SolverER::isValidDefPair(Lit a, Lit b, const std::tr1::unordered_set
 ///////////////
 // STATISTICS
 
-inline void SolverER::extTimerStart() const {
+inline void ERManager::extTimerStart() const {
     getrusage(RUSAGE_SELF, &ext_timer_start);
 }
 
-inline void SolverER::extTimerStop(struct rusage& ext_overhead) const {
+inline void ERManager::extTimerStop(struct rusage& ext_overhead) const {
     getrusage(RUSAGE_SELF, &ext_timer_end);
     
     // Add to total overhead
@@ -682,7 +682,7 @@ static inline double readTimer(const struct rusage& ext_overhead) {
     return (double)ext_overhead.ru_utime.tv_sec + (double)ext_overhead.ru_utime.tv_usec / 1000000;
 }
 
-inline double SolverER::extTimerRead(unsigned int i) const {
+inline double ERManager::extTimerRead(unsigned int i) const {
     switch(i) {
         case 0: return readTimer(ext_sel_overhead);
         case 1: return readTimer(ext_add_overhead);
@@ -697,20 +697,20 @@ inline double SolverER::extTimerRead(unsigned int i) const {
 ////////////////////////////////////
 // EXTENSION VARIABLE INTRODUCTION
 
-inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
+inline void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
     tmp_vec.clear(); for (const auto l : clause) tmp_vec.push(l);
     addExtDefClause(db, ext_lit, tmp_vec);
 }
 
-inline void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause) {
+inline void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause) {
     tmp_vec.clear(); for (const auto l : clause) tmp_vec.push(l);
     addExtDefClause(db, ext_lit, tmp_vec);
 }
 
-inline void SolverER::checkGenerateDefinitions(uint64_t conflicts) {
+inline void ERManager::checkGenerateDefinitions(uint64_t conflicts) {
     if (conflicts - prevExtensionConflict >= static_cast<unsigned int>(ext_freq)) {
         prevExtensionConflict = conflicts;
-        selectClauses(user_extSelHeuristic, SolverER::HeuristicType::DEFAULT);
+        selectClauses(user_extSelHeuristic, ERManager::HeuristicType::DEFAULT);
         defineExtVars(user_extDefHeuristic);
     }
 }
@@ -718,14 +718,14 @@ inline void SolverER::checkGenerateDefinitions(uint64_t conflicts) {
 ////////////////////////////////
 // EXTENSION VARIABLE DELETION
 
-inline void SolverER::checkDeleteExtVars(uint64_t conflicts) {
+inline void ERManager::checkDeleteExtVars(uint64_t conflicts) {
     if (conflicts - prevDelExtVarConflict >= static_cast<unsigned int>(ext_del_freq)){
         prevDelExtVarConflict = conflicts;
         deleteExtVars(user_extDelPredicateSetup, user_extDelPredicate);
     }
 }
 
-inline void SolverER::remove_incremental(CRef cr) {
+inline void ERManager::remove_incremental(CRef cr) {
     m_deletedClauses.insert(cr);
 }
 
@@ -737,7 +737,7 @@ inline static void removeSet(std::vector<CRef>& vec, const std::tr1::unordered_s
     vec.erase(vec.begin() + j, vec.end());
 }
 
-inline void SolverER::remove_flush() {
+inline void ERManager::remove_flush() {
     // Remove CRefs from buffers of filtered clauses
     removeSet(m_filteredClauses, m_deletedClauses);
     removeSet(m_filteredClauses_ler, m_deletedClauses);

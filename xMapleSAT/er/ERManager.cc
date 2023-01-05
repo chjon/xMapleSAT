@@ -1,4 +1,4 @@
-/*******************************************************************************************[SolverER.cc]
+/*******************************************************************************************[ERManager.cc]
 xMaple*, extended resolution for Minisat-based solvers -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
@@ -17,7 +17,7 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#include "core/SolverER.h"
+#include "er/ERManager.h"
 
 #include <stdio.h>
 #include "core/Solver.h"
@@ -72,7 +72,7 @@ static IntOption    opt_ext_del_freq(_ext, "ext-del-freq", "Number of conflicts 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
-SolverER::SolverER(Solver& s)
+ERManager::ERManager(Solver& s)
     ////////////////////
     // Solver references
     : assignmentTrail(s.assignmentTrail)
@@ -129,40 +129,40 @@ SolverER::SolverER(Solver& s)
 
     // Bind filter heuristic
     #if ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_RANGE
-        user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_width, this, _1);
+        user_extFilPredicate = std::bind(&ERManager::user_extFilPredicate_width, this, _1);
     #elif ER_USER_FILTER_HEURISTIC == ER_FILTER_HEURISTIC_LBD
-        user_extFilPredicate = std::bind(&SolverER::user_extFilPredicate_lbd, this, _1);
+        user_extFilPredicate = std::bind(&ERManager::user_extFilPredicate_lbd, this, _1);
     #endif
 
     // Bind clause selection heuristic
     #if ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ALL
-        user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_all, this, _1, _2, _3);
+        user_extSelHeuristic = std::bind(&ERManager::user_extSelHeuristic_all, this, _1, _2, _3);
     #elif ER_USER_SELECT_HEURISTIC == ER_SELECT_HEURISTIC_ACTIVITY
-        user_extSelHeuristic = std::bind(&SolverER::user_extSelHeuristic_activity, this, _1, _2, _3);
+        user_extSelHeuristic = std::bind(&ERManager::user_extSelHeuristic_activity, this, _1, _2, _3);
     #endif
 
     // Bind extension variable definition heuristic
     #if ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_SUBEXPR
-        user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_subexpression, this, _1, _2, _3);
+        user_extDefHeuristic = std::bind(&ERManager::user_extDefHeuristic_subexpression, this, _1, _2, _3);
     #elif ER_USER_ADD_HEURISTIC == ER_ADD_HEURISTIC_RANDOM
-        user_extDefHeuristic = std::bind(&SolverER::user_extDefHeuristic_random, this, _1, _2, _3);
+        user_extDefHeuristic = std::bind(&ERManager::user_extDefHeuristic_random, this, _1, _2, _3);
     #endif
 
     // Bind clause substitution predicate
-    user_extSubPredicate = std::bind(&SolverER::user_extSubPredicate_size_lbd, this, _1);
+    user_extSubPredicate = std::bind(&ERManager::user_extSubPredicate_size_lbd, this, _1);
 
     // Bind variable deletion predicate setup function
     #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
-        user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_none, this);
+        user_extDelPredicateSetup = std::bind(&ERManager::user_extDelPredicateSetup_none, this);
     #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-        user_extDelPredicateSetup = std::bind(&SolverER::user_extDelPredicateSetup_activity, this);
+        user_extDelPredicateSetup = std::bind(&ERManager::user_extDelPredicateSetup_activity, this);
     #endif
 
     // Bind variable deletion predicate
     #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
-        user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_all, this, _1);
+        user_extDelPredicate = std::bind(&ERManager::user_extDelPredicate_all, this, _1);
     #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-        user_extDelPredicate = std::bind(&SolverER::user_extDelPredicate_activity, this, _1);
+        user_extDelPredicate = std::bind(&ERManager::user_extDelPredicate_activity, this, _1);
     #endif
 
     // Initialize overhead measurement
@@ -177,7 +177,7 @@ SolverER::SolverER(Solver& s)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CLAUSE SELECTION
 
-void SolverER::filterBatch(
+void ERManager::filterBatch(
     const vec<CRef>& candidates,
     FilterPredicate& filterPredicate,
     HeuristicType heuristicType
@@ -201,7 +201,7 @@ void SolverER::filterBatch(
     extTimerStop(ext_sel_overhead);
 }
 
-void SolverER::filterIncremental(
+void ERManager::filterIncremental(
     const CRef candidate,
     FilterPredicate& filterPredicate,
     HeuristicType heuristicType
@@ -222,7 +222,7 @@ void SolverER::filterIncremental(
     extTimerStop(ext_sel_overhead);
 }
 
-void SolverER::selectClauses(
+void ERManager::selectClauses(
     SelectionHeuristic& selectionHeuristic,
     HeuristicType heuristicType, 
     unsigned int numKeepFiltered
@@ -261,7 +261,7 @@ void SolverER::selectClauses(
 ////////////////////////////////////
 // EXTENSION VARIABLE INTRODUCTION
 
-void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic, HeuristicType heuristicType) {
+void ERManager::defineExtVars(ExtDefHeuristic& extDefHeuristic, HeuristicType heuristicType) {
     extTimerStart();
 
     // Select data structure to use
@@ -286,7 +286,7 @@ void SolverER::defineExtVars(ExtDefHeuristic& extDefHeuristic, HeuristicType heu
     extTimerStop(ext_add_overhead);
 }
 
-void SolverER::introduceExtVars(
+void ERManager::introduceExtVars(
     std::tr1::unordered_map<Var, std::vector<CRef> >& ext_def_db,
     HeuristicType heuristicType
 ) {
@@ -349,7 +349,7 @@ void SolverER::introduceExtVars(
     extTimerStop(ext_add_overhead);
 }
 
-void SolverER::prioritize(const std::vector<ExtDef>& defs) {
+void ERManager::prioritize(const std::vector<ExtDef>& defs) {
     // FIXME: this only forces branching on the last extension variable we add here - maybe add a
     // queue for force branch variables?
     // const double desiredActivity = branchingHeuristicManager.getActivityVSIDS()[solver->order_heap[0]] * ext_prio_act;
@@ -366,7 +366,7 @@ void SolverER::prioritize(const std::vector<ExtDef>& defs) {
     // }
 }
 
-void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
+void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
     // Copy clause
     sort(ps);
     Lit p; int i, j;
@@ -418,7 +418,7 @@ void SolverER::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps)
 ////////////////////////////////////
 // EXTENSION VARIABLE SUBSTITUTION
 
-void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
+void ERManager::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
     extTimerStart();
     vec<Lit>& extLits = tmp_vec; extLits.clear();
 
@@ -453,7 +453,7 @@ EXIT_SUBSTITUTE:;
 ////////////////////////////////
 // EXTENSION VARIABLE DELETION
 
-void SolverER::getExtVarsToDelete(
+void ERManager::getExtVarsToDelete(
     std::tr1::unordered_set<Lit>& varsToDelete,
     DeletionPredicate& deletionPredicate
 ) const {
@@ -485,7 +485,7 @@ void SolverER::getExtVarsToDelete(
     }
 }
 
-void SolverER::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& deletionPredicate) {
+void ERManager::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& deletionPredicate) {
     extTimerStart();
 
     // Get extension variables to delete
@@ -524,7 +524,7 @@ void SolverER::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& d
 ///////////////////////
 // STATE MODIFICATION
 
-void SolverER::relocAll(ClauseAllocator& to) {
+void ERManager::relocAll(ClauseAllocator& to) {
     // Reloc CRefs stored in buffers
     for (unsigned int i = 0; i < m_filteredClauses.size(); i++) ca.reloc(m_filteredClauses[i], to);
     for (unsigned int i = 0; i < m_selectedClauses.size(); i++) ca.reloc(m_selectedClauses[i], to);
@@ -545,7 +545,7 @@ void SolverER::relocAll(ClauseAllocator& to) {
     }
 }
 
-void SolverER::removeSatisfied() {
+void ERManager::removeSatisfied() {
     // Iterate through every extension variable
     for (std::tr1::unordered_map< Var, std::vector<CRef> >::iterator it = extDefs.begin(); it != extDefs.end(); it++) {
         std::vector<CRef>& cs = it->second;
@@ -572,7 +572,7 @@ void SolverER::removeSatisfied() {
 //////////////////////////////////////
 // HELPER FUNCTIONS FOR SUBSTITUTION
 
-CRef SolverER::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
+CRef ERManager::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs) {
     // Find definition clause which asserts ~x
     int max_lvl;
 
@@ -615,7 +615,7 @@ static inline bool containsVarToDelete(Clause& c, LitSet& varsToDelete) {
     return false;
 }
 
-void SolverER::deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete) {
+void ERManager::deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete) {
     int i, j;
     for (i = j = 0; i < db.size(); i++) {
         CRef cr = db[i];

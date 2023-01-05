@@ -66,7 +66,6 @@ Solver::Solver()
     , branchingHeuristicManager(*this)
     , clauseDatabase           (*this)
     , conflictAnalyzer         (*this)
-    , solverER                 (*this)
 {}
 
 Solver::~Solver() {}
