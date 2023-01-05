@@ -224,6 +224,13 @@ namespace Minisat {
          */
         void removeClause(CRef cr);
 
+        /**
+         * @brief Relocate all clauses
+         * 
+         * @param to the ClauseAllocator to relocate to
+         */
+        void relocAll(ClauseAllocator& to);
+
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // UTILITY FUNCTIONS
@@ -370,13 +377,6 @@ namespace Minisat {
          * collection.
          */
         void checkGarbage(double gf);
-
-        /**
-         * @brief Relocate all clauses
-         * 
-         * @param to the ClauseAllocator to relocate to
-         */
-        void relocAll(ClauseAllocator& to);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -473,6 +473,12 @@ namespace Minisat {
         maxNumLearnts += 500;
     #endif
     }
+
+    inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
+        for (int i = 0; i < learnts.size(); i++) ca.reloc(learnts[i], to);
+        for (int i = 0; i < clauses.size(); i++) ca.reloc(clauses[i], to);
+    }
+
 
     //////////////////////
     // UTILITY FUNCTIONS
@@ -575,11 +581,6 @@ namespace Minisat {
                 db[j++] = db[i];
         }
         db.shrink(i - j);
-    }
-
-    inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
-        for (int i = 0; i < learnts.size(); i++) ca.reloc(learnts[i], to);
-        for (int i = 0; i < clauses.size(); i++) ca.reloc(clauses[i], to);
     }
 
     inline void ClauseDatabase::checkGarbage(double gf) {

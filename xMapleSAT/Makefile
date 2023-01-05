@@ -68,40 +68,15 @@ ER_DELETE_HEURISTIC_ACTIVITY  =2
 # Delete low-activity extension variables based on a proportional activity threshold
 ER_DELETE_HEURISTIC_ACTIVITY2 =3
 
-############################################
-# New variable generation location options #
-############################################
+#########################################################
+# New variable generation/introduction location options #
+#########################################################
 # Do not generate extension variables
-ER_GEN_LOCATION_NONE           =0
+NONE           =0
 # Generate extension variables after a restart
-ER_GEN_LOCATION_AFTER_RESTART  =1
+AFTER_RESTART  =1
 # Generate extension variables after a conflict
-ER_GEN_LOCATION_AFTER_CONFLICT =2
-
-##########################################
-# New variable addition location options #
-##########################################
-# Do not add extension variables
-ER_ADD_LOCATION_NONE           =0
-# Add extension variables after a restart
-ER_ADD_LOCATION_AFTER_RESTART  =1
-# Add extension variables after a conflict
-ER_ADD_LOCATION_AFTER_CONFLICT =2
-
-define make_er_solver
-	make CMD_CFLAGS="\
-		-D ER_USER_ADD_HEURISTIC=$(2) \
-		-D ER_USER_FILTER_HEURISTIC=$(3) \
-		-D ER_USER_SELECT_HEURISTIC=$(4) \
-		-D ER_USER_SUBSTITUTE_HEURISTIC=$(5) \
-		-D ER_USER_DELETE_HEURISTIC=$(6) \
-		-D ER_USER_GEN_LOCATION=$(7) \
-		-D ER_USER_ADD_LOCATION=$(8) \
-		-D ER_ENABLE_GLUCOSER=$(9) \
-		$(10) \
-	" -C core rs
-	mv core/maplesat_static core/$(1)
-endef
+AFTER_CONFLICT =2
 
 .PHONY: all clean test
 
@@ -113,56 +88,58 @@ all: maplesat xmaplesat
 	touch $@
 
 maplesat: .prev_maplesat
-	$(call make_er_solver,maplesat,0,0,0,0,0,0,0,0)
+	make -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
 
-xmaplesat: xmaplesat_rnd_rng xmaplesat_rnd_lbd xmaplesat_sub_rng xmaplesat_sub_lbd xmaplesat_glucoser
+xmaplesat: .prev_xmaplesat
+	make CMD_CFLAGS="\
+		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
+		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_BOTH) \
+		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
+		-D ER_USER_SUBSTITUTE_HEURISTIC=$(ER_SUBSTITUTE_HEURISTIC_WIDTH) \
+		-D ER_USER_DELETE_HEURISTIC=$(ER_DELETE_HEURISTIC_ACTIVITY2) \
+		-D ER_USER_GEN_LOCATION=$(AFTER_RESTART) \
+		-D ER_USER_ADD_LOCATION=$(AFTER_RESTART) \
+		-D PRIORITIZE_ER=0 \
+		-D BCP_PRIORITY_MODE=1 \
+	" -C er rs || exit 1
+	mkdir -p bin
+	mv er/xmaplesat_static bin/$@
 
 xmaplesat_rnd_rng: .prev_xmaplesat_rnd_rng
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0)
+	make CMD_CFLAGS="\
+		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_RANDOM) \
+		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_RANGE) \
+		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
+		-D ER_USER_SUBSTITUTE_HEURISTIC=$(ER_SUBSTITUTE_HEURISTIC_WIDTH) \
+		-D ER_USER_DELETE_HEURISTIC=$(ER_DELETE_HEURISTIC_ACTIVITY2) \
+		-D ER_USER_GEN_LOCATION=$(AFTER_RESTART) \
+		-D ER_USER_ADD_LOCATION=$(AFTER_RESTART) \
+	" -C er rs || exit 1
+	mkdir -p bin
+	mv er/xmaplesat_static bin/$@
 
 xmaplesat_sub_lbd: .prev_xmaplesat_sub_lbd
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0)
+	make CMD_CFLAGS="\
+		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
+		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_BOTH) \
+		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
+		-D ER_USER_SUBSTITUTE_HEURISTIC=$(ER_SUBSTITUTE_HEURISTIC_WIDTH) \
+		-D ER_USER_DELETE_HEURISTIC=$(ER_DELETE_HEURISTIC_ACTIVITY2) \
+		-D ER_USER_GEN_LOCATION=$(AFTER_RESTART) \
+		-D ER_USER_ADD_LOCATION=$(AFTER_RESTART) \
+	" -C er rs || exit 1
+	mkdir -p bin
+	mv er/xmaplesat_static bin/$@
 
 xmaplesat_glucoser: .prev_xmaplesat_glucoser
-	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1)
-
-xmaplesat_rnd_rng_bcp_priority: .prev_xmaplesat_rnd_rng_bcp_priority
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BCP_PRIORITY_MODE=1)
-
-xmaplesat_rnd_rng_bcp_priority2: .prev_xmaplesat_rnd_rng_bcp_priority2
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BCP_PRIORITY_MODE=2)
-
-xmaplesat_sub_lbd_bcp_priority: .prev_xmaplesat_sub_lbd_bcp_priority
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BCP_PRIORITY_MODE=1)
-
-xmaplesat_sub_lbd_bcp_priority2: .prev_xmaplesat_sub_lbd_bcp_priority2
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BCP_PRIORITY_MODE=2)
-
-xmaplesat_glucoser_bcp_priority: .prev_xmaplesat_glucoser_bcp_priority
-	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D BCP_PRIORITY_MODE=1)
-
-xmaplesat_glucoser_bcp_priority2: .prev_xmaplesat_glucoser_bcp_priority2
-	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D BCP_PRIORITY_MODE=2)
-
-xmaplesat_rnd_rng_er_priority: .prev_xmaplesat_rnd_rng_er_priority
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D PRIORITIZE_ER=1)
-
-xmaplesat_sub_lbd_er_priority: .prev_xmaplesat_sub_lbd_er_priority
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D PRIORITIZE_ER=1)
-
-xmaplesat_glucoser_er_priority: .prev_xmaplesat_glucoser_er_priority
-	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D PRIORITIZE_ER=1)
-
-xmaplesat_rnd_rng_er_bump: .prev_xmaplesat_rnd_rng_er_bump
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_RANDOM),$(ER_FILTER_HEURISTIC_RANGE),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BUMP_ER=1)
-
-xmaplesat_sub_lbd_er_bump: .prev_xmaplesat_sub_lbd_er_bump
-	$(call make_er_solver,$@,$(ER_ADD_HEURISTIC_SUBEXPR),$(ER_FILTER_HEURISTIC_LBD),$(ER_SELECT_HEURISTIC_ACTIVITY),$(ER_SUBSTITUTE_HEURISTIC_BOTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_AFTER_RESTART),$(ER_ADD_LOCATION_AFTER_RESTART),0,-D BUMP_ER=1)
-
-xmaplesat_glucoser_er_bump: .prev_xmaplesat_glucoser_er_bump
-	$(call make_er_solver,$@,0,0,0,$(ER_SUBSTITUTE_HEURISTIC_WIDTH),$(ER_DELETE_HEURISTIC_ACTIVITY2),$(ER_GEN_LOCATION_NONE),$(ER_ADD_LOCATION_NONE),1,-D BUMP_ER=1)
+	make CMD_CFLAGS="-D ER_ENABLE_GLUCOSER=1" -C er rs || exit 1
+	mkdir -p bin
+	mv er/xmaplesat_static bin/$@
 
 clean:
+	make -C er   clean
 	make -C core clean
 	make -C test clean
 

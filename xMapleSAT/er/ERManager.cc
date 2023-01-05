@@ -335,7 +335,7 @@ void ERManager::introduceExtVars(
         for (const std::vector<Lit>& c : def.additionalClauses) addExtDefClause(defs, x, c);
 
         // Add extension clause IDs to the extension definition database
-        ext_def_db.insert(std::make_pair(var(x), defs));
+        extDefs.insert(std::make_pair(var(x), defs));
     }
 
     // Prioritize new variables

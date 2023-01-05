@@ -1,4 +1,4 @@
-/***************************************************************************************[Solver.cc]
+/*************************************************************************************[ERSolver.cc]
 MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
            Copyright (c) 2007-2010, Niklas Sorensson
 
@@ -20,122 +20,37 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#include <math.h>
-
-#include "core/Solver.h"
-#include "mtl/Sort.h"
+#include "er/ERSolver.h"
 
 using namespace Minisat;
-
-//=================================================================================================
-// Options:
-
-
-static const char* _cat = "CORE";
-
-static BoolOption   opt_luby_restart (_cat, "luby",   "Use the Luby restart sequence", true);
-static IntOption    opt_restart_first(_cat, "rfirst", "The base restart interval", 100, IntRange(1, INT32_MAX));
-static DoubleOption opt_restart_inc  (_cat, "rinc",   "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
-Solver::Solver()
-    // Member variables
-    : ok(true)
-    , asynch_interrupt(false)
-
-    // Parameters
-    , luby_restart(opt_luby_restart)
-    , restart_first(opt_restart_first)
-    , restart_inc(opt_restart_inc)
-    , conflict_budget(-1)
-    , verbosity(0)
-
-    // Statistics
-    , solves(0)
-    , starts(0)
-    , conflicts(0)
-    , simpDB_assigns(-1)
-    , simpDB_props(0)
-
-    // Solver components
-    , assignmentTrail          (*this)
-    , propagationQueue         (*this)
-    , unitPropagator           (*this)
-    , branchingHeuristicManager(*this)
-    , clauseDatabase           (*this)
-    , conflictAnalyzer         (*this)
+ERSolver::ERSolver()
+    : Solver()
+    , erManager(*this)
 {}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// PROBLEM SPECIFICATION
-
-bool Solver::addClause(vec<Lit>& ps) {
-    assert(assignmentTrail.decisionLevel() == 0);
-
-    // Only add clause if the solver is in a consistent state
-    if (!ok) return false;
-
-    // Check if clause is satisfied and remove false/duplicate literals
-    sort(ps);
-    Lit p; int i, j;
-    for (i = j = 0, p = lit_Undef; i < ps.size(); i++) {
-        if (assignmentTrail.value(ps[i]) == l_True || ps[i] == ~p)
-            return true;
-        else if (assignmentTrail.value(ps[i]) != l_False && ps[i] != p)
-            ps[j++] = p = ps[i];
-    }
-    ps.shrink(i - j);
-
-    // Mark solver as inconsistent if the clause is empty
-    if (ps.size() == 0) return ok = false;
-
-    branchingHeuristicManager.handleEventInputClause(ps);
-
-    // Add variable directly to trail if the clause is unit
-    if (ps.size() == 1) {
-        propagationQueue.enqueue(ps[0]);
-        return ok = (unitPropagator.propagate() == CRef_Undef);
-    }
-
-    // Add the clause to the clause database
-    clauseDatabase.addInputClause(ps);
-
-    return true;
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
 
-bool Solver::simplify(void) {
-    assert(assignmentTrail.decisionLevel() == 0);
-
-    // Don't need to simplify if the formula is already UNSAT
-    if (!ok || unitPropagator.propagate() != CRef_Undef)
-        return ok = false;
-
-    if (assignmentTrail.nAssigns() == simpDB_assigns || (simpDB_props > 0))
-        return true;
-
-    // Remove satisfied clauses:
-    clauseDatabase.removeSatisfied();
-    
-    // Add variables back to queue of decision variables
-    branchingHeuristicManager.rebuildPriorityQueue();
-
-    // Update stats (shouldn't depend on stats really, but it will do for now)
-    simpDB_assigns = assignmentTrail.nAssigns();
-    simpDB_props   = clauseDatabase.clauses_literals + clauseDatabase.learnts_literals;
-
-    return true;
-}
-
-lbool Solver::search(int nof_conflicts) {
+lbool ERSolver::search(int nof_conflicts) {
     assert(ok);
     int backtrack_level;
     int conflictC = 0;
     starts++;
+
+#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+    // Generate extension variable definitions
+    // Only try generating more extension variables if there aren't any buffered already
+    erManager.checkGenerateDefinitions(conflicts);
+#endif
+
+#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
+    // Add extension variables
+    erManager.introduceExtVars();
+#endif
 
     for (;;) {
         CRef confl = unitPropagator.propagate();
@@ -156,11 +71,19 @@ lbool Solver::search(int nof_conflicts) {
             // Backjump
             assignmentTrail.cancelUntil(backtrack_level);
 
+            // EXTENDED RESOLUTION - substitute disjunctions with extension variables. This must be
+            // called after backtracking because extension variables might need to be propagated.
+            erManager.substitute(learnt_clause);
+
             // Add the learnt clause to the clause database
             CRef cr = clauseDatabase.addLearntClause(learnt_clause);
 
             // First UIP learnt clauses are asserting after backjumping -- propagate!
             propagationQueue.enqueue(learnt_clause[0], cr);
+
+            // Filter clauses for clause selection
+            if (cr != CRef_Undef)
+                erManager.filterIncremental(cr);
 
         } else {
             // NO CONFLICT
@@ -171,8 +94,13 @@ lbool Solver::search(int nof_conflicts) {
             }
 
             // Simplify the set of problem clauses:
-            if (assignmentTrail.decisionLevel() == 0 && !simplify())
-                return l_False;
+            if (assignmentTrail.decisionLevel() == 0) {
+                if (!simplify()) return l_False;
+
+            #if ER_USER_DELETE_HEURISTIC != ER_DELETE_HEURISTIC_NONE
+                erManager.checkDeleteExtVars(conflicts);
+            #endif
+            }
 
             // Reduce the set of learnt clauses:
             clauseDatabase.checkReduceDB();
@@ -200,6 +128,10 @@ lbool Solver::search(int nof_conflicts) {
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
+
+                // Update stats
+                if (erManager.isExtVar(var(next)))
+                    erManager.branchOnExt++;
             }
 
             // Increase decision level and enqueue 'next'
@@ -236,14 +168,16 @@ static double luby(double y, int x) {
 }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
-lbool Solver::solve_() {
+lbool ERSolver::solve_() {
     model.clear();
     conflict.clear();
     if (!ok) return l_False;
 
     solves++;
 
+    // Initialize solver components
     clauseDatabase.init();
+    erManager.init();
 
     lbool status = l_Undef;
 
@@ -269,7 +203,6 @@ lbool Solver::solve_() {
 
     if (verbosity >= 1)
         printf("===============================================================================\n");
-
 
     if (status == l_True) {
         // Extend & copy model:

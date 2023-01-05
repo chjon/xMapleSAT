@@ -163,9 +163,7 @@ void ClauseDatabase::garbageCollect(void) {
     ClauseAllocator to(ca.size() - ca.wasted()); 
 
     // Reloc all clause references
-    unitPropagator .relocAll(to);
-    assignmentTrail.relocAll(to);
-    relocAll(to);
+    solver.relocAll(to);
 
     if (solver.verbosity >= 2)
         printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 

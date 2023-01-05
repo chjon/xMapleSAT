@@ -42,7 +42,7 @@ namespace Minisat {
  * 
  */
 class Solver {
-private:
+protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // MEMBER VARIABLES
 
@@ -54,7 +54,7 @@ private:
     /// signal. Used to clean up and exit gracefully.
     bool asynch_interrupt;
 
-private:
+protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // TEMPORARY VARIABLES
 
@@ -157,7 +157,7 @@ public:
      * @brief Destroy the Solver object
      * 
      */
-    virtual ~Solver();
+    virtual ~Solver() = default;
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -223,6 +223,17 @@ public:
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
+    // STATE MODIFICATION
+
+    /**
+     * @brief Relocate all clauses
+     * 
+     * @param to the ClauseAllocator to relocate to
+     */
+    virtual void relocAll(ClauseAllocator& to);
+
+public:
+    ///////////////////////////////////////////////////////////////////////////////////////////////
     // PROBLEM SPECIFICATION
 
     /**
@@ -233,7 +244,7 @@ public:
      * effects on the meaning of a SATISFIABLE result).
      * @return the ID of the new variable
      */
-    Var newVar (bool polarity = true, bool dvar = true); // Add a new variable with parameters specifying variable mode.
+    virtual Var newVar (bool polarity = true, bool dvar = true);
     
     /**
      * @brief Add a new input clause
@@ -255,7 +266,7 @@ public:
      * 
      * @return false if the solver is already in a conflicting state, true otherwise
      */
-    bool simplify(void);
+    virtual bool simplify(void);
 
     /**
      * @brief Search for a model that respects a given set of assumptions.
@@ -324,7 +335,7 @@ public:
      */
     void clearInterrupt(void);
 
-private:
+protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // HELPER FUNCTIONS
 
@@ -337,7 +348,7 @@ private:
      * satisfiable. 'l_False' if the clause set is unsatisfiable. 'l_Undef' if the bound on number
      * of conflicts is reached.
      */
-    lbool search(int nof_conflicts);
+    virtual lbool search(int nof_conflicts);
     
     /**
      * @brief Main solve method (assumptions given in 'assumptions')
@@ -345,7 +356,7 @@ private:
      * @return l_True if the formula is satisfiable, l_False if the formula is unsatisfiable, or
      * l_Undef if the satisfiability of the formula is unknown.
      */
-    lbool solve_(void);
+    virtual lbool solve_(void);
 
     /**
      * @brief Check whether the solver should exit searching early
@@ -401,6 +412,28 @@ inline void Solver::setConfBudget(int64_t x) {
 inline void Solver::budgetOff() {
     conflict_budget = -1;
     unitPropagator.budgetOff();
+}
+
+///////////////////////
+// STATE MODIFICATION
+
+inline void Solver::relocAll(ClauseAllocator& to) {
+    unitPropagator .relocAll(to);
+    assignmentTrail.relocAll(to);
+    clauseDatabase .relocAll(to);
+}
+
+//////////////////////////
+// PROBLEM SPECIFICATION
+
+inline Var Solver::newVar(bool sign, bool dvar) {
+    int v = assignmentTrail  .newVar();
+    clauseDatabase           .newVar(v);
+    propagationQueue         .newVar(v);
+    unitPropagator           .newVar(v);
+    branchingHeuristicManager.newVar(v, sign, dvar);
+    conflictAnalyzer         .newVar(v);
+    return v;
 }
 
 ///////////////////

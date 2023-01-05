@@ -294,6 +294,12 @@ public:
     // STATE MODIFICATION
 
     /**
+     * @brief Set up data structures when the solver starts
+     * 
+     */
+    inline void init(void);
+
+    /**
      * @brief Update data structures to allocate enough memory when a new variable is added
      * 
      * @param v the variable to register
@@ -345,6 +351,15 @@ public:
         FilterPredicate& filterPredicate,
         HeuristicType heuristicType = HeuristicType::DEFAULT
     );
+
+    /**
+     * @brief Filter clauses for clause selection
+     * 
+     * @param candidate the clause to check
+     * 
+     * @note Saves outputs in @code{m_filteredClauses}
+     */
+    void filterIncremental(const CRef candidate);
 
     /**
      * @brief Select clauses for defining extension variables
@@ -403,6 +418,11 @@ public:
     );
 
     /**
+     * @brief Introduce extension variables into the solver
+     */
+    void introduceExtVars(void);
+
+    /**
      * @brief Adds an extension definition clause to the appropriate clause database
      * 
      * @param db The clause database to which to add the clause
@@ -458,6 +478,14 @@ public:
      * @param predicate The condition with which to check the clause
      */
     void substitute(vec<Lit>& clause, SubstitutionPredicate& p);
+
+    /**
+     * @brief Check whether the given clause meets some condition and substitute extension
+     * variables into a clause. Propagates substituted variables if they are unassigned.
+     * 
+     * @param clause The vector of literals in which to substitute
+     */
+    void substitute(vec<Lit>& clause);
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -618,6 +646,10 @@ private:
 ///////////////////////
 // STATE MODIFICATION
 
+inline void ERManager::init(void) {
+    originalNumVars = assignmentTrail.nVars();
+}
+
 inline void ERManager::newVar(Var v) {
     extensionLevel.push(0);
 }
@@ -694,8 +726,18 @@ inline double ERManager::extTimerRead(unsigned int i) const {
     }
 }
 
+/////////////////////
+// CLAUSE SELECTION
+inline void ERManager::filterIncremental(const CRef candidate) {
+    filterIncremental(candidate, user_extFilPredicate);
+}
+
 ////////////////////////////////////
 // EXTENSION VARIABLE INTRODUCTION
+
+inline void ERManager::introduceExtVars(void) {
+    introduceExtVars(extDefs);
+}
 
 inline void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
     tmp_vec.clear(); for (const auto l : clause) tmp_vec.push(l);
@@ -713,6 +755,19 @@ inline void ERManager::checkGenerateDefinitions(uint64_t conflicts) {
         selectClauses(user_extSelHeuristic, ERManager::HeuristicType::DEFAULT);
         defineExtVars(user_extDefHeuristic);
     }
+}
+
+////////////////////////////////////
+// EXTENSION VARIABLE SUBSTITUTION
+
+/**
+ * @brief Check whether the given clause meets some condition and substitute extension
+ * variables into a clause. Propagates substituted variables if they are unassigned.
+ * 
+ * @param clause The vector of literals in which to substitute
+ */
+inline void ERManager::substitute(vec<Lit>& clause) {
+    substitute(clause, user_extSubPredicate);
 }
 
 ////////////////////////////////
