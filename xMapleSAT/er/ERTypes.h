@@ -1,4 +1,4 @@
-/*******************************************************************************************[SolverERTypes.h]
+/***************************************************************************************[ERTypes.h]
 xMaple* -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
