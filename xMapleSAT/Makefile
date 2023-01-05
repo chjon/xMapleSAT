@@ -77,6 +77,7 @@ AFTER_CONFLICT=2
 all: maplesat xmaplesat
 
 .prev_%:
+	make -C er clean
 	make -C core clean
 	rm -f .prev_*
 	touch $@
