@@ -104,6 +104,19 @@ namespace Minisat {
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
+        // UTILITY FUNCTIONS
+
+        /**
+         * @brief Move undefined literal to index 0, ensuring that watcher invariants are satisfied
+         * 
+         * @param cr The CRef of the asserting clause
+         * @param i_undef The index of the undefined literal in the clause
+         * @param i_max The index of the literal in the clause with the highest decision level
+         */
+        void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
         // PARAMETER MODIFICATION
 
         /**

@@ -19,19 +19,22 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <algorithm>
 #include <iterator>
-#include <mtl/Sort.h>
-#include <core/SolverER.h>
-#include <core/SolverERTypes.h>
+
+#include "core/ClauseDatabase.h"
+#include "core/Solver.h"
+#include "core/SolverER.h"
+#include "core/SolverERTypes.h"
+#include "mtl/Sort.h"
 
 namespace Minisat {
 
 bool SolverER::user_extFilPredicate_width(CRef cr) {
-    const int sz = solver->ca[cr].size();
+    const int sz = ca[cr].size();
     return ext_min_width <= sz && sz <= ext_max_width;
 }
 
 bool SolverER::user_extFilPredicate_lbd(CRef cr) {
-    const int lbd = solver->lbd(solver->ca[cr]);
+    const int lbd = clauseDatabase.lbd(ca[cr]);
     return ext_min_lbd <= lbd && lbd <= ext_max_lbd;
 }
 
@@ -59,8 +62,8 @@ int SolverER::numDiffs(vec<Lit>& output, const Clause& c1, const Clause& c2) {
 
 bool SolverER::user_extFilPredicate_ler(CRef cr) {
     if (m_filteredClauses_ler.size() > 0) {
-        const Clause& c1 = solver->ca[cr];
-        const Clause& c2 = solver->ca[m_filteredClauses_ler[m_filteredClauses_ler.size() - 1]];
+        const Clause& c1 = ca[cr];
+        const Clause& c2 = ca[m_filteredClauses_ler[m_filteredClauses_ler.size() - 1]];
 
         if (
             c1.size() != c2.size() ||
@@ -77,7 +80,6 @@ void SolverER::user_extSelHeuristic_all(std::vector<CRef>& output, const std::ve
 }
 
 void SolverER::user_extSelHeuristic_activity(std::vector<CRef>& output, const std::vector<CRef>& input, unsigned int numClauses) {
-    ClauseAllocator& ca = solver->ca;
     for (unsigned int i = 0; i < input.size(); i++) {
         CRef clauseIndex = input[i], tmp = 0;
         double clauseActivity = ca[clauseIndex].activity();
@@ -122,9 +124,9 @@ void SolverER::quickselect_count(std::vector<LitPair>& db, std::tr1::unordered_m
     // Ensure we have a valid value of k
     k--;
     if (k <= 0 || k >= r - l + 1) return;
-    while (!solver->asynch_interrupt) {
+    while (!solver.interrupted()) {
         // Partition the array around last element and get position of pivot element in sorted array
-        int pivot = l + solver->irand(solver->random_seed, r - l + 1);
+        int pivot = l + randomNumberGenerator.irand(r - l + 1);
         pivot = partition_count(db, subexpr_count, l, r, pivot);
 
         // Update selection bounds
@@ -208,7 +210,7 @@ inline std::tr1::unordered_map<LitPair, int> SolverER::countSubexprs(std::vector
 
             // We might spend a lot of time here - exit if interrupted
             // FIXME: ideally, we wouldn't have to check for this at all if the sets of literals were sufficiently small
-            if (solver->asynch_interrupt) goto SUBEXPR_DOUBLE_BREAK;
+            if (solver.interrupted()) goto SUBEXPR_DOUBLE_BREAK;
             std::vector<Lit> intersection(sets[i].size() + sets[j].size());
             std::vector<Lit>::iterator it = std::set_intersection(sets[i].begin(), sets[i].end(), sets[j].begin(), sets[j].end(), intersection.begin());
             intersection.resize(it - intersection.begin());
@@ -226,7 +228,7 @@ inline std::tr1::unordered_map<LitPair, int> SolverER::countSubexprs(std::vector
             LitSet::iterator k = j; k++;
             // We might spend a lot of time here - exit if interrupted
             // FIXME: ideally, we wouldn't have to check for this at all if the sets of literals were sufficiently small
-            if (solver->asynch_interrupt) goto SUBEXPR_DOUBLE_BREAK;
+            if (solver.interrupted()) goto SUBEXPR_DOUBLE_BREAK;
             while (k != clause.end()) {
                 // Count subexpressions of length 2
                 LitPair key = mkLitPair(*j, *k);
@@ -249,7 +251,7 @@ void SolverER::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDef
     // Get the set of literals for each clause
     // FIXME: is there an efficient way to do this without passing in the solver's clause allocator?
     // Ideally, we want the solver object to be const when passed into this function
-    std::vector<LitSet> sets = getLiteralSets(solver->ca, selectedClauses);
+    std::vector<LitSet> sets = getLiteralSets(ca, selectedClauses);
 
     // Count subexpressions of length 2
     std::tr1::unordered_map<LitPair, int> subexprs = countSubexprs(sets);
@@ -259,7 +261,7 @@ void SolverER::user_extDefHeuristic_subexpression(std::vector<ExtDef>& extVarDef
 
     // Add extension variables
     std::tr1::unordered_set<LitPair> generatedPairs;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = assignmentTrail.nVars() + extVarDefBuffer.size();
     for (std::vector<LitPair>::iterator i = freqSubExprs.begin(); i != freqSubExprs.end(); i++) {
         Lit a = i->first, b = i->second;
         if (isValidDefPair(a, b, generatedPairs)) {
@@ -282,7 +284,7 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     // Time complexity: O(w k log(w k))
     LitSet litSet;
     for (unsigned int i = 0; i < selectedClauses.size(); i++) {
-        Clause& c = solver->ca[selectedClauses[i]];
+        Clause& c = ca[selectedClauses[i]];
         for (int j = 0; j < c.size(); j++) litSet.insert(c[j]);
     }
 
@@ -303,12 +305,12 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
     // already exist and there aren't enough distinct literals in the selected clauses
 
     const unsigned int MAX_RETRIES = 10;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = assignmentTrail.nVars() + extVarDefBuffer.size();
     for (unsigned int i = 0; i < maxNumNewVars; i++) {
         // Sample literals at random
         for (unsigned int j = 0; j < MAX_RETRIES; j++) {
-            const int i_a = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
-            const int i_b = Solver::irand(solver->random_seed, static_cast<int>(litVec.size()));
+            const int i_a = randomNumberGenerator.irand(static_cast<int>(litVec.size()));
+            const int i_b = randomNumberGenerator.irand(static_cast<int>(litVec.size()));
             Lit a = litVec[i_a], b = litVec[i_b];
             LitPair litPair = mkLitPair(a, b);
 
@@ -326,9 +328,9 @@ void SolverER::user_extDefHeuristic_random(std::vector<ExtDef>& extVarDefBuffer,
 void SolverER::user_extDefHeuristic_ler(std::vector<ExtDef>& extVarDefBuffer, const std::vector<CRef>& selectedClauses, unsigned int maxNumNewVars) {
     // Add extension variables
     std::tr1::unordered_set<LitPair> generatedPairs;
-    Var x = solver->nVars() + extVarDefBuffer.size();
+    Var x = assignmentTrail.nVars() + extVarDefBuffer.size();
     for (unsigned int i = 1; i < selectedClauses.size(); i++) {
-        int n = numDiffs(tmp_vec, solver->ca[selectedClauses[i]], solver->ca[selectedClauses[i - 1]]);
+        int n = numDiffs(tmp_vec, ca[selectedClauses[i]], ca[selectedClauses[i - 1]]);
         assert(n == 2);
         const Lit a = ~tmp_vec[0], b = ~tmp_vec[1];
         LitPair litPair = mkLitPair(a, b);
@@ -350,7 +352,7 @@ bool SolverER::user_extSubPredicate_size_lbd(vec<Lit>& clause) {
 #endif
 
 #if ER_USER_SUBSTITUTE_HEURISTIC & ER_SUBSTITUTE_HEURISTIC_LBD
-    const int clause_lbd = solver->lbd(clause);
+    const int clause_lbd = clauseDatabase.lbd(clause);
     if (clause_lbd < ext_min_lbd || clause_lbd > ext_max_lbd) return false;
 #endif
 
@@ -363,7 +365,7 @@ void SolverER::user_extDelPredicateSetup_activity() {
     m_threshold_activity = ext_act_threshold;
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     // Copy activities for current variables
-    vec<double>& activity = solver->activity;
+    vec<double>& activity = solver.branchingHeuristicManager.getActivityVSIDS();
     vec<double> currentActivity(originalNumVars);
     for (int i = 0; i < originalNumVars; i++) currentActivity.push(activity[i]);
     for (auto it = extDefs.begin(); it != extDefs.end(); it++) currentActivity.push(activity[it->first]);
@@ -378,7 +380,7 @@ bool SolverER::user_extDelPredicate_none(Var x) { return false; }
 bool SolverER::user_extDelPredicate_all(Var x) { return true; }
 bool SolverER::user_extDelPredicate_activity(Var x) {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-    const double activity = solver->activity[x];
+    const double activity = solver.branchingHeuristicManager.getActivityVSIDS()[x];
     return activity < m_threshold_activity;
 #else
     return false;

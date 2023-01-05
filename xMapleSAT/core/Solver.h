@@ -23,14 +23,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_Solver_h
 #define Minisat_Solver_h
 
-#include "core/SolverTypes.h"
-#include "core/RandomNumberGenerator.h"
 #include "core/AssignmentTrail.h"
-#include "core/PropagationQueue.h"
-#include "core/UnitPropagator.h"
 #include "core/BranchingHeuristicManager.h"
 #include "core/ClauseDatabase.h"
 #include "core/ConflictAnalyzer.h"
+#include "core/PropagationQueue.h"
+#include "core/RandomNumberGenerator.h"
+#include "core/SolverER.h"
+#include "core/SolverTypes.h"
+#include "core/UnitPropagator.h"
 #include "mtl/Alg.h"
 #include "mtl/Vec.h"
 #include "utils/Options.h"
@@ -143,6 +144,8 @@ public:
     /// @brief Conflict analyzer
     ConflictAnalyzer conflictAnalyzer;
 
+    SolverER solverER;
+
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // CONSTRUCTORS
@@ -196,6 +199,13 @@ public:
      * @return the number of decision literals that have not been assigned at the root level. 
      */
     int nFreeVars(void) const;
+
+    /**
+     * @brief Check whether the solver has been interrupted
+     * 
+     * @return true iff @code{async_interrupt} is true
+     */
+    bool interrupted(void) const;
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -380,6 +390,10 @@ inline lbool Solver::modelValue(Lit p) const {
 
 inline int Solver::nFreeVars(void) const {
     return (int)branchingHeuristicManager.dec_vars - assignmentTrail.nRootAssigns();
+}
+
+inline bool Solver::interrupted(void) const {
+    return asynch_interrupt;
 }
 
 ///////////////////////////

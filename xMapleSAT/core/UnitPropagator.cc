@@ -44,6 +44,38 @@ UnitPropagator::UnitPropagator(Solver& s)
 {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// UTILITY FUNCTIONS
+
+void UnitPropagator::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
+    // Move unassigned literal to c[0]
+    Clause& c = ca[cr];
+    Lit x = c[i_undef], max = c[i_max];
+    if (c.size() == 2) {
+        // Don't need to touch watchers for binary clauses
+        if (assignmentTrail.value(c[0]) == l_False) std::swap(c[0], c[1]);
+    } else {
+        // Swap unassigned literal to index 0 and highest-level literal to index 1,
+        // replacing watchers as necessary
+        OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = watches;
+
+        Lit c0 = c[0], c1 = c[1];
+        if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
+
+        if (i_max > 1) {
+            remove(ws[~c[1]], Watcher(cr, c0));
+            std::swap(c[1], c[i_max]);
+            ws[~max].push(Watcher(cr, x));
+        }
+
+        if (i_undef > 1) {
+            remove(ws[~c[0]], Watcher(cr, c1));
+            std::swap(c[0], c[i_undef]);
+            ws[~x].push(Watcher(cr, max));
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // STATE MODIFICATION
 
 void UnitPropagator::relocAll(ClauseAllocator& to) {

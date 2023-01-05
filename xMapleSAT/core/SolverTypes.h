@@ -64,6 +64,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Vec.h"
 #include "mtl/Map.h"
 #include "mtl/Alloc.h"
+#include <iostream>
 
 namespace Minisat {
 
@@ -111,6 +112,12 @@ inline  Lit  toLit     (int i)              { Lit p; p.x = i; return p; }
 
 const Lit lit_Undef = { -2 };  // }- Useful special constants.
 const Lit lit_Error = { -1 };  // }
+
+inline std::ostream& operator<<(std::ostream& out, const Lit& val) 
+{
+    out << (sign(val) ? -var(val) : var(val)) << std::flush;
+    return out;
+}
 
 
 //=================================================================================================
@@ -289,6 +296,16 @@ class ClauseAllocator : public RegionAllocator<uint32_t>
     }
 };
 
+
+inline std::ostream& operator<<(std::ostream& out, const Clause& cls) 
+{
+    for (int i = 0; i < cls.size(); ++i)
+    {
+		out << cls[i] << " ";
+	}
+	
+    return out;
+}
 
 //=================================================================================================
 // OccLists -- a class for maintaining occurence lists with lazy deletion:

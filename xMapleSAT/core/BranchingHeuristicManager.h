@@ -380,6 +380,22 @@ namespace Minisat {
         void bumpActivityVSIDS (Var v);
     #endif
 
+        /**
+         * @brief Update the position of a variable in the priority queue with respect to a
+         * decreased activity
+         * 
+         * @param v the variable whose activity was decreased
+         */
+        void decreasePriorityQueue(Var v);
+
+        /**
+         * @brief Update the position of a variable in the priority queue with respect to an
+         * increased activity
+         * 
+         * @param v the variable whose activity was increased
+         */
+        void increasePriorityQueue(Var v);
+
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // POLARITY SELECTION HEURISTIC STATE MODIFICATION
@@ -472,22 +488,6 @@ namespace Minisat {
          * @param x the variable to insert
          */
         void insertVarOrder(Var x);
-
-        /**
-         * @brief Update the position of a variable in the priority queue with respect to a
-         * decreased activity
-         * 
-         * @param v the variable whose activity was decreased
-         */
-        void decreasePriorityQueue(Var v);
-
-        /**
-         * @brief Update the position of a variable in the priority queue with respect to an
-         * increased activity
-         * 
-         * @param v the variable whose activity was increased
-         */
-        void increasePriorityQueue(Var v);
 
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -634,6 +634,32 @@ namespace Minisat {
     }
 #endif
 
+    inline void BranchingHeuristicManager::decreasePriorityQueue(Var v) {
+        // Update order_heap with respect to new activity
+    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
+        if (order_heap_extlvl.inHeap(v))
+            order_heap_extlvl.increase(v);
+        if (order_heap_degree.inHeap(v))
+            order_heap_degree.increase(v);
+    #else
+        if (order_heap.inHeap(v))
+            order_heap.increase(v);
+    #endif
+    }
+
+    inline void BranchingHeuristicManager::increasePriorityQueue(Var v) {
+        // Update order_heap with respect to new activity
+    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
+        if (order_heap_extlvl.inHeap(v))
+            order_heap_extlvl.decrease(v);
+        if (order_heap_degree.inHeap(v))
+            order_heap_degree.decrease(v);
+    #else
+        if (order_heap.inHeap(v))
+            order_heap.decrease(v);
+    #endif
+    }
+
     ////////////////////////////////////////////////////
     // POLARITY SELECTION HEURISTIC STATE MODIFICATION
 
@@ -752,32 +778,6 @@ namespace Minisat {
         Heap<VarOrderLt>& order_heap = extensionLevel[x] ? order_heap_extlvl : order_heap_degree;
     #endif
         if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x);
-    }
-
-    inline void BranchingHeuristicManager::decreasePriorityQueue(Var v) {
-        // Update order_heap with respect to new activity
-    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        if (order_heap_extlvl.inHeap(v))
-            order_heap_extlvl.increase(v);
-        if (order_heap_degree.inHeap(v))
-            order_heap_degree.increase(v);
-    #else
-        if (order_heap.inHeap(v))
-            order_heap.increase(v);
-    #endif
-    }
-
-    inline void BranchingHeuristicManager::increasePriorityQueue(Var v) {
-        // Update order_heap with respect to new activity
-    #if PRIORITIZE_ER && !defined(EXTLVL_ACTIVITY)
-        if (order_heap_extlvl.inHeap(v))
-            order_heap_extlvl.decrease(v);
-        if (order_heap_degree.inHeap(v))
-            order_heap_degree.decrease(v);
-    #else
-        if (order_heap.inHeap(v))
-            order_heap.decrease(v);
-    #endif
     }
 
     ////////////////////////////////////

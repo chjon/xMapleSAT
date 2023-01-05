@@ -24,6 +24,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define Minisat_ClauseDatabase_h
 
 #include <stdio.h>
+#include <vector>
+
 #include "core/AssignmentTrail.h"
 #include "core/UnitPropagator.h"
 
@@ -176,6 +178,18 @@ namespace Minisat {
         void newVar(Var v);
 
         /**
+         * @brief Add a clause to a database
+         * 
+         * @param ps the clause to add
+         * @param db the database to which to add the clause
+         * @param learnt true if @code{ps} is a learnt clause; false otherwise
+         * @return the CRef of the newly added clause; CRef_Undef if the clause
+         * is unit
+         */
+        template <typename V>
+        CRef addClause(vec<Lit>& ps, V& db, bool learnt);
+
+        /**
          * @brief Add a clause to the learnt clause database
          * 
          * @param ps the list of literals to add as a clause
@@ -202,6 +216,26 @@ namespace Minisat {
          * 
          */
         void checkReduceDB(void);
+
+        /**
+         * @brief Detach and free a clause
+         * 
+         * @param cr the clause to remove
+         */
+        void removeClause(CRef cr);
+
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // UTILITY FUNCTIONS
+
+        /**
+         * @brief Compute the LBD of a clause
+         * 
+         * @param clause the clause for which to compute LBD
+         * @return the LBD of the clause
+         */
+        template<class V>
+        int lbd (const V& clause);
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -237,15 +271,6 @@ namespace Minisat {
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // DELETION HEURISTIC STATE MODIFICATION
-
-        /**
-         * @brief Compute the LBD of a clause
-         * 
-         * @param clause the clause for which to compute LBD
-         * @return the LBD of the clause
-         */
-        template<class V>
-        int lbd (const V& clause);
 
     #if ! LBD_BASED_CLAUSE_DELETION
         /**
@@ -306,17 +331,6 @@ namespace Minisat {
         );
 
         /**
-         * @brief Add a clause to a database
-         * 
-         * @param ps the clause to add
-         * @param db the database to which to add the clause
-         * @param learnt true if @code{ps} is a learnt clause; false otherwise
-         * @return the CRef of the newly added clause; CRef_Undef if the clause
-         * is unit
-         */
-        CRef addClause(vec<Lit>& ps, vec<CRef>& db, bool learnt);
-
-        /**
          * @brief Update clause database size limit data structures upon learning a clause.
          * 
          * @param cr the learnt clause
@@ -342,13 +356,6 @@ namespace Minisat {
          */
         template <typename DeletionPredicate>
         void reduceDBWithPredicate(vec<CRef>& db, DeletionPredicate& shouldRemove);
-
-        /**
-         * @brief Detach and free a clause
-         * 
-         * @param cr the clause to remove
-         */
-        void removeClause(CRef cr);
 
         /**
          * @brief Reallocate clauses to defragment memory
@@ -400,6 +407,35 @@ namespace Minisat {
         learntSizeLimitGrowthTimerCounter = static_cast<int>(learntSizeLimitGrowthTimer);
     }
 
+    template <typename V, typename T>
+    static inline void vectorPush(V& vector, T& val) {
+        vector.push(val);
+    }
+
+    template <>
+    inline void vectorPush<std::vector<CRef>, CRef>(std::vector<CRef>& vector, CRef& val) {
+        vector.push_back(val);
+    }
+
+    template <typename V>
+    inline CRef ClauseDatabase::addClause(vec<Lit>& ps, V& db, bool learnt) {
+        assert(ps.size() > 0);
+
+        // Don't add unit clauses to the database -- they should be added to the trail instead
+        if (ps.size() == 1) return CRef_Undef;
+        
+        // Allocate clause
+        CRef cr = ca.alloc(ps, learnt);
+        unitPropagator.attachClause(cr);
+        vectorPush(db, cr);
+
+        // Update stats
+        if (learnt) learnts_literals += ps.size();
+        else        clauses_literals += ps.size();
+
+        return cr;
+    }
+
     inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps) {
         const CRef cr = addClause(ps, learnts, true);
         handleEventLearntClause(cr);
@@ -438,6 +474,23 @@ namespace Minisat {
     #endif
     }
 
+    //////////////////////
+    // UTILITY FUNCTIONS
+
+    template<class V>
+    inline int ClauseDatabase::lbd (const V& clause) {
+        lbd_calls++;
+        int lbd = 0;
+        for (int i = 0; i < clause.size(); i++) {
+            int l = assignmentTrail.level(var(clause[i]));
+            if (lbd_seen[l] != lbd_calls) {
+                lbd++;
+                lbd_seen[l] = lbd_calls;
+            }
+        }
+        return lbd;
+    }
+
     ///////////////////
     // EVENT HANDLERS
 
@@ -461,20 +514,6 @@ namespace Minisat {
 
     //////////////////////////////////////////
     // DELETION HEURISTIC STATE MODIFICATION
-
-    template<class V>
-    inline int ClauseDatabase::lbd (const V& clause) {
-        lbd_calls++;
-        int lbd = 0;
-        for (int i = 0; i < clause.size(); i++) {
-            int l = assignmentTrail.level(var(clause[i]));
-            if (lbd_seen[l] != lbd_calls) {
-                lbd++;
-                lbd_seen[l] = lbd_calls;
-            }
-        }
-        return lbd;
-    }
 
 #if ! LBD_BASED_CLAUSE_DELETION
     inline void Solver::claDecayActivity() {
@@ -536,24 +575,6 @@ namespace Minisat {
                 db[j++] = db[i];
         }
         db.shrink(i - j);
-    }
-
-    inline CRef ClauseDatabase::addClause(vec<Lit>& ps, vec<CRef>& db, bool learnt) {
-        assert(ps.size() > 0);
-
-        // Don't add unit clauses to the database -- they should be added to the trail instead
-        if (ps.size() == 1) return CRef_Undef;
-        
-        // Allocate clause
-        CRef cr = ca.alloc(ps, learnt);
-        unitPropagator.attachClause(cr);
-        db.push(cr);
-
-        // Update stats
-        if (learnt) learnts_literals += ps.size();
-        else        clauses_literals += ps.size();
-
-        return cr;
     }
 
     inline void ClauseDatabase::relocAll(ClauseAllocator& to) {
