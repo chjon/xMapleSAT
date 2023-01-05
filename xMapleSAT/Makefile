@@ -92,6 +92,11 @@ maplesat: .prev_maplesat
 	mkdir -p bin
 	mv core/maplesat_static bin/$@
 
+maplesat_bcp_priority: .prev_maplesat_bcp_priority
+	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
 xmaplesat: .prev_xmaplesat
 	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
