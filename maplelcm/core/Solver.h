@@ -6,11 +6,10 @@ Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
  
 Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
 Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
-
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search 
-
-xMaple_LCM_Dist, based on Maple_LCM_Dist -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
-
+ 
+Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
+ 
+ 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -47,7 +46,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
-#include "core/PropagationManager.h"
+
 
 // Don't change the actual numbers.
 #define LOCAL 0
@@ -189,8 +188,6 @@ public:
     int       learntsize_adjust_start_confl;
     double    learntsize_adjust_inc;
 
-    uint64_t       VSIDS_props_limit;
-
     // Statistics: (read-only member variable)
     //
     uint64_t solves, starts, decisions, rnd_decisions, propagations, conflicts, conflicts_VSIDS;
@@ -198,12 +195,6 @@ public:
 
     vec<uint32_t> picked;
     vec<uint32_t> conflicted;
-#if PRIORITIZE_ER
-    // Number of times a variable occurs in a clause
-    vec<uint32_t> degree;
-    // Map from variables to their extension level
-    vec<uint32_t> extensionLevel;
-#endif
     vec<uint32_t> almost_conflicted;
 #ifdef ANTI_EXPLORATION
     vec<uint32_t> canceled;
@@ -216,24 +207,25 @@ protected:
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
 
+    struct Watcher {
+        CRef cref;
+        Lit  blocker;
+        Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
+        bool operator==(const Watcher& w) const { return cref == w.cref; }
+        bool operator!=(const Watcher& w) const { return cref != w.cref; }
+    };
+
+    struct WatcherDeleted
+    {
+        const ClauseAllocator& ca;
+        WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
+        bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
+    };
+
     struct VarOrderLt {
         const vec<double>&  activity;
-#if PRIORITIZE_ER
-        const vec<uint32_t>& order_param;
-        bool greater_than;
-        bool operator () (Var x, Var y) const {
-            if (order_param[x] != order_param[y]) return greater_than ^ (order_param[x] < order_param[y]);
-            return activity[x] > activity[y];
-        }
-        VarOrderLt(const vec<double>&  act, const vec<uint32_t>& ord, bool gt = false)
-            : activity(act)
-            , order_param(ord)
-            , greater_than(gt)
-        { }
-#else
         bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
         VarOrderLt(const vec<double>&  act) : activity(act) { }
-#endif
     };
 
     // Solver state:
@@ -247,6 +239,9 @@ protected:
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.
     activity_VSIDS,activity_distance;
     double              var_inc;          // Amount to bump next variable with.
+    OccLists<Lit, vec<Watcher>, WatcherDeleted>
+    watches_bin,      // Watches for binary clauses only.
+    watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
     vec<lbool>          assigns;          // The current assignments.
     vec<char>           polarity;         // The preferred polarity of each variable.
     vec<char>           decision;         // Declares if a variable is eligible for selection in the decision heuristic.
@@ -257,14 +252,8 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-
-     // A priority queue of variables ordered with respect to the variable activity.
-#if PRIORITIZE_ER
-    Heap<VarOrderLt> order_heap_extlvl_CHB, order_heap_extlvl_VSIDS, order_heap_extlvl_distance;
-    Heap<VarOrderLt> order_heap_degree_CHB, order_heap_degree_VSIDS, order_heap_degree_distance;
-#else
-    Heap<VarOrderLt> order_heap_CHB       , order_heap_VSIDS       , order_heap_distance       ;
-#endif
+    Heap<VarOrderLt>    order_heap_CHB,   // A priority queue of variables ordered with respect to the variable activity.
+    order_heap_VSIDS,order_heap_distance;
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -305,7 +294,8 @@ protected:
     Lit      pickBranchLit    ();                                                      // Return the next decision variable.
     void     newDecisionLevel ();                                                      // Begins a new decision level.
     void     uncheckedEnqueue (Lit p, CRef from = CRef_Undef);                         // Enqueue a literal. Assumes value of literal is undefined.
-    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.                                                 // Perform unit propagation. Returns possibly conflicting clause.
+    bool     enqueue          (Lit p, CRef from = CRef_Undef);                         // Test if fact 'p' contradicts current state, enqueue otherwise.
+    CRef     propagate        ();                                                      // Perform unit propagation. Returns possibly conflicting clause.
     void     cancelUntil      (int level);                                             // Backtrack until a certain level.
     void     analyze          (CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);    // (bt = backtrack)
     void     analyzeFinal     (Lit p, vec<Lit>& out_conflict);                         // COULD THIS BE IMPLEMENTED BY THE ORDINARIY "analyze" BY SOME REASONABLE GENERALIZATION?
@@ -425,6 +415,7 @@ public:
     void	litsEnqueue(int cutP, Clause& c);
     void	cancelUntilTrailRecord();
     void	simpleUncheckEnqueue(Lit p, CRef from = CRef_Undef);
+    CRef    simplePropagate();
     uint64_t nbSimplifyAll;
     uint64_t simplified_length_record, original_length_record;
     uint64_t s_propagations;
@@ -451,11 +442,6 @@ public:
     vec<Lit> involved_lits;
     double    my_var_decay;
     bool   DISTANCE;
-
-    PropagationManager propagationManager;
-
-private:
-    friend class PropagationManager;
 };
 
 
@@ -467,14 +453,7 @@ inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
     //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
-#if PRIORITIZE_ER
-    Heap<VarOrderLt>& order_heap = DISTANCE ?
-        (order_heap_extlvl_distance.empty() ? order_heap_degree_distance : order_heap_extlvl_distance) : ((!VSIDS) ?
-        (order_heap_extlvl_CHB     .empty() ? order_heap_degree_CHB      : order_heap_extlvl_CHB     ) :
-        (order_heap_extlvl_VSIDS   .empty() ? order_heap_degree_VSIDS    : order_heap_extlvl_VSIDS   ));
-#else
     Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
-#endif
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 inline void Solver::varDecayActivity() {
@@ -488,14 +467,7 @@ inline void Solver::varBumpActivity(Var v, double mult) {
         var_inc *= 1e-100; }
 
     // Update order_heap with respect to new activity:
-#if PRIORITIZE_ER
-    if (order_heap_extlvl_VSIDS.inHeap(v)) order_heap_extlvl_VSIDS.decrease(v);
-    if (order_heap_degree_VSIDS.inHeap(v)) order_heap_degree_VSIDS.decrease(v);
-#else
-    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v);
-#endif
-    propagationManager.increasePriority(v);
-}
+    if (order_heap_VSIDS.inHeap(v)) order_heap_VSIDS.decrease(v); }
 
 inline void Solver::claDecayActivity() { cla_inc *= (1 / clause_decay); }
 inline void Solver::claBumpActivity (Clause& c) {
@@ -541,17 +513,10 @@ inline void     Solver::setDecisionVar(Var v, bool b)
     else if (!b &&  decision[v]) dec_vars--;
 
     decision[v] = b;
-#if PRIORITIZE_ER
-    if (b && !order_heap_extlvl_CHB.inHeap(v)){
-        order_heap_extlvl_CHB.insert(v); order_heap_extlvl_VSIDS.insert(v); order_heap_extlvl_distance.insert(v);
-        order_heap_degree_CHB.insert(v); order_heap_degree_VSIDS.insert(v); order_heap_degree_distance.insert(v);
-    }
-#else
     if (b && !order_heap_CHB.inHeap(v)){
         order_heap_CHB.insert(v);
         order_heap_VSIDS.insert(v);
         order_heap_distance.insert(v);}
-#endif
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }

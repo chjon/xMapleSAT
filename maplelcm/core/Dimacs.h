@@ -63,21 +63,8 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
-        } else if (*in == 'c') {
-            if (eagerMatch(in, "c extlvl")){
-                int var = parseInt(in);
-                int lvl = parseInt(in);
-                S.extensionLevel[var - 1] = lvl;
-            }else{
-                skipLine(in);
-            }
-        } else if (*in == 'p')
-            skipLine(in);
-#else
         } else if (*in == 'c' || *in == 'p')
             skipLine(in);
-#endif
         else{
             cnt++;
             readClause(in, S, lits);
@@ -130,21 +117,8 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("c PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
-        } else if (*in == 'c') {
-            if (eagerMatch(in, "c extlvl")){
-                int var = parseInt(in);
-                int lvl = parseInt(in);
-                S.extensionLevel[var - 1] = lvl;
-            }else{
-                skipLine(in);
-            }
-        } else if (*in == 'p')
-            skipLine(in);
-#else
         } else if (*in == 'c' || *in == 'p')
             skipLine(in);
-#endif
         else{
             cnt++;
             int parsed_lit, var;

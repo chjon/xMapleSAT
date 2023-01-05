@@ -1,8 +1,6 @@
 /****************************************************************************************[Dimacs.h]
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010, Niklas Sorensson
-
-MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+Copyright (c) 2007-2010, Niklas Sorensson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -41,7 +39,7 @@ static void readClause(B& in, Solver& S, vec<Lit>& lits) {
         parsed_lit = parseInt(in);
         if (parsed_lit == 0) break;
         var = abs(parsed_lit)-1;
-        while (var >= S.assignmentTrail.nVars()) S.newVar();
+        while (var >= S.nVars()) S.newVar();
         lits.push( (parsed_lit > 0) ? mkLit(var) : ~mkLit(var) );
     }
 }
@@ -65,34 +63,14 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
-        } else if (*in == 'c') {
-            if (eagerMatch(in, "c extlvl")){
-                int var = parseInt(in);
-                int lvl = parseInt(in);
-                S.extensionLevel[var - 1] = lvl;
-#ifdef EXTLVL_ACTIVITY
-                while (lvl >= S.extensionLevelActivity.size()) S.extensionLevelActivity.push(0);
-#endif
-#ifdef POLARITY_VOTING
-                while (lvl >= S.group_polarity.size()) S.group_polarity.push(0);
-#endif
-            }else{
-                skipLine(in);
-            }
-        } else if (*in == 'p')
-            skipLine(in);
-#else
         } else if (*in == 'c' || *in == 'p')
             skipLine(in);
-#endif
-        else {
+        else{
             cnt++;
             readClause(in, S, lits);
-            S.addClause(lits);
-        }
+            S.addClause_(lits); }
     }
-    if (vars != S.assignmentTrail.nVars())
+    if (vars != S.nVars())
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of variables.\n");
     if (cnt  != clauses)
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of clauses.\n");

@@ -1,8 +1,6 @@
 /***********************************************************************************[SolverTypes.h]
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010, Niklas Sorensson
-
-MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+Copyright (c) 2007-2010, Niklas Sorensson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -20,16 +18,13 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
+
 #ifndef Minisat_SolverTypes_h
 #define Minisat_SolverTypes_h
 
 #define VSIDS 0
 #define CHB 1
 #define LRB 2
-
-#ifndef PRIORITIZE_ER
-    #define PRIORITIZE_ER false
-#endif
 
 #ifndef BRANCHING_HEURISTIC
     #define BRANCHING_HEURISTIC LRB
@@ -219,7 +214,6 @@ public:
     operator const Lit* (void) const         { return (Lit*)data; }
 
     Act&         activity    ()              { assert(header.has_extra); return data[header.size].act; }
-    const Act&   activity    () const        { assert(header.has_extra); return data[header.size].act; }
     uint32_t     abstraction () const        { assert(header.has_extra); return data[header.size].abs; }
 
     Lit          subsumes    (const Clause& other) const;
@@ -304,10 +298,10 @@ class OccLists
  public:
     OccLists(const Deleted& d) : deleted(d) {}
     
-    void  init            (const Idx& idx)       { occs.growTo(toInt(idx)+1); dirty.growTo(toInt(idx)+1, 0); }
-    const Vec&  operator[](const Idx& idx) const { return occs[toInt(idx)]; }
-    Vec&        operator[](const Idx& idx)       { return occs[toInt(idx)]; }
-    Vec&        lookup    (const Idx& idx)       { if (dirty[toInt(idx)]) clean(idx); return occs[toInt(idx)]; }
+    void  init      (const Idx& idx){ occs.growTo(toInt(idx)+1); dirty.growTo(toInt(idx)+1, 0); }
+    // Vec&  operator[](const Idx& idx){ return occs[toInt(idx)]; }
+    Vec&  operator[](const Idx& idx){ return occs[toInt(idx)]; }
+    Vec&  lookup    (const Idx& idx){ if (dirty[toInt(idx)]) clean(idx); return occs[toInt(idx)]; }
 
     void  cleanAll  ();
     void  clean     (const Idx& idx);
@@ -349,19 +343,6 @@ void OccLists<Idx,Vec,Deleted>::clean(const Idx& idx)
     dirty[toInt(idx)] = 0;
 }
 
-struct Watcher {
-    CRef cref;
-    Lit  blocker;
-    Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
-    bool operator==(const Watcher& w) const { return cref == w.cref; }
-    bool operator!=(const Watcher& w) const { return cref != w.cref; }
-};
-
-struct WatcherDeleted {
-    const ClauseAllocator& ca;
-    WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
-    bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
-};
 
 //=================================================================================================
 // CMap -- a class for mapping clauses to values:

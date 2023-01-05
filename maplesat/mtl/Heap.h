@@ -71,8 +71,7 @@ class Heap {
         indices[x] = i;
     }
 
-    friend vec< Heap<Comp> >;
-    Heap(void* args) : lt(*reinterpret_cast<const Comp*>(args)) { }
+
   public:
     Heap(const Comp& c) : lt(c) { }
 

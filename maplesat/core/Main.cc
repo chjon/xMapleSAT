@@ -1,8 +1,6 @@
 /*****************************************************************************************[Main.cc]
-MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-           Copyright (c) 2007-2010, Niklas Sorensson
-
-MapleSAT_Refactor, based on MapleSAT -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+Copyright (c) 2007-2010, Niklas Sorensson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -36,14 +34,15 @@ using namespace Minisat;
 //=================================================================================================
 
 
-void printStats(Solver& solver) {
+void printStats(Solver& solver)
+{
     double cpu_time = cpuTime();
     double mem_used = memUsedPeak();
     printf("restarts              : %"    PRIu64 "\n", solver.starts);
     printf("conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
-    printf("decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.branchingHeuristicManager.decisions, (float)solver.branchingHeuristicManager.rnd_decisions*100 / (float)solver.branchingHeuristicManager.decisions, solver.branchingHeuristicManager.decisions   /cpu_time);
-    printf("propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.unitPropagator.propagations, solver.unitPropagator.propagations/cpu_time);
-    printf("conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.conflictAnalyzer.tot_literals, (solver.conflictAnalyzer.max_literals - solver.conflictAnalyzer.tot_literals)*100 / (double)solver.conflictAnalyzer.max_literals);
+    printf("decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.decisions, (float)solver.rnd_decisions*100 / (float)solver.decisions, solver.decisions   /cpu_time);
+    printf("propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.propagations, solver.propagations/cpu_time);
+    printf("conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.tot_literals, (solver.max_literals - solver.tot_literals)*100 / (double)solver.max_literals);
     if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
     printf("CPU time              : %g s\n", cpu_time);
 }
@@ -136,8 +135,8 @@ int main(int argc, char** argv)
         FILE* res = (argc >= 3) ? fopen(argv[2], "wb") : NULL;
         
         if (S.verbosity > 0){
-            printf("|  Number of variables:  %12d                                         |\n", S.assignmentTrail.nVars());
-            printf("|  Number of clauses:    %12d                                         |\n", S.clauseDatabase.nClauses()); }
+            printf("|  Number of variables:  %12d                                         |\n", S.nVars());
+            printf("|  Number of clauses:    %12d                                         |\n", S.nClauses()); }
         
         double parsed_time = cpuTime();
         if (S.verbosity > 0){
@@ -169,7 +168,7 @@ int main(int argc, char** argv)
         if (res != NULL){
             if (ret == l_True){
                 fprintf(res, "SAT\n");
-                for (int i = 0; i < S.assignmentTrail.nVars(); i++)
+                for (int i = 0; i < S.nVars(); i++)
                     if (S.model[i] != l_Undef)
                         fprintf(res, "%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
                 fprintf(res, " 0\n");
