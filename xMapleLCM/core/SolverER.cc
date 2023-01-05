@@ -69,6 +69,7 @@ namespace Minisat {
 
     SolverER::SolverER(Solver* s)
         : total_ext_vars     (0)
+        , tried_del_ext_vars (0)
         , deleted_ext_vars   (0)
         , max_ext_vars       (0)
         , conflict_extclauses(0)
@@ -103,6 +104,9 @@ namespace Minisat {
         , ext_act_threshold(opt_ext_act_thresh)
 #endif
         , ext_del_freq(opt_ext_del_freq)
+
+        , randomNumberGenerator(s->randomNumberGenerator)
+        , variableDatabase(s->variableDatabase)
         , solver(s)
     {
         using namespace std::placeholders;
@@ -277,7 +281,9 @@ namespace Minisat {
             assert(var(x) >= originalNumVars && var(x) > var(a) && var(x) > var(b));
             
             // Update extension level
+#if PRIORITIZE_ER
             extensionLevel[var(x)] = 1 + std::max(extensionLevel[var(a)], extensionLevel[var(b)]);
+#endif
 
             // Save definition (x <=> a v b)
             xdm.insert(x, a, b);
@@ -298,7 +304,7 @@ namespace Minisat {
         }
 
         // Prioritize new variables
-        // prioritize(*extVarDefBuffer);
+        solver->branchingHeuristicManager.prioritize(*extVarDefBuffer, ext_prio_act);
 
         // Update stats and clean up
         total_ext_vars += extVarDefBuffer->size();
@@ -306,25 +312,6 @@ namespace Minisat {
         extVarDefBuffer->clear();
 
         extTimerStop(ext_add_overhead);
-    }
-
-    void SolverER::prioritize(const std::vector<ExtDef>& defs) {
-        // FIXME: this only forces branching on the last extension variable we add here - maybe add a queue for force branch variables?
-        const double desiredActivityCHB   = solver->activity_CHB  [solver->order_heap_CHB  [0]] * ext_prio_act;
-        const double desiredActivityVSIDS = solver->activity_VSIDS[solver->order_heap_VSIDS[0]] * ext_prio_act;
-        for (const ExtDef& def : defs) {
-            Var v = var(def.x);
-            // Prioritize branching on our extension variables
-            solver->activity_CHB  [v] = desiredActivityCHB;
-            solver->activity_VSIDS[v] = desiredActivityVSIDS;
-
-#if EXTENSION_FORCE_BRANCHING
-            // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
-            solver->canceled[v] = conflicts;
-#endif
-            if (solver->order_heap_CHB  .inHeap(v)) solver->order_heap_CHB  .decrease(v);
-            if (solver->order_heap_VSIDS.inHeap(v)) solver->order_heap_VSIDS.decrease(v);
-        }
     }
 
     template<class V>
@@ -425,34 +412,6 @@ namespace Minisat {
         return CRef_Undef;
     }
 
-    void SolverER::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
-        // Move unassigned literal to c[0]
-        Clause& c = solver->ca[cr];
-        Lit x = c[i_undef], max = c[i_max];
-        if (c.size() == 2) {
-            // Don't need to touch watchers for binary clauses
-            if (value(c[0]) == l_False) std::swap(c[0], c[1]);
-        } else {
-            // Swap unassigned literal to index 0 and highest-level literal to index 1,
-            // replacing watchers as necessary
-            OccLists<Lit, vec<Solver::Watcher>, Solver::WatcherDeleted>& ws = solver->watches;
-            Lit c0 = c[0], c1 = c[1];
-            if (i_max == 0 || i_undef == 1) std::swap(c[0], c[1]);
-
-            if (i_max > 1) {
-                remove(ws[~c[1]], Solver::Watcher(cr, c0));
-                std::swap(c[1], c[i_max]);
-                ws[~max].push(Solver::Watcher(cr, x));
-            }
-
-            if (i_undef > 1) {
-                remove(ws[~c[0]], Solver::Watcher(cr, c1));
-                std::swap(c[0], c[i_undef]);
-                ws[~x].push(Solver::Watcher(cr, max));
-            }
-        }
-    }
-
     void SolverER::substitute(vec<Lit>& clause, SubstitutionPredicate& p) {
         extTimerStart();
         if (p(clause)) {
@@ -468,7 +427,7 @@ namespace Minisat {
                         int i_undef = -1, i_max = -1;
                         CRef cr = findAssertingClause(i_undef, i_max, x, extDefs.find(var(x))->second);
                         assert(cr != CRef_Undef);
-                        enforceWatcherInvariant(cr, i_undef, i_max);
+                        solver->unitPropagator.enforceWatcherInvariant(cr, i_undef, i_max);
                         Clause& c = solver->ca[cr];
                         solver->uncheckedEnqueue(c[0], cr);
                     }
@@ -490,6 +449,9 @@ namespace Minisat {
 
             // Check whether the solver should delete the variable
             if (!deletionPredicate(x)) continue;
+
+            // Increment the number of attempted deletions
+            tried_del_ext_vars++;
 
             // Check whether any of the extension definition clauses are not removable
             for (CRef cr : it->second) {

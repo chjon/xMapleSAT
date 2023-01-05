@@ -202,13 +202,6 @@ public:
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause);
     void addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::vector<Lit>& clause);
 
-    /**
-     * @brief Prioritize branching on a given set of variables
-     * 
-     * @param defs Extension variable definitions -- the extension variables will be prioritized
-     */
-    void prioritize(const std::vector<ExtDef>& defs);
-
     // Extension Variable Substitution
 
     /**
@@ -318,8 +311,8 @@ public:
     // Statistics //
     ////////////////
 
-    uint64_t total_ext_vars, deleted_ext_vars, max_ext_vars;
-    uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
+    mutable uint64_t total_ext_vars, tried_del_ext_vars, deleted_ext_vars, max_ext_vars;
+    mutable uint64_t conflict_extclauses, learnt_extclauses, lbd_total, branchOnExt;
 
     double extTimerRead(unsigned int i); // 0: sel, 1: add, 2: delC, 3: delV, 4: sub, 5: stat
 
@@ -357,6 +350,9 @@ protected:
     void   extTimerStart() const;
     void   extTimerStop(struct rusage& ext_overhead) const;
 
+    // Solver references
+    RandomNumberGenerator& randomNumberGenerator;
+    VariableDatabase& variableDatabase;
     Solver* solver;
     ExtDefMap<Lit> xdm;
 
@@ -383,15 +379,6 @@ protected:
      * @note pre-condition: the clause must be asserting at the current decision level
      */
     CRef findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector<CRef>& cs);
-
-    /**
-     * @brief Move undefined literal to index 0, ensuring that watcher invariants are satisfied
-     * 
-     * @param cr The CRef of the asserting clause
-     * @param i_undef The index of the undefined literal in the clause
-     * @param i_max The index of the literal in the clause with the highest decision level
-     */
-    void enforceWatcherInvariant(CRef cr, int i_undef, int i_max);
 
     /////////////////////////////////
     // HELPERS FOR CLAUSE DELETION //
@@ -479,7 +466,9 @@ lbool SolverER::value(Lit p) const { return solver->value(p); }
 #endif
 
 inline void SolverER::newVar() {
+#if PRIORITIZE_ER
     extensionLevel.push(0);
+#endif
 }
 
 // EXTENDED RESOLUTION - statistics

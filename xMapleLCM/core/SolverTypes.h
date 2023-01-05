@@ -41,6 +41,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
+enum BranchingHeuristic: uint8_t {
+    CHB   = 0,
+    VSIDS = 1,
+};
+
 //=================================================================================================
 // Variables, literals, lifted booleans, clauses:
 
@@ -304,6 +309,24 @@ inline std::ostream& operator<<(std::ostream& out, const Clause& cls)
 }
 
 //=================================================================================================
+// Watcher -- a struct for watching the value of a literal in a clause
+struct Watcher {
+    CRef cref;
+    Lit  blocker;
+    Watcher(CRef cr, Lit p) : cref(cr), blocker(p) {}
+    bool operator==(const Watcher& w) const { return cref == w.cref; }
+    bool operator!=(const Watcher& w) const { return cref != w.cref; }
+};
+
+//=================================================================================================
+// WatcherDeleted -- a struct for checking whether a watcher has been deleted
+struct WatcherDeleted {
+    const ClauseAllocator& ca;
+    WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
+    bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
+};
+
+//=================================================================================================
 // OccLists -- a class for maintaining occurence lists with lazy deletion:
 
 template<class Idx, class Vec, class Deleted>
@@ -317,10 +340,10 @@ class OccLists
 public:
     OccLists(const Deleted& d) : deleted(d) {}
     
-    void  init      (const Idx& idx){ occs.growTo(toInt(idx)+1); dirty.growTo(toInt(idx)+1, 0); }
-    // Vec&  operator[](const Idx& idx){ return occs[toInt(idx)]; }
-    Vec&  operator[](const Idx& idx){ return occs[toInt(idx)]; }
-    Vec&  lookup    (const Idx& idx){ if (dirty[toInt(idx)]) clean(idx); return occs[toInt(idx)]; }
+    void       init      (const Idx& idx)       { occs.growTo(toInt(idx)+1); dirty.growTo(toInt(idx)+1, 0); }
+    Vec&       operator[](const Idx& idx)       { return occs[toInt(idx)]; }
+    const Vec& operator[](const Idx& idx) const { return occs[toInt(idx)]; }
+    Vec&       lookup    (const Idx& idx)       { if (dirty[toInt(idx)]) clean(idx); return occs[toInt(idx)]; }
 
     void  cleanAll  ();
     void  clean     (const Idx& idx);
