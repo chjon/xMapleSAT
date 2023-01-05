@@ -77,23 +77,23 @@ AFTER_CONFLICT=2
 all: maplesat xmaplesat
 
 .prev_%:
-	make -C er clean
-	make -C core clean
+	gmake -C er clean
+	gmake -C core clean
 	rm -f .prev_*
 	touch $@
 
 maplesat: .prev_maplesat
-	make -C core rs || exit 1
+	gmake -C core rs || exit 1
 	mkdir -p bin
 	mv core/maplesat_static bin/$@
 
 maplesat_bcp_priority: .prev_maplesat_bcp_priority
-	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
 	mkdir -p bin
 	mv core/maplesat_static bin/$@
 
 xmaplesat: .prev_xmaplesat
-	make CMD_CFLAGS="\
+	gmake CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_LBD) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -108,7 +108,7 @@ xmaplesat: .prev_xmaplesat
 	mv er/xmaplesat_static bin/$@
 
 xmaplesat_rnd_rng: .prev_xmaplesat_rnd_rng
-	make CMD_CFLAGS="\
+	gmake CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_RANDOM) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_RANGE) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -121,7 +121,7 @@ xmaplesat_rnd_rng: .prev_xmaplesat_rnd_rng
 	mv er/xmaplesat_static bin/$@
 
 xmaplesat_sub_lbd: .prev_xmaplesat_sub_lbd
-	make CMD_CFLAGS="\
+	gmake CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_LBD) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -134,14 +134,14 @@ xmaplesat_sub_lbd: .prev_xmaplesat_sub_lbd
 	mv er/xmaplesat_static bin/$@
 
 xmaplesat_glucoser: .prev_xmaplesat_glucoser
-	make CMD_CFLAGS="-D ER_ENABLE_GLUCOSER=1" -C er rs || exit 1
+	gmake CMD_CFLAGS="-D ER_ENABLE_GLUCOSER=1" -C er rs || exit 1
 	mkdir -p bin
 	mv er/xmaplesat_static bin/$@
 
 clean:
-	make -C er   clean
-	make -C core clean
-	make -C test clean
+	gmake -C er   clean
+	gmake -C core clean
+	gmake -C test clean
 
 test:
-	make CMD_CFLAGS="-D TESTING" -C test
+	gmake CMD_CFLAGS="-D TESTING" -C test

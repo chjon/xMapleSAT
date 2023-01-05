@@ -14,21 +14,21 @@
 # BUILDING:
 (release version: without assertions, statically linked, etc)
 
-maplesat: `make maplesat`
+maplesat: `gmake maplesat`
 - Refactored baseline solver
 
-maplesat_bcp_priority: `make maplesat_bcp_priority`
+maplesat_bcp_priority: `gmake maplesat_bcp_priority`
 - Uses VSIDS activity to sequence literals for propagation ("delayed" BCP mode)
 
-xmaplesat: `make xmaplesat`
+xmaplesat: `gmake xmaplesat`
 - ER solver: uses common literal pairs to define new variables
 - Uses VSIDS activity to sequence literals for propagation ("delayed" BCP mode)
 
-xmaplesat_sub_lbd: `make xmaplesat_sub_lbd`
+xmaplesat_sub_lbd: `gmake xmaplesat_sub_lbd`
 - ER solver: uses common literal pairs to define new variables
 
-xmaplesat_rnd_rng: `make xmaplesat_rnd_rng`
+xmaplesat_rnd_rng: `gmake xmaplesat_rnd_rng`
 - ER solver: uses random literal pairs to define new variables
 
-xmaplesat_glucoser: `make xmaplesat_glucoser`
+xmaplesat_glucoser: `gmake xmaplesat_glucoser`
 - ER solver: implements the LER heuristic introduced in glucosER
