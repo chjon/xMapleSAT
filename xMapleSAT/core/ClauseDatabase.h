@@ -244,6 +244,16 @@ namespace Minisat {
         template<class V>
         int lbd (const V& clause);
 
+        /**
+         * @brief Get a list of all the learnt clauses that satisfy a predicate
+         * 
+         * @param output The output list
+         * @param predicate the predicate function: takes a CRef as input and returns true iff the
+         * clause satisfies the predicate. 
+         */
+        template<typename V, typename P>
+        void selectLearntClauses(V& output, P predicate);
+
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // EVENT HANDLERS
@@ -495,6 +505,13 @@ namespace Minisat {
             }
         }
         return lbd;
+    }
+
+    template<typename V, typename P>
+    void ClauseDatabase::selectLearntClauses(V& output, P predicate) {
+        for (int i = 0; i < learnts.size(); i++)
+            if (predicate(learnts[i]))
+                vectorPush(output, learnts[i]);
     }
 
     ///////////////////

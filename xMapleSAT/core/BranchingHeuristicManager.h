@@ -362,6 +362,14 @@ namespace Minisat {
          */
         void rebuildPriorityQueue(void);
 
+        /**
+         * @brief Set the variable activity
+         * 
+         * @param v the variable whose activity should be set
+         * @param activityValue the activity to give the variable
+         */
+        void setActivity(Var v, double activityValue);
+
     #if BRANCHING_HEURISTIC == VSIDS
         // VSIDS
 
@@ -603,6 +611,15 @@ namespace Minisat {
 
     ////////////////////////////////////////////////////
     // VARIABLE SELECTION HEURISTIC STATE MODIFICATION
+
+    inline void BranchingHeuristicManager::setActivity(Var v, double activityValue) {
+        const double oldActivity = activity[v];
+        activity[v] = activityValue;
+        if (activity[v] > oldActivity)
+            increasePriorityQueue(v);
+        else
+            decreasePriorityQueue(v);
+    }
 
 #if BRANCHING_HEURISTIC == VSIDS
     inline void BranchingHeuristicManager::decayActivityVSIDS() {

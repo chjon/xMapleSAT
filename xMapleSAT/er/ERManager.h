@@ -325,21 +325,6 @@ public:
     /**
      * @brief Filter clauses for clause selection
      * 
-     * @param candidates a list of clauses to check
-     * @param filterPredicate a method for selecting clauses for defining extension variables
-     * @param heuristicType the overall heuristic type
-     * 
-     * @note Saves outputs in @code{m_filteredClauses}
-     */
-    void filterBatch(
-        const vec<CRef>& candidates,
-        FilterPredicate& filterPredicate,
-        HeuristicType heuristicType = HeuristicType::DEFAULT
-    );
-
-    /**
-     * @brief Filter clauses for clause selection
-     * 
      * @param candidate the clause to check
      * @param filterPredicate a method for selecting clauses for defining extension variables
      * @param heuristicType the overall heuristic type
@@ -499,7 +484,7 @@ public:
      * 
      * @note Assumes that @code{varsToDelete} is initially empty
      */
-    void getExtVarsToDelete(LitSet& varsToDelete, DeletionPredicate& deletionPredicate) const;
+    void getExtVarsToDelete(VarSet& varsToDelete, DeletionPredicate& deletionPredicate) const;
 
     /**
      * @brief Remove extension variables from the solver
@@ -603,7 +588,7 @@ protected:
      * @param db the learnt clause database to delete from
      * @param varsToDelete the set of variables to delete (represented as a set of positive literals)
      */
-    void deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete);
+    void deleteExtVarsFrom(vec<CRef>& db, VarSet& varsToDelete);
 
     /**
      * @brief Mark that a clause has been deleted -- must be used in tandem with @code{remove_flush}

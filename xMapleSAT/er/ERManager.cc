@@ -177,30 +177,6 @@ ERManager::ERManager(Solver& s)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CLAUSE SELECTION
 
-void ERManager::filterBatch(
-    const vec<CRef>& candidates,
-    FilterPredicate& filterPredicate,
-    HeuristicType heuristicType
-) {
-    extTimerStart();
-
-    // Select data structure to use
-    std::vector<CRef>* filteredClauses = nullptr;
-    switch (heuristicType) {
-        case HeuristicType::LER: filteredClauses = &m_filteredClauses_ler; break;
-        default:                 filteredClauses = &m_filteredClauses    ; break;
-    }
-
-    // Iterate through all candidate clauses and add the ones that satisfy the predicate
-    for (int i = 0; i < candidates.size(); i++) {
-        CRef candidate = candidates[i];
-        if (filterPredicate(candidate))
-            filteredClauses->push_back(candidate);
-    }
-
-    extTimerStop(ext_sel_overhead);
-}
-
 void ERManager::filterIncremental(
     const CRef candidate,
     FilterPredicate& filterPredicate,
@@ -227,10 +203,6 @@ void ERManager::selectClauses(
     HeuristicType heuristicType, 
     unsigned int numKeepFiltered
 ) {
-    // For static metrics, it is preferable to use filterIncremental when learning clauses
-    // instead of using filterBatch here.
-    // filterBatch(solver->learnts, user_extFilPredicate);
-
     extTimerStart();
 
     // Select data structure to use
@@ -246,6 +218,10 @@ void ERManager::selectClauses(
             selectedClauses = &m_selectedClauses;
         } break;
     }
+
+    // For static metrics, it is preferable to use filterIncremental when learning clauses
+    // instead of using selectLearntClauses here.
+    // branchingHeuristicManager.selectLearntClauses(*filteredClauses, user_extFilPredicate);
 
     if (filteredClauses->size()) {
         selectionHeuristic(*selectedClauses, *filteredClauses, ext_window);
@@ -352,18 +328,19 @@ void ERManager::introduceExtVars(
 void ERManager::prioritize(const std::vector<ExtDef>& defs) {
     // FIXME: this only forces branching on the last extension variable we add here - maybe add a
     // queue for force branch variables?
-    // const double desiredActivity = branchingHeuristicManager.getActivityVSIDS()[solver->order_heap[0]] * ext_prio_act;
-    // for (const ExtDef& def : defs) {
-    //     Var v = var(def.x);
-    //     // Prioritize branching on our extension variables
-    //     solver->activity[v] = desiredActivity;
 
-    // #if EXTENSION_FORCE_BRANCHING
-    //     // This forces branching because of how branching is implemented when ANTI_EXPLORATION is turned on
-    //     solver->canceled[v] = conflicts;
-    // #endif
-    //     branchingHeuristicManager.increasePriorityQueue(v);
-    // }
+    // Find maximum activity
+    double maxActivity = 0;
+    const vec<double>& activities = branchingHeuristicManager.getActivityVSIDS();
+    for (int i = 0; i < assignmentTrail.nVars(); i++)
+        maxActivity = std::max(maxActivity, activities[i]);
+
+    // Prioritize branching on our extension variables
+    for (const ExtDef& def : defs) {
+        Var v = var(def.x);
+        branchingHeuristicManager.setActivity(v, maxActivity * ext_prio_act);
+        branchingHeuristicManager.increasePriorityQueue(v);
+    }
 }
 
 void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, vec<Lit>& ps) {
@@ -454,7 +431,7 @@ EXIT_SUBSTITUTE:;
 // EXTENSION VARIABLE DELETION
 
 void ERManager::getExtVarsToDelete(
-    std::tr1::unordered_set<Lit>& varsToDelete,
+    VarSet& varsToDelete,
     DeletionPredicate& deletionPredicate
 ) const {
     // Iterate through current extension variables
@@ -479,7 +456,7 @@ void ERManager::getExtVarsToDelete(
         }
 
         // Queue extension variable to be deleted
-        varsToDelete.insert(mkLit(x));
+        varsToDelete.insert(x);
 
         NEXT_VAR:;
     }
@@ -489,11 +466,14 @@ void ERManager::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& 
     extTimerStart();
 
     // Get extension variables to delete
-    LitSet varsToDelete;
+    VarSet varsToDelete;
     setup();
     getExtVarsToDelete(varsToDelete, deletionPredicate);
 
     extTimerStop(ext_delV_overhead);
+
+    // Exit if there are no variables to delete
+    if (varsToDelete.size() == 0) return;
 
     // Delete learnt clauses containing the extension variable
     // NOTE: This is optional -- we can let the solver delete these by itself as clause activities decay
@@ -504,16 +484,19 @@ void ERManager::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& 
     extTimerStart();
 
     // Delete extension variable definition clauses
-    for (Lit x : varsToDelete) {
-        for (CRef cr : extDefs.find(var(x))->second) {
+    for (Var x : varsToDelete) {
+        for (CRef cr : extDefs.find(x)->second) {
             remove_incremental(cr);
             clauseDatabase.removeClause(cr);
         }
-        extDefs.erase(var(x));
+        extDefs.erase(x);
     }
 
     // Remove extension variable from definition map to prevent future clause substitution
-    xdm.erase(varsToDelete);
+    for (Var x : varsToDelete)
+        xdm.erase(mkLit(x));
+
+    // Flush clause selection buffers
     remove_flush();
 
     // Update stats
@@ -607,20 +590,27 @@ CRef ERManager::findAssertingClause(int& i_undef, int& i_max, Lit x, std::vector
 /////////////////////////////////////////////////////
 // HELPER FUNCTIONS FOR EXTENSION VARIABLE DELETION
 
-static inline bool containsVarToDelete(Clause& c, LitSet& varsToDelete) {
+/**
+ * @brief Check whether a clause contains any variables in a set
+ * 
+ * @param c the clause to check
+ * @param vars the set of variables
+ * @return true iff the clause contains at least one variable which is in the set
+ */
+static inline bool containsAnyVar(Clause& c, VarSet& vars) {
     for (int i = 0; i < c.size(); i++)
-        if (varsToDelete.find(mkLit(var(c[i]))) != varsToDelete.end())
+        if (vars.find(var(c[i])) != vars.end())
             return true;
 
     return false;
 }
 
-void ERManager::deleteExtVarsFrom(vec<CRef>& db, LitSet& varsToDelete) {
+void ERManager::deleteExtVarsFrom(vec<CRef>& db, VarSet& varsToDelete) {
     int i, j;
     for (i = j = 0; i < db.size(); i++) {
         CRef cr = db[i];
         Clause& c = ca[cr];
-        if (!assignmentTrail.locked(c) && containsVarToDelete(c, varsToDelete)) {
+        if (!assignmentTrail.locked(c) && containsAnyVar(c, varsToDelete)) {
             remove_incremental(cr);
             clauseDatabase.removeClause(cr);
         } else {

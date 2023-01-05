@@ -35,9 +35,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef EXTENSION_SUBSTITUTION
     #define EXTENSION_SUBSTITUTION true
 #endif
-#ifndef EXTENSION_FORCE_BRANCHING
-    #define EXTENSION_FORCE_BRANCHING false
-#endif
 #ifndef PRIORITIZE_ER
     #define PRIORITIZE_ER false
 #endif
@@ -125,6 +122,7 @@ namespace Minisat {
 
 using LitPair = std::pair<Lit, Lit>;
 using LitSet  = std::tr1::unordered_set<Lit>;
+using VarSet  = std::tr1::unordered_set<Var>;
 
 inline LitPair mkLitPair(Lit a, Lit b) {
     return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);

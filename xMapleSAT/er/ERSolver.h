@@ -28,6 +28,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "er/ERManager.h"
 
 namespace Minisat {
+    /**
+     * @brief This class augments the base solver with extended resolution capabilities.
+     * 
+     */
     class ERSolver : public Solver {
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +44,16 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // CONSTRUCTORS
 
+        /**
+         * @brief Construct a new ERSolver object
+         * 
+         */
         ERSolver();
+
+        /**
+         * @brief Destroy the ERSolver object
+         * 
+         */
         virtual ~ERSolver() = default;
 
     public:
