@@ -183,13 +183,13 @@ namespace Minisat {
         assignmentTrail.assign(p, from);
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        if (soft_assigns[var(p)] ^ sign(p) == l_False) {
+        if ((soft_assigns[var(p)] ^ sign(p)) == l_False) {
             // Ensure conflicting literal is on the trail
             if (assignmentTrail.value(p) == l_Undef)
                 assignmentTrail.assign(~p, reasons[var(p)]);
 
             return false;
-        } else if (soft_assigns[var(p)] ^ sign(p) == l_Undef) {
+        } else if ((soft_assigns[var(p)] ^ sign(p)) == l_Undef) {
             // Note: actual variable assignment is delayed until the literal is popped by @code{getNext()}
             order_heap.insert(p.x);
             soft_assigns[var(p)] = lbool(!sign(p));
@@ -213,7 +213,8 @@ namespace Minisat {
         qhead = levelHead;
         
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        Lit* i, end;
+        Lit* i;
+        Lit* end;
         i = static_cast<Lit*>(trail);
         end = i + trail.size();
         while (i != end) {
@@ -232,17 +233,18 @@ namespace Minisat {
         // Propagate according to priority queue afterward
         qhead++;
         if (!order_heap.empty()) {
-            Lit p = Lit(order_heap.removeMin());
+            Lit p = Lit{order_heap.removeMin()};
 
             // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
-            assignmentTrail.assign(p, from);
+            assignmentTrail.assign(p, reasons[var(p)]);
+            soft_assigns[var(p)] = l_Undef;
             return p;
         }
         return lit_Undef;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
         // Always propagate according to priority queue
-        return order_heap.empty() ? lit_Undef : Lit(order_heap.removeMin());
+        return order_heap.empty() ? lit_Undef : Lit{order_heap.removeMin()};
     #endif
     }
 
