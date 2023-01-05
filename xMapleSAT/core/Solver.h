@@ -335,6 +335,14 @@ public:
      */
     void clearInterrupt(void);
 
+    /**
+     * @brief Update data structures when a clause is deleted
+     * 
+     * @param c the clause that was deleted
+     * @param cr the reference to the clause that was deleted
+     */
+    virtual void handleEventClauseDeleted(const Clause& c, CRef cr);
+
 protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // HELPER FUNCTIONS
@@ -445,6 +453,12 @@ inline void Solver::interrupt() {
 
 inline void Solver::clearInterrupt() {
     asynch_interrupt = false;
+}
+
+inline void Solver::handleEventClauseDeleted(const Clause& c, CRef cr) {
+    // Don't leave pointers to free'd memory!
+    unitPropagator.detachClause(cr);
+    assignmentTrail.handleEventClauseDeleted(c);
 }
 
 ////////////

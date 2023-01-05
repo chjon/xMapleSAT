@@ -591,20 +591,25 @@ protected:
     void deleteExtVarsFrom(vec<CRef>& db, VarSet& varsToDelete);
 
     /**
-     * @brief Mark that a clause has been deleted -- must be used in tandem with @code{remove_flush}
+     * @brief Remove deleted clauses from CRef buffers. 
+     * Used in tandem with @code{handleEventClauseDeleted} 
+     * 
+     * @note clears @code{m_deletedClauses}
+     */
+    inline void remove_flush();
+
+public:
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // EVENT HANDLERS
+
+    /**
+     * @brief Mark that a clause has been deleted -- used in tandem with @code{remove_flush}
      * 
      * @param cr the CRef of the deleted clause
      *
      * @note adds the CRef to @code{m_deletedClauses}
      */
-    inline void remove_incremental(CRef cr);
-
-    /**
-     * @brief Remove deleted clauses from CRef buffers -- must be used in tandem with @code{remove_incremental} 
-     * 
-     * @note clears @code{m_deletedClauses}
-     */
-    inline void remove_flush();
+    inline void handleEventClauseDeleted(CRef cr);
 
 private:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -765,10 +770,6 @@ inline void ERManager::checkDeleteExtVars(uint64_t conflicts) {
     }
 }
 
-inline void ERManager::remove_incremental(CRef cr) {
-    m_deletedClauses.insert(cr);
-}
-
 inline static void removeSet(std::vector<CRef>& vec, const std::tr1::unordered_set<CRef>& toDelete) {
     unsigned int i, j;
     for (i = j = 0; i < vec.size(); i++)
@@ -788,6 +789,13 @@ inline void ERManager::remove_flush() {
 
     // Clear deletion buffer
     m_deletedClauses.clear();
+}
+
+///////////////////
+// EVENT HANDLERS
+
+inline void ERManager::handleEventClauseDeleted(CRef cr) {
+    m_deletedClauses.insert(cr);
 }
 
 }

@@ -143,14 +143,11 @@ void ClauseDatabase::toDimacs(FILE* f, const vec<Lit>& assumps) {
 
 void ClauseDatabase::removeClause(CRef cr) {
     Clause& c = ca[cr];
-    unitPropagator.detachClause(cr);
+    solver.handleEventClauseDeleted(c, cr);
 
     // Update stats
     if (c.learnt()) learnts_literals -= c.size();
     else            clauses_literals -= c.size();
-
-    // Don't leave pointers to free'd memory!
-    assignmentTrail.handleEventClauseDeleted(c);
 
     // Mark clause as deleted
     c.mark(1); 

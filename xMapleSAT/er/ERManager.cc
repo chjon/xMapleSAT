@@ -486,7 +486,6 @@ void ERManager::deleteExtVars(DeletionPredicateSetup& setup, DeletionPredicate& 
     // Delete extension variable definition clauses
     for (Var x : varsToDelete) {
         for (CRef cr : extDefs.find(x)->second) {
-            remove_incremental(cr);
             clauseDatabase.removeClause(cr);
         }
         extDefs.erase(x);
@@ -538,7 +537,6 @@ void ERManager::removeSatisfied() {
         for (i = j = 0; i < cs.size(); i++) {
             Clause& c = ca[cs[i]];
             if (assignmentTrail.satisfied(c)) {
-                remove_incremental(cs[i]);
                 clauseDatabase.removeClause(cs[i]);
             } else {
                 cs[j++] = cs[i];
@@ -611,7 +609,6 @@ void ERManager::deleteExtVarsFrom(vec<CRef>& db, VarSet& varsToDelete) {
         CRef cr = db[i];
         Clause& c = ca[cr];
         if (!assignmentTrail.locked(c) && containsAnyVar(c, varsToDelete)) {
-            remove_incremental(cr);
             clauseDatabase.removeClause(cr);
         } else {
             db[j++] = db[i];
