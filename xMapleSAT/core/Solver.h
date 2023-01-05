@@ -216,7 +216,7 @@ public:
     void setConfBudget(int64_t x);
 
     /**
-     * @brief Turn off the conflcit budget.
+     * @brief Turn off the conflict budget.
      * 
      */
     void budgetOff(void);
