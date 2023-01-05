@@ -85,6 +85,22 @@ lbool ERSolver::search(int nof_conflicts) {
             if (cr != CRef_Undef)
                 erManager.filterIncremental(cr);
 
+        #if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
+            // Generate extension variable definitions
+            // Only try generating more extension variables if there aren't any buffered already
+            erManager.checkGenerateDefinitions(conflicts);
+        #endif
+
+        #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
+            // Add extension variables
+            erManager.introduceExtVars();
+        #endif
+
+        #if ER_ENABLE_GLUCOSER
+            erManager.generateLER();
+            erManager.introduceExtVars(ERManager::HeuristicType::LER);
+        #endif
+
         } else {
             // NO CONFLICT
             if (nof_conflicts >= 0 && conflictC >= nof_conflicts || !withinBudget()) {

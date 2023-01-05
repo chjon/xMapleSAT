@@ -51,7 +51,7 @@ class RandomNumberGenerator;
 class UnitPropagator;
 
 class ERManager {
-protected:
+public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // HELPER TYPES
 
@@ -341,10 +341,11 @@ public:
      * @brief Filter clauses for clause selection
      * 
      * @param candidate the clause to check
+     * @param heuristicType the overall heuristic type
      * 
      * @note Saves outputs in @code{m_filteredClauses}
      */
-    void filterIncremental(const CRef candidate);
+    void filterIncremental(const CRef candidate, HeuristicType heuristicType = HeuristicType::DEFAULT);
 
     /**
      * @brief Select clauses for defining extension variables
@@ -404,8 +405,10 @@ public:
 
     /**
      * @brief Introduce extension variables into the solver
+     * 
+     * @param heuristicType the overall heuristic type
      */
-    void introduceExtVars(void);
+    void introduceExtVars(HeuristicType heuristicType = HeuristicType::DEFAULT);
 
     /**
      * @brief Adds an extension definition clause to the appropriate clause database
@@ -500,6 +503,16 @@ public:
      * @param conflicts the current total number of conflicts seen by the solver
      */
     inline void checkDeleteExtVars(uint64_t conflicts);
+
+public:
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // BUILT-IN HEURISTICS
+
+    /**
+     * @brief Add a variable according to the Local Extended Resolution heuristic
+     * 
+     */
+    void generateLER(void);
 
 public:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -718,15 +731,22 @@ inline double ERManager::extTimerRead(unsigned int i) const {
 
 /////////////////////
 // CLAUSE SELECTION
-inline void ERManager::filterIncremental(const CRef candidate) {
-    filterIncremental(candidate, user_extFilPredicate);
+inline void ERManager::filterIncremental(const CRef candidate, HeuristicType heuristicType) {
+#if ER_ENABLE_GLUCOSER
+    using namespace std::placeholders;
+    static FilterPredicate fil_ler = std::bind(&ERManager::user_extFilPredicate_ler, this, _1);
+    filterIncremental(candidate, fil_ler, HeuristicType::LER);
+#endif
+#if ER_USER_FILTER_HEURISTIC != ER_FILTER_HEURISTIC_NONE
+    filterIncremental(candidate, user_extFilPredicate, heuristicType);
+#endif
 }
 
 ////////////////////////////////////
 // EXTENSION VARIABLE INTRODUCTION
 
-inline void ERManager::introduceExtVars(void) {
-    introduceExtVars(extDefs);
+inline void ERManager::introduceExtVars(HeuristicType heuristicType) {
+    introduceExtVars(extDefs, heuristicType);
 }
 
 inline void ERManager::addExtDefClause(std::vector<CRef>& db, Lit ext_lit, const std::initializer_list<Lit>& clause) {
@@ -757,7 +777,9 @@ inline void ERManager::checkGenerateDefinitions(uint64_t conflicts) {
  * @param clause The vector of literals in which to substitute
  */
 inline void ERManager::substitute(vec<Lit>& clause) {
+#if ER_USER_SUBSTITUTE_HEURISTIC != ER_SUBSTITUTE_HEURISTIC_NONE
     substitute(clause, user_extSubPredicate);
+#endif
 }
 
 ////////////////////////////////
@@ -796,6 +818,19 @@ inline void ERManager::remove_flush() {
 
 inline void ERManager::handleEventClauseDeleted(CRef cr) {
     m_deletedClauses.insert(cr);
+}
+
+////////////////////////
+// BUILT-IN HEURISTICS
+
+inline void ERManager::generateLER(void) {
+    using namespace std::placeholders;
+    static SelectionHeuristic sel_ler = std::bind(&ERManager::user_extSelHeuristic_all, this, _1, _2, _3);
+    static ExtDefHeuristic def_ler = std::bind(&ERManager::user_extDefHeuristic_ler, this, _1, _2, _3);
+
+    // Generate extension variable definitions
+    selectClauses(sel_ler, HeuristicType::LER, 1);
+    defineExtVars(def_ler, HeuristicType::LER);
 }
 
 }

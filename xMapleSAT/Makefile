@@ -18,8 +18,6 @@ ER_FILTER_HEURISTIC_RANGE    =1
 ER_FILTER_HEURISTIC_LONGEST  =2
 # Consider clauses whose LBDs are in a certain range
 ER_FILTER_HEURISTIC_LBD      =3
-# Consider the most recently learnt clauses
-ER_FILTER_HEURISTIC_GLUCOSER =4
 
 ###############################
 # Selection heuristic options #
@@ -30,8 +28,6 @@ ER_SELECT_HEURISTIC_NONE      =0
 ER_SELECT_HEURISTIC_ACTIVITY  =1
 # Select most active clauses using quickselect
 ER_SELECT_HEURISTIC_ACTIVITY2 =2
-# Only consider the previous two learnt clauses
-ER_SELECT_HEURISTIC_GLUCOSER  =3
 
 ##################################
 # Substitution heuristic options #
@@ -53,8 +49,6 @@ ER_ADD_HEURISTIC_NONE     =0
 ER_ADD_HEURISTIC_RANDOM   =1
 # Add extension variables by selecting the most common pairs of literals
 ER_ADD_HEURISTIC_SUBEXPR  =2
-# Add extension variables according to the scheme prescribed by GlucosER
-ER_ADD_HEURISTIC_GLUCOSER =3
 
 #######################################
 # Variable deletion heuristic options #

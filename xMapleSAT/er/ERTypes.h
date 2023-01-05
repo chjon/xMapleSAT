@@ -62,18 +62,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_FILTER_HEURISTIC_RANGE    1 // Consider clauses whose widths are in a certain range 
 #define ER_FILTER_HEURISTIC_LONGEST  2 // Consider the longest clauses
 #define ER_FILTER_HEURISTIC_LBD      3 // Consider clauses whose LBDs are in a certain range
-#define ER_FILTER_HEURISTIC_GLUCOSER 4 // Consider the most recently learnt clauses
 #ifndef ER_USER_FILTER_HEURISTIC
-    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_GLUCOSER
+    #define ER_USER_FILTER_HEURISTIC ER_FILTER_HEURISTIC_NONE
 #endif
 
 // Define heuristic for selecting clauses
 #define ER_SELECT_HEURISTIC_ALL       0 // Consider all clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY  1 // Select most active clauses
 #define ER_SELECT_HEURISTIC_ACTIVITY2 2 // Select most active clauses using quickselect
-#define ER_SELECT_HEURISTIC_GLUCOSER  3 // Only consider the previous two learnt clauses
 #ifndef ER_USER_SELECT_HEURISTIC
-    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_GLUCOSER
+    #define ER_USER_SELECT_HEURISTIC ER_SELECT_HEURISTIC_ALL
 #endif
 
 // Define heuristic for replacing extension definitions in clauses
@@ -81,16 +79,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_SUBSTITUTE_HEURISTIC_WIDTH 0x1 // Consider clauses within a clause width range
 #define ER_SUBSTITUTE_HEURISTIC_LBD   0x2 // Consider clauses within an LBD range
 #ifndef ER_USER_SUBSTITUTE_HEURISTIC
-    #define ER_USER_SUBSTITUTE_HEURISTIC (ER_SUBSTITUTE_HEURISTIC_WIDTH | ER_SUBSTITUTE_HEURISTIC_LBD)
+    #define ER_USER_SUBSTITUTE_HEURISTIC ER_SUBSTITUTE_HEURISTIC_NONE
 #endif
 
 // Define heuristics for adding extension definitions
 #define ER_ADD_HEURISTIC_NONE     0 // Do not add extension variables
 #define ER_ADD_HEURISTIC_RANDOM   1 // Add extension variables by selecting random pairs of literals
 #define ER_ADD_HEURISTIC_SUBEXPR  2 // Add extension variables by selecting the most common pairs of literals
-#define ER_ADD_HEURISTIC_GLUCOSER 3 // Add extension variables according to the scheme prescribed by GlucosER
 #ifndef ER_USER_ADD_HEURISTIC
-    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_GLUCOSER
+    #define ER_USER_ADD_HEURISTIC ER_ADD_HEURISTIC_NONE
 #endif
 
 // Define heuristics for deleting extension variables
@@ -107,7 +104,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_GEN_LOCATION_AFTER_RESTART  1 // Generate extension variables after a restart
 #define ER_GEN_LOCATION_AFTER_CONFLICT 2 // Generate extension variables after a conflict
 #ifndef ER_USER_GEN_LOCATION
-    #define ER_USER_GEN_LOCATION ER_GEN_LOCATION_AFTER_RESTART
+    #define ER_USER_GEN_LOCATION ER_GEN_LOCATION_NONE
 #endif
 
 // Define heuristics for location to add variables
@@ -115,7 +112,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define ER_ADD_LOCATION_AFTER_RESTART  1 // Add extension variables after a restart
 #define ER_ADD_LOCATION_AFTER_CONFLICT 2 // Add extension variables after a conflict
 #ifndef ER_USER_ADD_LOCATION
-    #define ER_USER_ADD_LOCATION ER_GEN_LOCATION_AFTER_RESTART
+    #define ER_USER_ADD_LOCATION ER_ADD_LOCATION_NONE
 #endif
 
 namespace Minisat {

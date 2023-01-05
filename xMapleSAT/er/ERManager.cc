@@ -149,7 +149,9 @@ ERManager::ERManager(Solver& s)
     #endif
 
     // Bind clause substitution predicate
+    #if ER_USER_SUBSTITUTE_HEURISTIC != ER_SUBSTITUTE_HEURISTIC_NONE
     user_extSubPredicate = std::bind(&ERManager::user_extSubPredicate_size_lbd, this, _1);
+    #endif
 
     // Bind variable deletion predicate setup function
     #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ALL
