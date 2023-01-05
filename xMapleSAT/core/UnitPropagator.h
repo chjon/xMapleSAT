@@ -23,6 +23,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_UnitPropagator_h
 #define Minisat_UnitPropagator_h
 
+#ifdef TESTING
+#define protected public
+#define private public
+#endif
+
 #include <map>
 #include "core/SolverTypes.h"
 #include "mtl/Heap.h"
