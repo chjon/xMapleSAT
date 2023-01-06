@@ -545,7 +545,7 @@ namespace Minisat {
 
     inline void Solver::claBumpActivity (Clause& c) {
         const double RESCALE_THRESHOLD = 1e20;
-        if ((c.activity() += cla_inc) <= RESCALE_THRESHOLD) continue;
+        if ((c.activity() += cla_inc) <= RESCALE_THRESHOLD) return;
 
         // Rescale:
         for (int i = 0; i < learnts.size(); i++)
