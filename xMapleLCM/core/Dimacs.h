@@ -39,7 +39,7 @@ static void readClause(B& in, Solver& S, vec<Lit>& lits) {
         parsed_lit = parseInt(in);
         if (parsed_lit == 0) break;
         var = abs(parsed_lit)-1;
-        while (var >= S.variableDatabase.nVars()) S.newVar();
+        while (var >= S.nVars()) S.newVar();
         lits.push( (parsed_lit > 0) ? mkLit(var) : ~mkLit(var) );
     }
 }
@@ -63,31 +63,14 @@ static void parse_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
-        } else if (*in == 'c') {
-            if (eagerMatch(in, "c extlvl")){
-                int var = parseInt(in);
-                int lvl = parseInt(in);
-#if PRIORITIZE_ER_BINARY
-                S.ser->extensionLevel[var] = lvl ? 1 : 0;
-#else
-                S.ser->extensionLevel[var] = lvl;
-#endif
-            }else{
-                skipLine(in);
-            }
-        } else if (*in == 'p')
-            skipLine(in);
-#else
         } else if (*in == 'c' || *in == 'p')
             skipLine(in);
-#endif
         else{
             cnt++;
             readClause(in, S, lits);
             S.addClause_(lits); }
     }
-    if (vars != S.variableDatabase.nVars())
+    if (vars != S.nVars())
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of variables.\n");
     if (cnt  != clauses)
         fprintf(stderr, "WARNING! DIMACS header mismatch: wrong number of clauses.\n");
@@ -134,25 +117,8 @@ static void check_solution_DIMACS_main(B& in, Solver& S) {
             }else{
                 printf("c PARSE ERROR! Unexpected char: %c\n", *in), exit(3);
             }
-#if PRIORITIZE_ER
-        } else if (*in == 'c') {
-            if (eagerMatch(in, "c extlvl")){
-                int var = parseInt(in);
-                int lvl = parseInt(in);
-#if PRIORITIZE_ER_BINARY
-                S.ser->extensionLevel[var] = lvl ? 1 : 0;
-#else
-                S.ser->extensionLevel[var] = lvl;
-#endif
-            }else{
-                skipLine(in);
-            }
-        } else if (*in == 'p')
-            skipLine(in);
-#else
         } else if (*in == 'c' || *in == 'p')
             skipLine(in);
-#endif
         else{
             cnt++;
             int parsed_lit, var;
