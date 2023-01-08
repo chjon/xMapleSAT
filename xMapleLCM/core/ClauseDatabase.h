@@ -303,9 +303,8 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // HELPER FUNCTIONS
 
-        void removeSatisfied(vec<CRef>& cs);
-
-        void safeRemoveSatisfied(vec<CRef>& cs, unsigned valid_mark);
+        template <class CheckClausePredicate>
+        void removeSatisfied(vec<CRef>& cs, CheckClausePredicate shouldCheckClause);
 
         void reduceDB(void);
         void reduceDB_Tier2(void);

@@ -96,22 +96,26 @@ struct reduceDB_lt {
 };
 
 void ClauseDatabase::reduceDB() {
-    int     i, j;
-    //if (local_learnts_dirty) cleanLearnts(learnts_local, LOCAL);
-    //local_learnts_dirty = false;
-
     sort(learnts_local, reduceDB_lt(ca));
-
     int limit = learnts_local.size() / 2;
+
+    // Iterate through local clauses
+    int i, j;
     for (i = j = 0; i < learnts_local.size(); i++){
         Clause& c = ca[learnts_local[i]];
-        if (c.mark() == LOCAL)
-            if (c.removable() && !assignmentTrail.locked(c) && i < limit)
-                removeClause(learnts_local[i]);
-            else{
-                if (!c.removable()) limit++;
-                c.removable(true);
-                learnts_local[j++] = learnts_local[i]; }
+        if (c.mark() != LOCAL) continue;
+
+        if (c.removable() && !assignmentTrail.locked(c) && i < limit) {
+            // Clause cannot be demoted further: remove clause!
+            removeClause(learnts_local[i]);
+        } else {
+            // Mark clause as deletable next time
+            if (!c.removable()) limit++;
+            c.removable(true);
+
+            // Keep clause
+            learnts_local[j++] = learnts_local[i];
+        }
     }
     learnts_local.shrink(i - j);
 
@@ -119,27 +123,34 @@ void ClauseDatabase::reduceDB() {
 }
 
 void ClauseDatabase::reduceDB_Tier2() {
+    // Iterate through tier2 clauses
     int i, j;
     for (i = j = 0; i < learnts_tier2.size(); i++) {
         Clause& c = ca[learnts_tier2[i]];
-        if (c.mark() == TIER2)
-            if (!assignmentTrail.locked(c) && c.touched() + 30000 < solver.conflicts){
-                learnts_local.push(learnts_tier2[i]);
-                c.mark(LOCAL);
-                //c.removable(true);
-                c.activity() = 0;
-                claBumpActivity(c);
-            } else
-                learnts_tier2[j++] = learnts_tier2[i];
+        if (c.mark() != TIER2) continue;
+
+        if (!assignmentTrail.locked(c) && c.touched() + 30000 < solver.conflicts) {
+            // Demote clause to local clause database
+            learnts_local.push(learnts_tier2[i]);
+            c.mark(LOCAL);
+            //c.removable(true);
+            c.activity() = 0;
+            claBumpActivity(c);
+        } else {
+            // Keep clause
+            learnts_tier2[j++] = learnts_tier2[i];
+        }
     }
     learnts_tier2.shrink(i - j);
 }
 
-
-void ClauseDatabase::removeSatisfied(vec<CRef>& cs) {
+template <class CheckClausePredicate>
+void ClauseDatabase::removeSatisfied(vec<CRef>& cs, CheckClausePredicate shouldCheckClause) {
     int i, j;
     for (i = j = 0; i < cs.size(); i++) {
         Clause& c = ca[cs[i]];
+        if (!shouldCheckClause(c)) continue;
+
         if (assignmentTrail.satisfied(c))
             removeClause(cs[i]);
         else
@@ -148,25 +159,18 @@ void ClauseDatabase::removeSatisfied(vec<CRef>& cs) {
     cs.shrink(i - j);
 }
 
-void ClauseDatabase::safeRemoveSatisfied(vec<CRef>& cs, unsigned valid_mark) {
-    int i, j;
-    for (i = j = 0; i < cs.size(); i++) {
-        Clause& c = ca[cs[i]];
-        if (c.mark() == valid_mark)
-            if (assignmentTrail.satisfied(c))
-                removeClause(cs[i]);
-            else
-                cs[j++] = cs[i];
-    }
-    cs.shrink(i - j);
-}
+static inline bool always(const Clause& c) { return true; }
+
+template <int valid_mark>
+static inline bool validMark(const Clause& c) { return c.mark() == valid_mark; }
 
 void ClauseDatabase::removeSatisfied(void) {
-    removeSatisfied(learnts_core); // Should clean core first.
-    safeRemoveSatisfied(learnts_tier2, TIER2);
-    safeRemoveSatisfied(learnts_local, LOCAL);
-    if (remove_satisfied)        // Can be turned off.
-        removeSatisfied(clauses);
+    removeSatisfied(learnts_core , always);
+    removeSatisfied(learnts_tier2, validMark<TIER2>);
+    removeSatisfied(learnts_local, validMark<LOCAL>);
+
+    if (remove_satisfied) // Can be turned off.
+        removeSatisfied(clauses, always);
     checkGarbage();
 }
 
