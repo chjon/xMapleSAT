@@ -356,6 +356,7 @@ namespace Minisat {
         assigns.push(l_Undef);
         vardata.push(VarData{CRef_Undef, 0});
         trail  .capacity(v + 1);
+        lbd_seen.push(0);
         return v;
     }
 

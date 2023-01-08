@@ -190,14 +190,14 @@ CRef UnitPropagator::simplePropagate() {
             if (assignmentTrail.value(first) == l_False) {
                 confl = cr;
                 propagationQueue.clear();
-                // Copy the remaining watches:
-                while (i < end)
-                    *j++ = *i++;
+                break;
             } else {
                 assignmentTrail.simpleUncheckEnqueue(first, cr);
             }
 NextClause:;
         }
+        // Copy the remaining watches:
+        while (i < end) *j++ = *i++;
         ws.shrink(i - j);
     }
 
@@ -227,7 +227,7 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     Watcher *i, *j, *end;
     vec<Watcher>& ws = watches[p];
 
-    for (i = j = (Watcher*)ws, end = i + ws.size(); i != end;){
+    for (i = j = (Watcher*)ws, end = i + ws.size(); i != end;) {
         // Try to avoid inspecting the clause:
         Lit blocker = i->blocker;
         if (assignmentTrail.value(blocker) == l_True) {
@@ -245,9 +245,10 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
 
         // If 0th watch is true, then clause is already satisfied.
         Lit     first = c[0];
-        Watcher w     = Watcher(cr, first);
+        Watcher w = Watcher(cr, first);
         if (first != blocker && assignmentTrail.value(first) == l_True){
-            *j++ = w; continue; }
+            *j++ = w; continue;
+        }
 
         // Look for new watch:
         for (int k = 2; k < c.size(); k++) {
@@ -260,27 +261,29 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
 
         // Did not find watch -- clause is unit under assignment:
         *j++ = w;
-        if (assignmentTrail.value(first) == l_False) {
+        if (
+            assignmentTrail.value(first) == l_False ||
+            !propagationQueue.enqueue(first, cr)
+        ) {
+            // All literals falsified!
             confl = cr;
             propagationQueue.clear();
-            // Copy the remaining watches:
-            while (i < end)
-                *j++ = *i++;
-        } else {
-            propagationQueue.enqueue(first, cr);
+            break;
         }
 
-NextClause:;
+    NextClause:;
     }
-    ws.shrink(i - j);
 
+    // Copy the remaining watches:
+    while (i < end) *j++ = *i++;
+    ws.shrink(i - j);
     return confl;
 }
 
 inline CRef UnitPropagator::propagateSingle(Lit p) {
     // Propagate binary clauses first.
     CRef confl = propagateSingleBinary(p);
-    if (confl == CRef_Undef) return confl;
+    if (confl != CRef_Undef) return confl;
 
     // Propagate non-binary clauses second.
     return propagateSingleNonBinary(p);
