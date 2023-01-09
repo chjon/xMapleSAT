@@ -246,7 +246,7 @@ namespace Minisat {
          */
         void assign(Lit p, CRef from = CRef_Undef);
 
-        void simpleUncheckEnqueue(Lit p, CRef from = CRef_Undef);
+        void simpleAssign(Lit p, CRef from = CRef_Undef);
 
         /**
          * @brief Backtrack until a certain decision level. Keeps all assignments at 'level' but
@@ -254,7 +254,7 @@ namespace Minisat {
          * 
          * @param level The decision level to which to backtrack.
          */
-        void cancelUntil(int level);
+        void cancelUntilLevel(int level);
 
         void cancelUntilTrailSize(int trailSize);
 
@@ -278,6 +278,26 @@ namespace Minisat {
 
         template<class V>
         int computeLBD(const V& c);
+
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER FUNCTIONS
+
+        /**
+         * @brief Assign a variable such that the given literal is true. 
+         * @warning This might not add the literal to the propagation queue! Prefer to use the
+         * PropagationQueue's @code{enqueue} method instead.
+         * 
+         * @tparam simple true to skip notifying event listeners
+         * @param p The literal to assign. Assumes that the current value of the literal is
+         * undefined.
+         * @param from The reason for the literal assignment.
+         */
+        template <bool simple>
+        void genericAssign(Lit p, CRef from);
+
+        template<bool notifyListeners>
+        void cancelUntil(int trailSize);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

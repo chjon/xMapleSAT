@@ -106,7 +106,7 @@ lbool Solver::search(int& nof_conflicts) {
 
             learnt_clause.clear();
             conflictAnalyzer.analyze(confl, learnt_clause, backtrack_level, lbd);
-            assignmentTrail.cancelUntil(backtrack_level);
+            assignmentTrail.cancelUntilLevel(backtrack_level);
 
             lbd--;
             restartHeuristicManager.handleEventLearntClause(lbd);
@@ -120,7 +120,7 @@ lbool Solver::search(int& nof_conflicts) {
             // NO CONFLICT
             if (restartHeuristicManager.shouldRestart() || !withinBudget()) {
                 // Reached bound on number of conflicts:
-                assignmentTrail.cancelUntil(0);
+                assignmentTrail.cancelUntilLevel(0);
                 nof_conflicts = restartHeuristicManager.getConflictBudget();
                 return l_Undef;
             }
@@ -200,7 +200,7 @@ lbool Solver::solve_() {
         ok = false;
     }
 
-    assignmentTrail.cancelUntil(0);
+    assignmentTrail.cancelUntilLevel(0);
     return status;
 }
 
@@ -245,7 +245,7 @@ void Solver::simplifyLearnt(Clause& c) {
 
     for (i = 0, j = 0; i < c.size(); i++) {
         if (assignmentTrail.value(c[i]) == l_Undef) {
-            assignmentTrail.simpleUncheckEnqueue(~c[i]);
+            assignmentTrail.simpleAssign(~c[i]);
             c[j++] = c[i];
             confl = unitPropagator.simplePropagate();
             if (confl != CRef_Undef) break;

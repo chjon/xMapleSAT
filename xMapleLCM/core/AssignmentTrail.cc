@@ -53,62 +53,66 @@ double AssignmentTrail::progressEstimate() const {
 // STATE MODIFICATION
 
 void AssignmentTrail::assign(Lit p, CRef from) {
-    assert(value(p) == l_Undef);
-    Var x = var(p);
-    solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
-    assigns[x] = lbool(!sign(p));
-    vardata[x] = VarData{from, decisionLevel()};
-    trail.push_(p);
+    genericAssign<false>(p, from);
 }
 
-void AssignmentTrail::simpleUncheckEnqueue(Lit p, CRef from){
-    assert(value(p) == l_Undef);
-    Var x = var(p);
-    assigns[x] = lbool(!sign(p));
-    vardata[x].reason = from;
-    trail.push_(p);
+void AssignmentTrail::simpleAssign(Lit p, CRef from){
+    genericAssign<true>(p, from);
 }
 
-// Revert to the state at given level (keeping all assignment at 'level' but not beyond).
-//
-void AssignmentTrail::cancelUntil(int level) {
+void AssignmentTrail::cancelUntilLevel(int level) {
     // Do nothing if the trail is already set at the correct level
     if (decisionLevel() <= level) return;
 
-    // Clear the values of the variables
-    for (int c = trail.size()-1; c >= trail_lim[level]; c--){
-        Var x = var(trail[c]);
-        assigns[x] = l_Undef;
-        solver.branchingHeuristicManager.handleEventLitUnassigned(
-            trail[c],
-            solver.conflicts,
-            c > trail_lim.last()
-        );
-    }
+    // Backtrack
+    cancelUntil<true>(trail_lim[level]);
 
-    // Decrease the size of the trail
-    const int qhead = trail_lim[level];
-    trail.shrink(trail.size() - trail_lim[level]);
+    // Update current decision level
     trail_lim.shrink(trail_lim.size() - level);
-
-    // Add the assignments at 'level' to the queue
-    solver.propagationQueue.batchEnqueue(trail, qhead);
 }
 
 void AssignmentTrail::cancelUntilTrailSize(int trailSize) {
-    // Do nothing if the trail is already the correct size
-    if (trail.size() <= trailSize) return;
+    cancelUntil<false>(trailSize);
+}
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// HELPER FUNCTIONS
+
+template <bool simple>
+inline void AssignmentTrail::genericAssign(Lit p, CRef from) {
+    assert(value(p) == l_Undef);
+
+    // Notify event listeners
+    if (!simple) solver.branchingHeuristicManager.handleEventLitAssigned(p, solver.conflicts);
+
+    // Set variable value
+    Var x = var(p);
+    assigns[x] = lbool(!sign(p));
+    if (simple) vardata[x].reason = from;
+    else vardata[x] = VarData{from, decisionLevel()};
+    trail.push_(p);
+}
+
+template<bool notifyListeners>
+void AssignmentTrail::cancelUntil(int trailSize) {
     // Clear the values of the variables
-    for (int c = trail.size() - 1; c >= trailSize; c--) {
+    for (int c = trail.size() - 1; c >= trailSize; c--){
         Var x = var(trail[c]);
         assigns[x] = l_Undef;
+
+        // Notify event listeners
+        if (notifyListeners) {
+            solver.branchingHeuristicManager.handleEventLitUnassigned(
+                trail[c],
+                solver.conflicts,
+                c > trail_lim.last()
+            );
+        }
     }
 
     // Decrease the size of the trail
-    const int qhead = trailSize;
     trail.shrink(trail.size() - trailSize);
 
-    // Add the remaining assignments to the queue
-    solver.propagationQueue.batchEnqueue(trail, qhead);
+    // Add remaining assignments to the queue
+    solver.propagationQueue.batchEnqueue(trail, trailSize);
 }

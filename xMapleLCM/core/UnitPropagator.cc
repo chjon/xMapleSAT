@@ -148,7 +148,7 @@ CRef UnitPropagator::simplePropagate() {
             }
 
             if (assignmentTrail.value(imp) == l_Undef) {
-                assignmentTrail.simpleUncheckEnqueue(imp, wbin[k].cref);
+                assignmentTrail.simpleAssign(imp, wbin[k].cref);
             }
         }
 
@@ -198,7 +198,7 @@ CRef UnitPropagator::simplePropagate() {
                 propagationQueue.clear();
                 break;
             } else {
-                assignmentTrail.simpleUncheckEnqueue(first, cr);
+                assignmentTrail.simpleAssign(first, cr);
             }
 NextClause:;
         }
