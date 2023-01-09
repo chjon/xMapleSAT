@@ -104,14 +104,20 @@ CRef UnitPropagator::propagate() {
     Lit p; // 'p' is enqueued fact to propagate.
     while ((p = propagationQueue.getNext()) != lit_Undef) {
         num_props++;
-        confl = propagateSingle(p);
+
+        // Propagate binary clauses first.
+        confl = propagateSingleBinary(p);
         if (confl != CRef_Undef) {
-        #ifndef LOOSE_PROP_STAT
-            break;
-        #else
+        #ifdef LOOSE_PROP_STAT
             return confl;
+        #else
+            break;
         #endif
         }
+
+        // Propagate non-binary clauses second.
+        confl = propagateSingleNonBinary(p);
+        if (confl != CRef_Undef) break;
     }
 
     propagations += num_props;
@@ -278,13 +284,4 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     while (i < end) *j++ = *i++;
     ws.shrink(i - j);
     return confl;
-}
-
-inline CRef UnitPropagator::propagateSingle(Lit p) {
-    // Propagate binary clauses first.
-    CRef confl = propagateSingleBinary(p);
-    if (confl != CRef_Undef) return confl;
-
-    // Propagate non-binary clauses second.
-    return propagateSingleNonBinary(p);
 }

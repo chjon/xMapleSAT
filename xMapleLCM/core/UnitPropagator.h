@@ -235,14 +235,6 @@ namespace Minisat {
         CRef propagateSingleNonBinary(Lit p);
 
         /**
-         * @brief Perform all propagations for a single literal
-         * 
-         * @param p the literal to propagate
-         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
-         */
-        CRef propagateSingle(Lit p);
-
-        /**
          * @brief Relocate watcher CRefs to new ClauseAllocator
          * 
          * @param ws The watchers for which to relocate CRefs
