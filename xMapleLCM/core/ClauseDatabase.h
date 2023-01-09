@@ -34,6 +34,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "core/AssignmentTrail.h"
 #include "core/UnitPropagator.h"
+#include "mtl/Sort.h"
 
 namespace Minisat {
     // Forward declarations
@@ -72,6 +73,9 @@ namespace Minisat {
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////////
         // TEMPORARY VARIABLES
+
+        /// @brief The limit on the total number of clauses to delete during reduceDB()
+        int reduceDBLimit;
 
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -306,21 +310,33 @@ namespace Minisat {
         template <class CheckClausePredicate>
         void removeSatisfied(vec<CRef>& cs, CheckClausePredicate shouldCheckClause);
 
-        void reduceDB(void);
-        void reduceDB_Tier2(void);
-
-        /**
-         * @brief Perform preprocessing of clause database to prepare for
-         * clause deletion. This is a helper function for @code{checkReduceDB}.
-         * 
-         */
-        void preprocessReduceDB(void);
+        template <int db_mark>
+        void reduceDB(uint64_t conflicts);
 
         /**
          * @brief Reallocate clauses to defragment memory
          * 
          */
         void garbageCollect(void);
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // REDUCE DB HELPER FUNCTIONS
+
+        /**
+         * @brief Set up for reduceDB
+         * 
+         */
+        template<int db_mark> inline void preReduceDB ();
+
+        /**
+         * @brief Clean up after removing clauses in reduceDB
+         * 
+         * @tparam db_mark 
+         */
+        template<int db_mark> inline void postReduceDB();
+
+        template<int db_mark>
+        bool demoteClause(Clause& c, int i, uint64_t conflicts);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,14 +407,29 @@ namespace Minisat {
         return cr;
     }
 
+    static inline bool always(const Clause& c) { return true; }
+
+    template <int valid_mark>
+    static inline bool validMark(const Clause& c) { return c.mark() == valid_mark; }
+
+    inline void ClauseDatabase::removeSatisfied(void) {
+        removeSatisfied(learnts_core , always);
+        removeSatisfied(learnts_tier2, validMark<TIER2>);
+        removeSatisfied(learnts_local, validMark<LOCAL>);
+
+        if (remove_satisfied) // Can be turned off.
+            removeSatisfied(clauses, always);
+        checkGarbage();
+    }
+
     inline void ClauseDatabase::checkReduceDB(uint64_t conflicts) {
         if (conflicts >= next_T2_reduce) {
             next_T2_reduce = conflicts + 10000;
-            reduceDB_Tier2();
+            reduceDB<TIER2>(conflicts);
         }
         if (conflicts >= next_L_reduce) {
             next_L_reduce = conflicts + 15000;
-            reduceDB();
+            reduceDB<LOCAL>(conflicts);
         }
     }
 
@@ -501,6 +532,101 @@ namespace Minisat {
         for (int i = 0; i < learnts_local.size(); i++)
             ca[learnts_local[i]].activity() /= RESCALE_THRESHOLD;
         cla_inc /= RESCALE_THRESHOLD;
+    }
+
+    /////////////////////
+    // HELPER FUNCTIONS
+
+    template <class CheckClausePredicate>
+    inline void ClauseDatabase::removeSatisfied(vec<CRef>& cs, CheckClausePredicate shouldCheckClause) {
+        int i, j;
+        for (i = j = 0; i < cs.size(); i++) {
+            Clause& c = ca[cs[i]];
+            if (!shouldCheckClause(c)) continue;
+
+            if (assignmentTrail.satisfied(c)) {
+                removeClause(cs[i]);
+            } else {
+                cs[j++] = cs[i];
+            }
+        }
+        cs.shrink(i - j);
+    }
+
+    ///////////////////////////////
+    // REDUCE DB HELPER FUNCTIONS
+
+    template<int db_mark>
+    inline void ClauseDatabase::reduceDB(uint64_t conflicts) {
+        preReduceDB<db_mark>();
+
+        // Iterate through clause database
+        vec<CRef>& db = getDB<db_mark>();
+        int i, j;
+        for (i = j = 0; i < db.size(); i++){
+            Clause& c = ca[db[i]];
+
+            // Skip clause if it does not match the db mark
+            if (c.mark() != db_mark) continue;
+
+            // Try to demote clause to a lower-tier database
+            if (demoteClause<db_mark>(c, i, conflicts)) continue;
+
+            // Keep clause
+            db[j++] = db[i];
+        }
+        db.shrink(i - j);
+
+        postReduceDB<db_mark>();
+    }
+
+    struct reduceDB_lt { 
+        ClauseAllocator& ca;
+        reduceDB_lt(ClauseAllocator& ca_) : ca(ca_) {}
+        bool operator() (CRef x, CRef y) const { return ca[x].activity() < ca[y].activity(); }
+    };
+
+    template<> inline void ClauseDatabase::preReduceDB<LOCAL>() {
+        sort(learnts_local, reduceDB_lt(ca));
+        reduceDBLimit = learnts_local.size() / 2;
+    }
+    template<> inline void ClauseDatabase::postReduceDB<LOCAL>() {
+        checkGarbage();
+    }
+
+    template<> inline void ClauseDatabase::preReduceDB <TIER2>() {}
+    template<> inline void ClauseDatabase::postReduceDB<TIER2>() {}
+
+    template<>
+    inline bool ClauseDatabase::demoteClause<LOCAL>(Clause& c, int i, uint64_t conflicts) {
+        if (c.removable() && !assignmentTrail.locked(c) && i < reduceDBLimit) {
+            // Clause cannot be demoted further: remove clause!
+            removeClause(learnts_local[i]);
+            return true;
+        }
+
+        // Look for another clause to delete if this clause cannot be deleted
+        if (!c.removable()) reduceDBLimit++;
+
+        // Mark clause as deletable next time
+        c.removable(true);
+
+        return false;
+    }
+
+    template<>
+    inline bool ClauseDatabase::demoteClause<TIER2>(Clause& c, int i, uint64_t conflicts) {
+        if (!assignmentTrail.locked(c) && c.touched() + 30000 < conflicts) {
+            // Demote clause to local clause database
+            learnts_local.push(learnts_tier2[i]);
+            c.mark(LOCAL);
+            // c.removable(true);
+            c.activity() = 0;
+            claBumpActivity(c);
+            return true;
+        }
+
+        return false;
     }
 }
 

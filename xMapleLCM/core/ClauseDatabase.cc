@@ -22,7 +22,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "core/ClauseDatabase.h"
 #include "core/Solver.h"
-#include "mtl/Sort.h"
 
 using namespace Minisat;
 
@@ -87,91 +86,6 @@ void ClauseDatabase::detachClause(CRef cr, bool strict) {
 
     if (c.learnt()) learnts_literals -= c.size();
     else            clauses_literals -= c.size();
-}
-
-struct reduceDB_lt { 
-    ClauseAllocator& ca;
-    reduceDB_lt(ClauseAllocator& ca_) : ca(ca_) {}
-    bool operator() (CRef x, CRef y) const { return ca[x].activity() < ca[y].activity(); }
-};
-
-void ClauseDatabase::reduceDB() {
-    sort(learnts_local, reduceDB_lt(ca));
-    int limit = learnts_local.size() / 2;
-
-    // Iterate through local clauses
-    int i, j;
-    for (i = j = 0; i < learnts_local.size(); i++){
-        Clause& c = ca[learnts_local[i]];
-        if (c.mark() != LOCAL) continue;
-
-        if (c.removable() && !assignmentTrail.locked(c) && i < limit) {
-            // Clause cannot be demoted further: remove clause!
-            removeClause(learnts_local[i]);
-        } else {
-            // Mark clause as deletable next time
-            if (!c.removable()) limit++;
-            c.removable(true);
-
-            // Keep clause
-            learnts_local[j++] = learnts_local[i];
-        }
-    }
-    learnts_local.shrink(i - j);
-
-    checkGarbage();
-}
-
-void ClauseDatabase::reduceDB_Tier2() {
-    // Iterate through tier2 clauses
-    int i, j;
-    for (i = j = 0; i < learnts_tier2.size(); i++) {
-        Clause& c = ca[learnts_tier2[i]];
-        if (c.mark() != TIER2) continue;
-
-        if (!assignmentTrail.locked(c) && c.touched() + 30000 < solver.conflicts) {
-            // Demote clause to local clause database
-            learnts_local.push(learnts_tier2[i]);
-            c.mark(LOCAL);
-            //c.removable(true);
-            c.activity() = 0;
-            claBumpActivity(c);
-        } else {
-            // Keep clause
-            learnts_tier2[j++] = learnts_tier2[i];
-        }
-    }
-    learnts_tier2.shrink(i - j);
-}
-
-template <class CheckClausePredicate>
-void ClauseDatabase::removeSatisfied(vec<CRef>& cs, CheckClausePredicate shouldCheckClause) {
-    int i, j;
-    for (i = j = 0; i < cs.size(); i++) {
-        Clause& c = ca[cs[i]];
-        if (!shouldCheckClause(c)) continue;
-
-        if (assignmentTrail.satisfied(c))
-            removeClause(cs[i]);
-        else
-            cs[j++] = cs[i];
-    }
-    cs.shrink(i - j);
-}
-
-static inline bool always(const Clause& c) { return true; }
-
-template <int valid_mark>
-static inline bool validMark(const Clause& c) { return c.mark() == valid_mark; }
-
-void ClauseDatabase::removeSatisfied(void) {
-    removeSatisfied(learnts_core , always);
-    removeSatisfied(learnts_tier2, validMark<TIER2>);
-    removeSatisfied(learnts_local, validMark<LOCAL>);
-
-    if (remove_satisfied) // Can be turned off.
-        removeSatisfied(clauses, always);
-    checkGarbage();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
