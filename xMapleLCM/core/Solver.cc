@@ -281,58 +281,18 @@ void Solver::simplifyLearnt(Clause& c) {
     assignmentTrail.cancelUntilTrailSize(trailRecord);
 }
 
-inline void Solver::removeFalseLits(Clause& c) {
-    int i, j;
-    for (i = j = 0; i < c.size(); i++){
-        if (assignmentTrail.value(c[i]) != l_False){
-            c[j++] = c[i];
-        }
-    }
-    c.shrink(i - j);
-}
-
-inline bool Solver::detachAndSimplify(CRef cr) {
-    Clause& c = ca[cr];
-
-    // Remove satisfied clauses and check for false literals
-    bool false_lit = false;
-    for (int i = 0; i < c.size(); i++){
-        if (assignmentTrail.value(c[i]) == l_True){
-            clauseDatabase.removeClause(cr);
-            return true;
-        } else if (assignmentTrail.value(c[i]) == l_False){
-            false_lit = true;
-        }
-    }
-
-    // Detach clause so it can be modified
-    clauseDatabase.detachClause(cr, true);
-    
-    // Remove false literals
-    int saved_size = c.size();
-    if (false_lit) removeFalseLits(c);
-    assert(c.size() > 1);
-
-    // Further simplify the learnt clause
-    simplifyLearnt(c);
-    assert(c.size() > 0);
-
-    // Log clause simplification
-    if (saved_size != c.size()) proofLogger.addClause(c);
-
-    return false;
-}
-
-bool Solver::simplifyLearntDB(vec<CRef>& db, int db_mark) {
+template<int db_mark>
+bool Solver::simplifyLearntDB() {
     int ci, cj;
     unsigned int nblevels;
 
+    vec<CRef>& db = clauseDatabase.getDB<db_mark>();
     for (ci = 0, cj = 0; ci < db.size(); ci++) {
         CRef cr = db[ci];
         Clause& c = ca[cr];
 
         // Drop clause if already deleted
-        if (removed(cr)) continue;
+        if (ca[cr].mark() == 1) continue;
 
         // Keep clause if already simplified
         if (c.simplified()) {
@@ -380,9 +340,9 @@ bool Solver::simplifyAll() {
     if (!ok || unitPropagator.propagate() != CRef_Undef)
         return ok = false;
 
-    if (!simplifyLearntDB(clauseDatabase.getDB<CORE>(), CORE)) return ok = false;
-    if (!simplifyLearntDB(clauseDatabase.getDB<TIER2>(), TIER2)) return ok = false;
-    // if (!simplifyLearntDB(clauseDatabase.getDB<LOCAL>(), LOCAL)) return ok = false;
+    if (!simplifyLearntDB<CORE>()) return ok = false;
+    if (!simplifyLearntDB<TIER2>()) return ok = false;
+    // if (!simplifyLearntDB<LOCAL>()) return ok = false;
 
     clauseDatabase.checkGarbage();
 

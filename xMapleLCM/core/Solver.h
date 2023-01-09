@@ -301,8 +301,6 @@ public:
 
     bool simplifyAll();
 
-    bool simplifyLearntDB(vec<CRef>& db, int db_mark);
-
     /**
      * @brief Search for a model that respects a given set of assumptions.
      * 
@@ -408,12 +406,17 @@ protected:
      */
     bool withinBudget(void) const;
 
-    bool removed(CRef cr);
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // HELPER FUNCTIONS FOR simplifyAll
+
+    template<int db_mark>
+    bool simplifyLearntDB();
+
+    void removeFalseLits(Clause& c);
+
+    bool detachAndSimplify(CRef cr);
 
     void simplifyLearnt(Clause& c);
-
-    inline void removeFalseLits(Clause& c);
-    bool detachAndSimplify(CRef cr);
 
 private:
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -446,10 +449,6 @@ inline lbool Solver::modelValue(Lit p) const {
 
 inline bool Solver::interrupted(void) const {
     return asynch_interrupt;
-}
-
-inline bool Solver::removed(CRef cr) {
-    return ca[cr].mark() == 1;
 }
 
 ///////////////////////////
@@ -528,11 +527,49 @@ inline bool Solver::withinBudget() const {
         unitPropagator.withinBudget();
 }
 
-//=================================================================================================
-// Debug etc:
+/////////////////////////////////////
+// HELPER FUNCTIONS FOR simplifyAll
 
+inline void Solver::removeFalseLits(Clause& c) {
+    int i, j;
+    for (i = j = 0; i < c.size(); i++) {
+        if (assignmentTrail.value(c[i]) != l_False)
+            c[j++] = c[i];
+    }
+    c.shrink(i - j);
+}
 
-//=================================================================================================
+inline bool Solver::detachAndSimplify(CRef cr) {
+    Clause& c = ca[cr];
+
+    // Remove satisfied clauses and check for false literals
+    bool false_lit = false;
+    for (int i = 0; i < c.size(); i++){
+        if (assignmentTrail.value(c[i]) == l_True){
+            clauseDatabase.removeClause(cr);
+            return true;
+        } else if (assignmentTrail.value(c[i]) == l_False){
+            false_lit = true;
+        }
+    }
+
+    // Detach clause so it can be modified
+    clauseDatabase.detachClause(cr, true);
+    
+    // Remove false literals
+    int saved_size = c.size();
+    if (false_lit) removeFalseLits(c);
+    assert(c.size() > 1);
+
+    // Further simplify the learnt clause
+    simplifyLearnt(c);
+    assert(c.size() > 0);
+
+    // Log clause simplification
+    if (saved_size != c.size()) proofLogger.addClause(c);
+
+    return false;
+}
 }
 
 #endif
