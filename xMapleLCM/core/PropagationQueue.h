@@ -139,6 +139,15 @@ namespace Minisat {
         bool enqueue(Lit p, CRef from = CRef_Undef);
 
         /**
+         * @brief Add a literal to the propagation queue without notifying event listeners
+         * 
+         * @param p the literal to add to the queue
+         * @param from the reason for the literal
+         * @return false if the negated version of the literal is already in the queue, true otherwise
+         */
+        bool simpleEnqueue(Lit p, CRef from = CRef_Undef);
+
+        /**
          * @brief Add a set of literals to the propagation queue
          * 
          * @param trail the current assignment trail
@@ -151,8 +160,10 @@ namespace Minisat {
         /**
          * @brief Get the next literal for propagation
          * 
+         * @tparam simple: true to skip updating stats and notifying event listeners
          * @return the literal to propagate
          */
+        template <bool simple>
         Lit getNext();
 
         /**
@@ -160,6 +171,21 @@ namespace Minisat {
          * 
          */
         void clear();
+    
+    private:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // HELPER FUNCTIONS
+
+        /**
+         * @brief Add a literal to the propagation queue
+         * 
+         * @tparam simple: true to skip updating stats and notifying event listeners
+         * @param p the literal to add to the queue
+         * @param from the reason for the literal
+         * @return false if the negated version of the literal is already in the queue, true otherwise
+         */
+        template <bool simple>
+        bool genericEnqueue(Lit p, CRef from = CRef_Undef);
     };
 
     // Explicitly instantiate required templates
@@ -179,30 +205,11 @@ namespace Minisat {
     }
 
     inline bool PropagationQueue::enqueue(Lit p, CRef from) {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        assignmentTrail.assign(p, from);
+        return genericEnqueue<false>(p, from);
+    }
 
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        if ((soft_assigns[var(p)] ^ sign(p)) == l_False) {
-            // Ensure conflicting literal is on the trail
-            if (assignmentTrail.value(p) == l_Undef)
-                assignmentTrail.assign(~p, reasons[var(p)]);
-
-            return false;
-        } else if ((soft_assigns[var(p)] ^ sign(p)) == l_Undef) {
-            // Note: actual variable assignment is delayed until the literal is popped by @code{getNext()}
-            order_heap.insert(p.x);
-            soft_assigns[var(p)] = lbool(!sign(p));
-            reasons[var(p)] = from;
-        }
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        order_heap.insert(p.x);
-        assignmentTrail.assign(p, from);
-
-    #endif
-
-        return true;
+    inline bool PropagationQueue::simpleEnqueue(Lit p, CRef from) {
+        return genericEnqueue<true>(p, from);
     }
 
     inline void PropagationQueue::batchEnqueue(vec<Lit>& trail, int levelHead) {
@@ -223,6 +230,7 @@ namespace Minisat {
     #endif
     }
 
+    template <bool simple>
     inline Lit PropagationQueue::getNext() {
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         return qhead == queue.size() ? lit_Undef : queue[qhead++];
@@ -236,7 +244,8 @@ namespace Minisat {
             Lit p = Lit{order_heap.removeMin()};
 
             // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
-            assignmentTrail.assign(p, reasons[var(p)]);
+            if (simple) assignmentTrail.simpleAssign(p, reasons[var(p)]);
+            else        assignmentTrail.assign(p, reasons[var(p)]);
             soft_assigns[var(p)] = l_Undef;
             return p;
         }
@@ -262,6 +271,41 @@ namespace Minisat {
         order_heap.clear();
 
     #endif
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    // HELPER FUNCTIONS
+
+    template<bool simple>
+    inline bool PropagationQueue::genericEnqueue(Lit p, CRef from) {
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+        if (simple) assignmentTrail.simpleAssign(p, from);
+        else        assignmentTrail.assign(p, from);
+
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+        if ((soft_assigns[var(p)] ^ sign(p)) == l_False) {
+            // Ensure conflicting literal is on the trail
+            if (assignmentTrail.value(p) == l_Undef) {
+                if (simple) assignmentTrail.simpleAssign(~p, reasons[var(p)]);
+                else        assignmentTrail.assign(~p, reasons[var(p)]);
+            }
+
+            return false;
+        } else if ((soft_assigns[var(p)] ^ sign(p)) == l_Undef) {
+            // Note: actual variable assignment is delayed until the literal is popped by @code{getNext()}
+            order_heap.insert(p.x);
+            soft_assigns[var(p)] = lbool(!sign(p));
+            reasons[var(p)] = from;
+        }
+
+    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+        order_heap.insert(p.x);
+        if (simple) assignmentTrail.simpleAssign(p, from);
+        else        assignmentTrail.assign(p, from);
+
+    #endif
+
+        return true;
     }
 }
 

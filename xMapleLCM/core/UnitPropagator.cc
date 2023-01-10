@@ -95,138 +95,33 @@ void UnitPropagator::relocAll(ClauseAllocator& to) {
 }
 
 CRef UnitPropagator::propagate() {
-    // Batch update propagations stat to avoid cost of data non-locality
-    int num_props = 0;
-
-    CRef confl = CRef_Undef;
-    watches.cleanAll();
-    
-    Lit p; // 'p' is enqueued fact to propagate.
-    while ((p = propagationQueue.getNext()) != lit_Undef) {
-        num_props++;
-
-        // Propagate binary clauses first.
-        confl = propagateSingleBinary(p);
-        if (confl != CRef_Undef) {
-        #ifdef LOOSE_PROP_STAT
-            return confl;
-        #else
-            break;
-        #endif
-        }
-
-        // Propagate non-binary clauses second.
-        confl = propagateSingleNonBinary(p);
-        if (confl != CRef_Undef) break;
-    }
-
-    propagations += num_props;
-    solver.simpDB_props -= num_props;
-
-    return confl;
+    return genericPropagate<false>();
 }
 
 CRef UnitPropagator::simplePropagate() {
-    CRef    confl = CRef_Undef;
-    int     num_props = 0;
-    watches.cleanAll();
-    watches_bin.cleanAll();
-
-    Lit p; // 'p' is enqueued fact to propagate.
-    while ((p = propagationQueue.getNext()) != lit_Undef) {
-        vec<Watcher>&  ws = watches[p];
-        Watcher        *i, *j, *end;
-        num_props++;
-
-        // First, Propagate binary clauses
-        vec<Watcher>&  wbin = watches_bin[p];
-
-        for (int k = 0; k < wbin.size(); k++) {
-            Lit imp = wbin[k].blocker;
-            if (assignmentTrail.value(imp) == l_False) {
-                return wbin[k].cref;
-            }
-
-            if (assignmentTrail.value(imp) == l_Undef) {
-                assignmentTrail.simpleAssign(imp, wbin[k].cref);
-            }
-        }
-
-        for (i = j = (Watcher*)ws, end = i + ws.size(); i != end;) {
-            // Try to avoid inspecting the clause:
-            Lit blocker = i->blocker;
-            if (assignmentTrail.value(blocker) == l_True) {
-                *j++ = *i++; continue;
-            }
-
-            // Make sure the false literal is data[1]:
-            CRef     cr = i->cref;
-            Clause&  c = ca[cr];
-            Lit      false_lit = ~p;
-            if (c[0] == false_lit)
-                c[0] = c[1], c[1] = false_lit;
-            assert(c[1] == false_lit);
-            //  i++;
-
-            // If 0th watch is true, then clause is already satisfied.
-            // However, 0th watch is not the blocker, make it blocker using a new watcher w
-            // why not simply do i->blocker=first in this case?
-            Lit first = c[0];
-            //  Watcher w     = Watcher(cr, first);
-            if (first != blocker && assignmentTrail.value(first) == l_True) {
-                i->blocker = first;
-                *j++ = *i++; continue;
-            } else {  // ----------------- DEFAULT  MODE (NOT INCREMENTAL)
-                for (int k = 2; k < c.size(); k++) {
-                    if (assignmentTrail.value(c[k]) != l_False) {
-                        // watcher i is abandonned using i++, because cr watches now ~c[k] instead of p
-                        // the blocker is first in the watcher. However,
-                        // the blocker in the corresponding watcher in ~first is not c[1]
-                        Watcher w = Watcher(cr, first); i++;
-                        c[1] = c[k]; c[k] = false_lit;
-                        watches[~c[1]].push(w);
-                        goto NextClause;
-                    }
-                }
-            }
-
-            // Did not find watch -- clause is unit under assignment:
-            i->blocker = first;
-            *j++ = *i++;
-            if (assignmentTrail.value(first) == l_False) {
-                confl = cr;
-                propagationQueue.clear();
-                break;
-            } else {
-                assignmentTrail.simpleAssign(first, cr);
-            }
-NextClause:;
-        }
-        // Copy the remaining watches:
-        while (i < end) *j++ = *i++;
-        ws.shrink(i - j);
-    }
-
-    return confl;
+    return genericPropagate<true>();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
 
+template <bool simple>
 inline CRef UnitPropagator::propagateSingleBinary(Lit p) {
     vec<Watcher>& ws_bin = watches_bin[p];
-    for (int k = 0; k < ws_bin.size(); k++){
+    for (int k = 0; k < ws_bin.size(); k++) {
         Lit the_other = ws_bin[k].blocker;
-        if (assignmentTrail.value(the_other) == l_False){
+        if (assignmentTrail.value(the_other) == l_False) {
             return ws_bin[k].cref;
         } else if (assignmentTrail.value(the_other) == l_Undef) {
-            propagationQueue.enqueue(the_other, ws_bin[k].cref);
+            if (simple) propagationQueue.simpleEnqueue(the_other, ws_bin[k].cref);
+            else        propagationQueue.enqueue(the_other, ws_bin[k].cref);
         }
     }
 
     return CRef_Undef;
 }
 
+template <bool simple>
 inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     // Iterate through the watches for p, using pointers instead of array indices for speed
     CRef confl = CRef_Undef;
@@ -241,35 +136,37 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
         }
 
         // Make sure the false literal is data[1]:
-        CRef     cr        = i->cref;
-        Clause&  c         = ca[cr];
-        Lit      false_lit = ~p;
-        if (c[0] == false_lit)
-            c[0] = c[1], c[1] = false_lit;
+        CRef cr = i->cref;
+        Clause& c = ca[cr];
+        Lit false_lit = ~p;
+        if (c[0] == false_lit) std::swap(c[0], c[1]);
         assert(c[1] == false_lit);
-        i++;
 
         // If 0th watch is true, then clause is already satisfied.
-        Lit     first = c[0];
-        Watcher w = Watcher(cr, first);
-        if (first != blocker && assignmentTrail.value(first) == l_True){
-            *j++ = w; continue;
+        // If 0th watch is not already the blocker, make it the blocker
+        Lit first = c[0];
+        if (first != blocker && assignmentTrail.value(first) == l_True) {
+            i->blocker = first;
+            *j++ = *i++; continue;
         }
-
-        // Look for new watch:
+        
+        // Look for new watch
         for (int k = 2; k < c.size(); k++) {
-            if (assignmentTrail.value(c[k]) != l_False) {
-                c[1] = c[k]; c[k] = false_lit;
-                watches[~c[1]].push(w);
-                goto NextClause;
-            }
+            if (assignmentTrail.value(c[k]) == l_False) continue;
+
+            std::swap(c[1], c[k]);
+            watches[~c[1]].push(Watcher(cr, first));
+            i++;
+            goto NextClause;
         }
 
         // Did not find watch -- clause is unit under assignment:
-        *j++ = w;
+        i->blocker = first;
+        *j++ = *i++;
+
         if (
             assignmentTrail.value(first) == l_False ||
-            !propagationQueue.enqueue(first, cr)
+            !(simple ? propagationQueue.simpleEnqueue(first, cr) : propagationQueue.enqueue(first, cr))
         ) {
             // All literals falsified!
             confl = cr;
@@ -283,5 +180,44 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     // Copy the remaining watches:
     while (i < end) *j++ = *i++;
     ws.shrink(i - j);
+    return confl;
+}
+
+template <bool simple>
+inline CRef UnitPropagator::genericPropagate() {
+    // Batch update propagations stat to avoid cost of data non-locality
+    CRef confl = CRef_Undef;
+    int num_props = 0;
+    watches.cleanAll();
+    watches_bin.cleanAll();
+
+    Lit p; // 'p' is enqueued fact to propagate.
+    while ((p = propagationQueue.getNext<simple>()) != lit_Undef) {
+        num_props++;
+
+        // Propagate binary clauses first.
+        confl = propagateSingleBinary<simple>(p);
+        if (confl != CRef_Undef) {
+            if (simple) {
+                break;
+            } else {
+            #ifdef LOOSE_PROP_STAT
+                return confl;
+            #else
+                break;
+            #endif
+            }
+        }
+
+        // Propagate non-binary clauses second.
+        confl = propagateSingleNonBinary<simple>(p);
+        if (confl != CRef_Undef) break;
+    }
+
+    if (!simple) {
+        propagations += num_props;
+        solver.simpDB_props -= num_props;
+    }
+
     return confl;
 }

@@ -191,6 +191,11 @@ namespace Minisat {
          */
         CRef propagate();
 
+        /**
+         * @brief Propagate all enqueued facts without updating stats or notifying event listeners
+         * 
+         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef. 
+         */
         CRef simplePropagate();
 
     private:
@@ -224,15 +229,27 @@ namespace Minisat {
          * @param p the literal to propagate
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
          */
+        template <bool simple>
         CRef propagateSingleBinary(Lit p);
 
         /**
-         * @brief Perform all non-binary-clause propagations for a single literal
+         * @brief Perform all non-binary-clause propagations for a single literal without updating
+         * stats or notifying event listeners.
          * 
          * @param p the literal to propagate
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
          */
+        template <bool simple>
         CRef propagateSingleNonBinary(Lit p);
+
+        /**
+         * @brief Propagate all enqueued facts.
+         * 
+         * @tparam simple: true to skip updating stats and notifying event listeners
+         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef. 
+         */
+        template <bool simple>
+        CRef genericPropagate();
 
         /**
          * @brief Relocate watcher CRefs to new ClauseAllocator

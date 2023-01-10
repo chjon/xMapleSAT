@@ -245,7 +245,7 @@ void Solver::simplifyLearnt(Clause& c) {
 
     for (i = 0, j = 0; i < c.size(); i++) {
         if (assignmentTrail.value(c[i]) == l_Undef) {
-            assignmentTrail.simpleAssign(~c[i]);
+            propagationQueue.simpleEnqueue(~c[i]);
             c[j++] = c[i];
             confl = unitPropagator.simplePropagate();
             if (confl != CRef_Undef) break;
