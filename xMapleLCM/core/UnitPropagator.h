@@ -258,6 +258,14 @@ namespace Minisat {
          * @param to The ClauseAllocator into which to reloc 
          */
         void relocWatchers(vec<Watcher>& ws, ClauseAllocator& to);
+
+        /**
+         * @brief Get the index of a new watch for the clause
+         * 
+         * @param c the clause for which to find a new watch
+         * @return the index of the new watch for the clause, or 0 if none exists
+         */
+        int getNewWatchIndex(const Clause& c);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

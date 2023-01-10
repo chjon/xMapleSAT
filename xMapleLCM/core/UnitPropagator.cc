@@ -106,6 +106,12 @@ CRef UnitPropagator::simplePropagate() {
 // HELPER FUNCTIONS
 
 template <bool simple>
+static inline bool enqueue(PropagationQueue& propagationQueue, Lit p, CRef from) {
+    if (simple) return propagationQueue.simpleEnqueue(p, from);
+    else        return propagationQueue.enqueue      (p, from);
+}
+
+template <bool simple>
 inline CRef UnitPropagator::propagateSingleBinary(Lit p) {
     vec<Watcher>& ws_bin = watches_bin[p];
     for (int k = 0; k < ws_bin.size(); k++) {
@@ -113,12 +119,18 @@ inline CRef UnitPropagator::propagateSingleBinary(Lit p) {
         if (assignmentTrail.value(the_other) == l_False) {
             return ws_bin[k].cref;
         } else if (assignmentTrail.value(the_other) == l_Undef) {
-            if (simple) propagationQueue.simpleEnqueue(the_other, ws_bin[k].cref);
-            else        propagationQueue.enqueue(the_other, ws_bin[k].cref);
+            enqueue<simple>(propagationQueue, the_other, ws_bin[k].cref);
         }
     }
 
     return CRef_Undef;
+}
+
+inline int UnitPropagator::getNewWatchIndex(const Clause& c) {
+    for (int k = 2; k < c.size(); k++)
+        if (assignmentTrail.value(c[k]) != l_False)
+            return k;
+    return 0;
 }
 
 template <bool simple>
@@ -132,32 +144,32 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
         // Try to avoid inspecting the clause:
         Lit blocker = i->blocker;
         if (assignmentTrail.value(blocker) == l_True) {
-            *j++ = *i++; continue;
+            *j++ = *i++;
+            continue;
         }
 
         // Make sure the false literal is data[1]:
         CRef cr = i->cref;
         Clause& c = ca[cr];
-        Lit false_lit = ~p;
-        if (c[0] == false_lit) std::swap(c[0], c[1]);
-        assert(c[1] == false_lit);
+        if (c[0] == ~p) std::swap(c[0], c[1]);
+        assert(c[1] == ~p);
 
         // If 0th watch is true, then clause is already satisfied.
         // If 0th watch is not already the blocker, make it the blocker
         Lit first = c[0];
         if (first != blocker && assignmentTrail.value(first) == l_True) {
             i->blocker = first;
-            *j++ = *i++; continue;
+            *j++ = *i++;
+            continue;
         }
         
         // Look for new watch
-        for (int k = 2; k < c.size(); k++) {
-            if (assignmentTrail.value(c[k]) == l_False) continue;
-
-            std::swap(c[1], c[k]);
+        const int newWatchIndex = getNewWatchIndex(c);
+        if (newWatchIndex) {
+            std::swap(c[1], c[newWatchIndex]);
             watches[~c[1]].push(Watcher(cr, first));
             i++;
-            goto NextClause;
+            continue;
         }
 
         // Did not find watch -- clause is unit under assignment:
@@ -166,15 +178,13 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
 
         if (
             assignmentTrail.value(first) == l_False ||
-            !(simple ? propagationQueue.simpleEnqueue(first, cr) : propagationQueue.enqueue(first, cr))
+            !enqueue<simple>(propagationQueue, first, cr)
         ) {
             // All literals falsified!
             confl = cr;
             propagationQueue.clear();
             break;
         }
-
-    NextClause:;
     }
 
     // Copy the remaining watches:
