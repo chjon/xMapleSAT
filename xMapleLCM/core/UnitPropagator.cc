@@ -79,6 +79,10 @@ void UnitPropagator::enforceWatcherInvariant(CRef cr, int i_undef, int i_max) {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // STATE MODIFICATION
 
+static inline void relocWatchers(vec<Watcher>& ws, ClauseAllocator& from, ClauseAllocator& to) {
+    for (int i = 0; i < ws.size(); i++) from.reloc(ws[i].cref, to);
+}
+
 void UnitPropagator::relocAll(ClauseAllocator& to) {
     // Clean watchers
     watches_bin.cleanAll();
@@ -87,10 +91,10 @@ void UnitPropagator::relocAll(ClauseAllocator& to) {
     // Reloc clauses in watchers
     for (int v = 0; v < assignmentTrail.nVars(); v++) {
         Lit p = mkLit(v);
-        relocWatchers(watches_bin[ p], to);
-        relocWatchers(watches_bin[~p], to);
-        relocWatchers(watches    [ p], to);
-        relocWatchers(watches    [~p], to);
+        relocWatchers(watches_bin[ p], ca, to);
+        relocWatchers(watches_bin[~p], ca, to);
+        relocWatchers(watches    [ p], ca, to);
+        relocWatchers(watches    [~p], ca, to);
     }
 }
 
@@ -103,7 +107,7 @@ CRef UnitPropagator::simplePropagate() {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS FOR propagate()
 
 template <bool simple>
 static inline bool enqueue(PropagationQueue& propagationQueue, Lit p, CRef from) {
@@ -112,25 +116,37 @@ static inline bool enqueue(PropagationQueue& propagationQueue, Lit p, CRef from)
 }
 
 template <bool simple>
-inline CRef UnitPropagator::propagateSingleBinary(Lit p) {
-    vec<Watcher>& ws_bin = watches_bin[p];
+static inline CRef propagateSingleBinary(
+    PropagationQueue& pq,
+    vec<Watcher>& ws_bin,
+    const AssignmentTrail& at
+) {
     for (int k = 0; k < ws_bin.size(); k++) {
         Lit the_other = ws_bin[k].blocker;
-        if (assignmentTrail.value(the_other) == l_False) {
+        if (at.value(the_other) == l_False) {
             return ws_bin[k].cref;
-        } else if (assignmentTrail.value(the_other) == l_Undef) {
-            enqueue<simple>(propagationQueue, the_other, ws_bin[k].cref);
+        } else if (at.value(the_other) == l_Undef) {
+            enqueue<simple>(pq, the_other, ws_bin[k].cref);
         }
     }
 
     return CRef_Undef;
 }
 
-inline int UnitPropagator::getNewWatchIndex(const Clause& c) {
-    for (int k = 2; k < c.size(); k++)
-        if (assignmentTrail.value(c[k]) != l_False)
-            return k;
-    return 0;
+static inline bool findNewWatch(
+    OccLists<Lit, vec<Watcher>, WatcherDeleted>& watches,
+    const AssignmentTrail& at,
+    Clause& c,
+    CRef cr
+) {
+    for (int k = 2; k < c.size(); k++) {
+        if (at.value(c[k]) != l_False) {
+            std::swap(c[1], c[k]);
+            watches[~c[1]].push(Watcher(cr, c[0]));
+            return true;
+        }
+    }
+    return false;
 }
 
 template <bool simple>
@@ -164,10 +180,7 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
         }
         
         // Look for new watch
-        const int newWatchIndex = getNewWatchIndex(c);
-        if (newWatchIndex) {
-            std::swap(c[1], c[newWatchIndex]);
-            watches[~c[1]].push(Watcher(cr, first));
+        if (findNewWatch(watches, assignmentTrail, c, cr)) {
             i++;
             continue;
         }
@@ -206,7 +219,7 @@ inline CRef UnitPropagator::genericPropagate() {
         num_props++;
 
         // Propagate binary clauses first.
-        confl = propagateSingleBinary<simple>(p);
+        confl = propagateSingleBinary<simple>(propagationQueue, watches_bin[p], assignmentTrail);
         if (confl != CRef_Undef) {
             if (simple) {
                 break;

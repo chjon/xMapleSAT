@@ -224,15 +224,6 @@ namespace Minisat {
         void detachClause(const Clause& c, CRef cr, bool strict = false);
 
         /**
-         * @brief Perform all binary-clause propagations for a single literal
-         * 
-         * @param p the literal to propagate
-         * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
-         */
-        template <bool simple>
-        CRef propagateSingleBinary(Lit p);
-
-        /**
          * @brief Perform all non-binary-clause propagations for a single literal without updating
          * stats or notifying event listeners.
          * 
@@ -250,22 +241,6 @@ namespace Minisat {
          */
         template <bool simple>
         CRef genericPropagate();
-
-        /**
-         * @brief Relocate watcher CRefs to new ClauseAllocator
-         * 
-         * @param ws The watchers for which to relocate CRefs
-         * @param to The ClauseAllocator into which to reloc 
-         */
-        void relocWatchers(vec<Watcher>& ws, ClauseAllocator& to);
-
-        /**
-         * @brief Get the index of a new watch for the clause
-         * 
-         * @param c the clause for which to find a new watch
-         * @return the index of the new watch for the clause, or 0 if none exists
-         */
-        int getNewWatchIndex(const Clause& c);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -310,24 +285,15 @@ namespace Minisat {
     }
 
     inline void UnitPropagator::attachClause(CRef cr) {
-        attachClause(ca[cr], cr);
-    }
-
-    inline void UnitPropagator::detachClause(CRef cr, bool strict) {
-        detachClause(ca[cr], cr, strict);
-    }
-
-    /////////////////////
-    // HELPER FUNCTIONS
-
-    inline void UnitPropagator::attachClause(const Clause& c, CRef cr) {
+        const Clause&c = ca[cr];
         assert(c.size() > 1);
         OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = (c.size() == 2) ? watches_bin : watches;
         ws[~c[0]].push(Watcher(cr, c[1]));
         ws[~c[1]].push(Watcher(cr, c[0]));
     }
 
-    inline void UnitPropagator::detachClause(const Clause& c, CRef cr, bool strict) {
+    inline void UnitPropagator::detachClause(CRef cr, bool strict) {
+        const Clause&c = ca[cr];
         assert(c.size() > 1);
         OccLists<Lit, vec<Watcher>, WatcherDeleted>& ws = (c.size() == 2) ? watches_bin : watches;
         if (strict) {
@@ -339,10 +305,6 @@ namespace Minisat {
             ws.smudge(~c[0]);
             ws.smudge(~c[1]);
         }
-    }
-
-    inline void UnitPropagator::relocWatchers(vec<Watcher>& ws, ClauseAllocator& to) {
-        for (int i = 0; i < ws.size(); i++) ca.reloc(ws[i].cref, to);
     }
 } // namespace Minisat
 
