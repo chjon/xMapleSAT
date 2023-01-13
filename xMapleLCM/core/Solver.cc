@@ -34,13 +34,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 using namespace Minisat;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// OPTIONS
-
-static const char* _cat = "CORE";
-
-static IntOption     opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
 Solver::Solver()
@@ -49,7 +42,6 @@ Solver::Solver()
     , asynch_interrupt(false)
 
     // Parameters
-    , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
     , conflict_budget(-1)
     , curSimplify(1)
     , nbconfbeforesimplify(1000)
@@ -169,21 +161,14 @@ lbool Solver::solve_() {
     branchingHeuristicManager.VSIDS = false;
 
     // Search:
-    uint64_t curr_props = 0;
-    bool switch_mode = false;
     while (status == l_Undef && withinBudget()) {
         // Periodically switch branching heuristic
-        if (switch_mode) { 
-            switch_mode = false;
-            branchingHeuristicManager.switchHeuristic();
-        }
-        if (unitPropagator.propagations - curr_props > VSIDS_props_limit){
-            curr_props = unitPropagator.propagations;
-            switch_mode = true;
-            VSIDS_props_limit = VSIDS_props_limit + VSIDS_props_limit / 10;
-        }
+        branchingHeuristicManager.checkSwitchHeuristic(unitPropagator.propagations);
 
+        // Compute the next number of conflicts before restart
         int numConflictsBeforeRestart = restartHeuristicManager.getRestartConflicts();
+
+        // Search
         status = search(numConflictsBeforeRestart);
     }
 

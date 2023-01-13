@@ -190,6 +190,13 @@ namespace Minisat {
 
         /// @brief The preferred polarity of each variable.
         vec<char> polarity;
+
+        ///////////////////
+        // MODE SWITCHING
+
+        bool switchMode;
+
+        uint64_t prevPropagations;
         
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -206,6 +213,9 @@ namespace Minisat {
 
         /// @brief Controls the level of phase saving (0=none, 1=limited, 2=full).
         PhaseSavingLevel phase_saving;
+
+        /// @brief Specifies the number of propagations after which the solver switches between LRB and VSIDS
+        uint64_t VSIDS_props_limit;
 
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -289,6 +299,13 @@ namespace Minisat {
          * @return the decision literal
          */
         Lit pickBranchLit(void);
+
+        /**
+         * @brief Check whether to switch the current branching heuristic
+         * 
+         * @param propagations 
+         */
+        void checkSwitchHeuristic(uint64_t propagations);
 
         /**
          * @brief Switch the current branching heuristic from VSIDS to LRB and vice versa.

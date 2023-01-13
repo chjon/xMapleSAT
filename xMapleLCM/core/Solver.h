@@ -90,9 +90,6 @@ protected:
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // PARAMETERS
 
-    /// @brief Specifies the number of propagations after which the solver switches between LRB and VSIDS
-    uint64_t VSIDS_props_limit;
-
     /// @brief Current set of assumptions provided to solve by the user.
     vec<Lit> assumptions;
 

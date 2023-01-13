@@ -36,6 +36,7 @@ static DoubleOption opt_step_size_dec (_cat, "step-size-dec","Step size decremen
 static DoubleOption opt_min_step_size (_cat, "min-step-size","Minimal step size",                            0.06,     DoubleRange(0, false, 1, false));
 static BoolOption   opt_rnd_init_act  (_cat, "rnd-init",    "Randomize the initial activity", false);
 static IntOption    opt_phase_saving  (_cat, "phase-saving", "Controls the level of phase saving (0=none, 1=limited, 2=full)", 2, IntRange(0, 2));
+static IntOption    opt_VSIDS_props_limit (_cat, "VSIDS-lim",  "specifies the number of propagations after which the solver switches between LRB and VSIDS(in millions).", 30, IntRange(1, INT32_MAX));
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -66,11 +67,18 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
     , var_iLevel_inc(1)
     , my_var_decay(0.6)
 
+    // Mode switching
+    , switchMode(false)
+    , prevPropagations(0)
+
     // Random
     , rnd_init_act(opt_rnd_init_act)
 
     // Phase saving
     , phase_saving(static_cast<PhaseSavingLevel>(static_cast<int>(opt_phase_saving)))
+
+    // Mode switching
+    , VSIDS_props_limit(opt_VSIDS_props_limit*1000000)
 
     /////////////
     // Statistics
@@ -109,6 +117,19 @@ Lit BranchingHeuristicManager::pickBranchLit() {
         }
 
     return mkLit(next, polarity[next]);
+}
+
+void BranchingHeuristicManager::checkSwitchHeuristic(uint64_t propagations) {
+    if (switchMode) { 
+        switchHeuristic();
+        switchMode = false;
+    }
+
+    if (propagations - prevPropagations > VSIDS_props_limit){
+        prevPropagations = propagations;
+        switchMode = true;
+        VSIDS_props_limit = VSIDS_props_limit + VSIDS_props_limit / 10;
+    }
 }
 
 void BranchingHeuristicManager::switchHeuristic(void) {
