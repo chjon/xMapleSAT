@@ -407,18 +407,13 @@ namespace Minisat {
         return cr;
     }
 
-    static inline bool always(const Clause& c) { return true; }
-
-    template <int valid_mark>
-    static inline bool validMark(const Clause& c) { return c.mark() == valid_mark; }
-
     inline void ClauseDatabase::removeSatisfied(void) {
-        removeSatisfied(learnts_core , always);
-        removeSatisfied(learnts_tier2, validMark<TIER2>);
-        removeSatisfied(learnts_local, validMark<LOCAL>);
+        removeSatisfied(learnts_core , [](const Clause& c){ return true; });
+        removeSatisfied(learnts_tier2, [](const Clause& c){ return c.mark() == TIER2; });
+        removeSatisfied(learnts_local, [](const Clause& c){ return c.mark() == LOCAL; });
 
         if (remove_satisfied) // Can be turned off.
-            removeSatisfied(clauses, always);
+            removeSatisfied(clauses, [](const Clause& c){ return true; });
         checkGarbage();
     }
 
@@ -525,7 +520,7 @@ namespace Minisat {
     }
 
     inline void ClauseDatabase::claBumpActivity (Clause& c) {
-        const double RESCALE_THRESHOLD = 1e20;
+        constexpr double RESCALE_THRESHOLD = 1e20;
         if ((c.activity() += cla_inc) <= RESCALE_THRESHOLD) return;
 
         // Rescale:

@@ -134,93 +134,96 @@ void ConflictAnalyzer::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
 
     for (int i = assignmentTrail.nAssigns() - 1; i >= assignmentTrail.indexOfDecisionLevel(1); i--){
         Var x = var(assignmentTrail[i]);
-        if (seen[x]){
-            if (assignmentTrail.reason(x) == CRef_Undef){
-                assert(assignmentTrail.level(x) > 0);
-                out_conflict.push(~assignmentTrail[i]);
-            } else {
-                Clause& c = ca[assignmentTrail.reason(x)];
-                for (int j = c.size() == 2 ? 0 : 1; j < c.size(); j++)
-                    if (assignmentTrail.level(var(c[j])) > 0)
-                        seen[var(c[j])] = 1;
-            }
-            seen[x] = 0;
+        if (!seen[x]) continue;
+        seen[x] = 0;
+
+        if (assignmentTrail.reason(x) == CRef_Undef){
+            assert(assignmentTrail.level(x) > 0);
+            out_conflict.push(~assignmentTrail[i]);
+        } else {
+            Clause& c = ca[assignmentTrail.reason(x)];
+            for (int j = c.size() == 2 ? 0 : 1; j < c.size(); j++)
+                if (assignmentTrail.level(var(c[j])) > 0)
+                    seen[var(c[j])] = 1;
         }
     }
 
     seen[var(p)] = 0;
 }
 
-// pathCs[k] is the number of variables assigned at level k,
-// it is initialized to 0 at the begining and reset to 0 after the function execution
-bool ConflictAnalyzer::collectFirstUIP(CRef confl){
-    involved_lits.clear();
-    int max_level = 1;
-    Clause& c = ca[confl];
+template <class C>
+static inline void enforceBinaryClauseInvariant(const AssignmentTrail& at, C& c) {
+    if (c.size() == 2 && at.value(c[0]) == l_False) {
+        // Special case for binary clauses - the first one has to be SAT
+        assert(at.value(c[1]) != l_False);
+        std::swap(c[0], c[1]);
+    }
+}
 
-    // Find minimum decision level (starting from the conflict clause)
-    int minLevel = assignmentTrail.decisionLevel();
-    for (int i = 0; i < c.size(); i++) {
-        Var v = var(c[i]);
-        if (assignmentTrail.level(v) > 0) {
-            seen[v] = 1;
-            var_iLevel_tmp[v] = 1;
-            pathCs[assignmentTrail.level(v)]++;
-            minLevel = std::min(minLevel, assignmentTrail.level(v));
+template <class C, class F>
+static inline void forNonRootVariables(const AssignmentTrail& at, const C& c, int start, F f) {
+    for (int i = start; i < c.size(); i++) {
+        if (at.level(var(c[i])) != 0) {
+            f(var(c[i]));
         }
     }
+}
 
-    // Iterate over every literal that participates in the conflict graph
-    int limit = assignmentTrail.indexOfDecisionLevel(minLevel);
-    for (int i = assignmentTrail.nAssigns() - 1; i >= limit; i--) {
+// pathCs[k] is the number of variables assigned at level k,
+// it is initialized to 0 at the begining and reset to 0 after the function execution
+bool ConflictAnalyzer::collectFirstUIP(CRef confl) {
+    int totalPathCount = 0;
+
+    // Mark distances of variables at the conflict
+    forNonRootVariables(assignmentTrail, ca[confl], 0, [&](Var v) {
+        // Mark distance of variable from the conflict
+        var_iLevel_tmp[v] = 1;
+
+        // Update data structures for exploring the conflict graph
+        seen[v] = 1;
+        pathCs[assignmentTrail.level(v)]++;
+        totalPathCount++;
+    });
+
+    // Find every literal that participates in the conflict graph
+    int max_distance = 1;
+    involved_vars.clear();
+    for (int i = assignmentTrail.nAssigns() - 1; totalPathCount > 0; i--) {
         Lit p = assignmentTrail[i];
         Var v = var(p);
         if (!seen[v]) continue;
         seen[v] = 0;
 
-        // Keep track of literals that participate in the conflict graph
-        involved_lits.push(p);
+        // Keep track of variables that participate in the conflict graph
+        involved_vars.push(var(p));
 
-        // Don't iterate backward past the first UIP
-        int currentDecLevel = assignmentTrail.level(v);
-        if (--pathCs[currentDecLevel] == 0) continue;
+        // Don't explore backward past the first UIP for the level
+        totalPathCount--;
+        if (--pathCs[assignmentTrail.level(v)] == 0) continue;
 
-        // Find the maximum level of a literal that participates in the conflict graph
-        int reasonVarLevel = var_iLevel_tmp[v] + 1;
-        max_level = std::max(max_level, reasonVarLevel);
+        // Find the maximum path distance of a literal from the conflict
+        const int reasonDist = var_iLevel_tmp[v] + 1;
+        max_distance = std::max(max_distance, reasonDist);
 
         Clause& rc = ca[assignmentTrail.reason(v)];
-        if (rc.size() == 2 && assignmentTrail.value(rc[0]) == l_False) {
-            // Special case for binary clauses
-            // The first one has to be SAT
-            assert(assignmentTrail.value(rc[1]) != l_False);
-            std::swap(rc[0], rc[1]);
-        }
+        enforceBinaryClauseInvariant(assignmentTrail, rc);
 
         // Iterate over the non-root literals in the reason clause
-        for (int j = 1; j < rc.size(); j++) {
-            Lit q = rc[j]; Var v1 = var(q);
-            if (assignmentTrail.level(v1) == 0) continue;
+        forNonRootVariables(assignmentTrail, rc, 1, [&](Var x) {
+            // Mark distance of variable from the conflict
+            var_iLevel_tmp[x] = seen[x] ? std::max(var_iLevel_tmp[x], reasonDist) : reasonDist;
 
-            if (minLevel > assignmentTrail.level(v1)) {
-                minLevel = assignmentTrail.level(v1);
-                limit = assignmentTrail.indexOfDecisionLevel(minLevel);
-                assert(minLevel>0);
+            // Update data structures for exploring the conflict graph
+            if (!seen[x]) {
+                seen[x] = 1;
+                totalPathCount++;
+                pathCs[assignmentTrail.level(x)]++;
             }
-
-            if (seen[v1]) {
-                if (var_iLevel_tmp[v1] < reasonVarLevel)
-                    var_iLevel_tmp[v1] = reasonVarLevel;
-            } else {
-                var_iLevel_tmp[v1] = reasonVarLevel;
-                seen[v1] = 1;
-                pathCs[assignmentTrail.level(v1)]++;
-            }
-        }
+        });
     }
 
     // Update activity_distance
-    branchingHeuristicManager.updateActivityDistance(involved_lits, var_iLevel_tmp, max_level);
+    branchingHeuristicManager.updateActivityDistance(involved_vars, var_iLevel_tmp, max_distance);
     return true;
 }
 
@@ -239,12 +242,8 @@ void ConflictAnalyzer::simpleAnalyze(
         if (confl != CRef_Undef){
             reason_clause.push(confl);
             Clause& c = ca[confl];
-            // Special case for binary clauses
-            // The first one has to be SAT
-            if (p != lit_Undef && c.size() == 2 && assignmentTrail.value(c[0]) == l_False) {
-                assert(assignmentTrail.value(c[1]) == l_True);
-                std::swap(c[0], c[1]);
-            }
+            enforceBinaryClauseInvariant(assignmentTrail, c);
+
             // if True_confl==true, then choose p begin with the 1th index of c;
             for (int j = (p == lit_Undef && True_confl == false) ? 0 : 1; j < c.size(); j++){
                 Lit q = c[j];
@@ -254,7 +253,7 @@ void ConflictAnalyzer::simpleAnalyze(
                 }
             }
         }
-        else if (confl == CRef_Undef){
+        else {
             out_learnt.push(~p);
         }
         // if not break, while() will come to the index of trail blow 0, and fatal error occur;

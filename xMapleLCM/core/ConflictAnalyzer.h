@@ -91,9 +91,9 @@ namespace Minisat {
 
         vec<int> pathCs;
 
-        vec<double> var_iLevel_tmp;
+        vec<int> var_iLevel_tmp;
 
-        vec<Lit> involved_lits;
+        vec<Var> involved_vars;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////

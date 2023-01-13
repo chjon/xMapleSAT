@@ -297,9 +297,9 @@ namespace Minisat {
         void switchHeuristic(void);
 
         void updateActivityDistance(
-            const vec<Lit>& involvedLits,
-            const vec<double>& var_iLevel_tmp,
-            int max_level
+            const vec<Var>& involvedVars,
+            const vec<int>& varDist,
+            int max_distance
         );
 
     public:
@@ -646,7 +646,7 @@ namespace Minisat {
     }
 
     inline void BranchingHeuristicManager::varBumpActivity(Var v, double mult) {
-        const double RESCALE_THRESHOLD = 1e100;
+        constexpr double RESCALE_THRESHOLD = 1e100;
         if ((activity_VSIDS[v] += var_inc * mult) > RESCALE_THRESHOLD) {
             // Rescale:
             for (int i = 0; i < assignmentTrail.nVars(); i++)

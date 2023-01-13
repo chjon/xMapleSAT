@@ -131,37 +131,57 @@ void BranchingHeuristicManager::switchHeuristic(void) {
     }
 }
 
-void BranchingHeuristicManager::updateActivityDistance(
-    const vec<Lit>& involvedLits,
-    const vec<double>& var_iLevel_tmp,
-    int max_level
+static inline void getExponentialDecaySeries(
+    vec<int>& decays,
+    int length,
+    double initialDecay,
+    double decayFactor
 ) {
-    double inc = var_iLevel_inc;
+    while (length--) {
+        decays.push(initialDecay);
+        initialDecay /= decayFactor;
+    }
+}
+
+template <class H>
+static inline void bumpActivityDistance(
+    vec<double>& activity,
+    H& heap,
+    Var v,
+    double bump,
+    vec<int>& level_incs
+) {
+    // Bump variable activity
+    activity[v] += bump;
+
+    // Rescale activities if required
+    constexpr double RESCALE_THRESHOLD = 1e100;
+    if (activity[v] > RESCALE_THRESHOLD) {
+        for (Var x = 0; x < activity  .size(); x++) activity  [x] /= RESCALE_THRESHOLD;
+        for (int j = 0; j < level_incs.size(); j++) level_incs[j] /= RESCALE_THRESHOLD;
+    }
+    
+    // Update variable's position in priority queue
+    if (heap.inHeap(v)) heap.decrease(v);
+}
+
+void BranchingHeuristicManager::updateActivityDistance(
+    const vec<Var>& involvedVars,
+    const vec<int>& varDist,
+    int maxDistance
+) {
+    // Compute exponential decay series
     vec<int> level_incs;
-    for (int i = 0; i < max_level; i++) {
-        level_incs.push(inc);
-        inc /= my_var_decay;
+    getExponentialDecaySeries(level_incs, maxDistance, var_iLevel_inc, my_var_decay);
+
+    // Update variable activities
+    for (int i = 0; i < involvedVars.size(); i++) {
+        Var v = involvedVars[i];
+        const double bump = static_cast<double>(varDist[v]) * level_incs[varDist[v] - 1];
+        bumpActivityDistance(activity_distance, order_heap_distance, v, bump, level_incs);
     }
 
-    for (int i = 0; i < involvedLits.size(); i++) {
-        Var v = var(involvedLits[i]);
-        activity_distance[v] += var_iLevel_tmp[v] * level_incs[var_iLevel_tmp[v] - 1];
-
-        const double RESCALE_THRESHOLD = 1e100;
-        if (activity_distance[v] > RESCALE_THRESHOLD) {
-            for (Var x = 0; x < assignmentTrail.nVars(); x++)
-                activity_distance[x] /= RESCALE_THRESHOLD;
-            var_iLevel_inc /= RESCALE_THRESHOLD;
-
-            for (int j = 0; j < max_level; j++)
-                level_incs[j] /= RESCALE_THRESHOLD;
-        }
-
-        if (order_heap_distance.inHeap(v))
-            order_heap_distance.decrease(v);
-    }
-
-    var_iLevel_inc = level_incs[level_incs.size()-1];
+    var_iLevel_inc = level_incs.last();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
