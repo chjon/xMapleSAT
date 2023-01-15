@@ -1,14 +1,9 @@
 /*****************************************************************************************[Main.cc]
-Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
-Copyright (c) 2007-2010, Niklas Sorensson
- 
-Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
+MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
+           Copyright (c) 2007-2010, Niklas Sorensson
 
-Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
-Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,” in IJCAI-2017, 2017, pp. to–appear.
- 
-Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
- 
+xMaple* -- Copyright (c) 2022, Jonathan Chung, Vijay Ganesh, Sam Buss
+
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
 including without limitation the rights to use, copy, modify, merge, publish, distribute,
@@ -34,28 +29,49 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/ParseUtils.h"
 #include "utils/Options.h"
 #include "core/Dimacs.h"
-#include "core/Solver.h"
+#include "er/ERSolver.h"
 
 using namespace Minisat;
 
 //=================================================================================================
 
 
-void printStats(Solver& solver)
-{
+void printStats(ERSolver& solver) {
     double cpu_time = cpuTime();
     double mem_used = memUsedPeak();
-    printf("c restarts              : %"    PRIu64 "\n", solver.starts);
-    printf("c conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
-    printf("c decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.branchingHeuristicManager.decisions, 0.f, solver.branchingHeuristicManager.decisions   /cpu_time);
-    printf("c propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.unitPropagator.propagations, solver.unitPropagator.propagations/cpu_time);
-    printf("c conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.conflictAnalyzer.tot_literals, (solver.conflictAnalyzer.max_literals - solver.conflictAnalyzer.tot_literals)*100 / (double)solver.conflictAnalyzer.max_literals);
-    if (mem_used != 0) printf("c Memory used           : %.2f MB\n", mem_used);
-    printf("c CPU time              : %g s\n", cpu_time);
+    const ERManager& erm = solver.erManager;
+
+    // Standard stats
+    printf("restarts              : %"    PRIu64 "\n", solver.starts);
+    printf("conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
+    printf("decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.branchingHeuristicManager.decisions, 0.f, solver.branchingHeuristicManager.decisions   /cpu_time);
+    printf("propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.unitPropagator.propagations, solver.unitPropagator.propagations/cpu_time);
+    printf("conflict literals     : %-12" PRIu64 "   (%4.2f %% deleted)\n", solver.conflictAnalyzer.tot_literals, (solver.conflictAnalyzer.max_literals - solver.conflictAnalyzer.tot_literals)*100 / (double)solver.conflictAnalyzer.max_literals);
+    
+    // Extended resolution stats
+    printf("total ext vars        : %-12" PRIu64 "\n", erm.total_ext_vars);
+    printf("tried delete ext vars : %-12" PRIu64 "\n", erm.tried_del_ext_vars);
+    printf("deleted ext vars      : %-12" PRIu64 "\n", erm.deleted_ext_vars);
+    printf("max ext vars          : %-12" PRIu64 "\n", erm.max_ext_vars);
+    printf("conflict ext clauses  : %-12" PRIu64 "   (%.0f /sec)\n", erm.conflict_extclauses, erm.conflict_extclauses / cpu_time);
+    printf("learnt ext clauses    : %-12" PRIu64 "   (%.0f /sec)\n", erm.learnt_extclauses, erm.learnt_extclauses / cpu_time);
+    printf("decisions on ext vars : %-12" PRIu64 "\n", erm.branchOnExt);
+
+    // Resource usage stats
+    if (mem_used != 0) printf("Memory used           : %.2f MB\n", mem_used);
+    printf("CPU time              : %g s\n", cpu_time);
+
+    // ER overhead stats
+    printf("ER_sel time           : %g s\n", erm.extTimerRead(0));
+    printf("ER_add time           : %g s\n", erm.extTimerRead(1));
+    printf("ER_delC time          : %g s\n", erm.extTimerRead(2));
+    printf("ER_delV time          : %g s\n", erm.extTimerRead(3));
+    printf("ER_sub time           : %g s\n", erm.extTimerRead(4));
+    printf("ER_stat time          : %g s\n", erm.extTimerRead(5));
 }
 
 
-static Solver* solver;
+static ERSolver* solver;
 // Terminate by notifying the solver and back out gracefully. This is mainly to have a test-case
 // for this feature of the Solver as it may take longer than an immediate call to '_exit()'.
 static void SIGINT_interrupt(int signum) { solver->interrupt(); }
@@ -64,10 +80,10 @@ static void SIGINT_interrupt(int signum) { solver->interrupt(); }
 // destructors and may cause deadlocks if a malloc/free function happens to be running (these
 // functions are guarded by locks for multithreaded use).
 static void SIGINT_exit(int signum) {
-    printf("\n"); printf("c *** INTERRUPTED ***\n");
+    printf("\n"); printf("*** INTERRUPTED ***\n");
     if (solver->verbosity > 0){
         printStats(*solver);
-        printf("\n"); printf("c *** INTERRUPTED ***\n"); }
+        printf("\n"); printf("*** INTERRUPTED ***\n"); }
     _exit(1); }
 
 
@@ -75,16 +91,15 @@ static void SIGINT_exit(int signum) {
 // Main:
 
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     try {
         setUsageHelp("USAGE: %s [options] <input-file> <result-output-file>\n\n  where input may be either in plain or gzipped DIMACS.\n");
-        printf("c This is COMiniSatPS.\n");
+        // printf("This is MiniSat 2.0 beta\n");
         
-#if defined(__linux__)
+#if defined(__linux__) && defined(_FPU_EXTENDED) && defined(_FPU_DOUBLE) && defined(_FPU_GETCW)
         fpu_control_t oldcw, newcw;
         _FPU_GETCW(oldcw); newcw = (oldcw & ~_FPU_EXTENDED) | _FPU_DOUBLE; _FPU_SETCW(newcw);
-        printf("c WARNING: for repeatability, setting FPU to use double precision\n");
+        printf("WARNING: for repeatability, setting FPU to use double precision\n");
 #endif
         // Extra options:
         //
@@ -94,7 +109,7 @@ int main(int argc, char** argv)
         
         parseOptions(argc, argv, true);
 
-        Solver S;
+        ERSolver S;
         double initial_time = cpuTime();
 
         S.verbosity = verb;
@@ -112,7 +127,7 @@ int main(int argc, char** argv)
             if (rl.rlim_max == RLIM_INFINITY || (rlim_t)cpu_lim < rl.rlim_max){
                 rl.rlim_cur = cpu_lim;
                 if (setrlimit(RLIMIT_CPU, &rl) == -1)
-                    printf("c WARNING! Could not set resource limit: CPU-time.\n");
+                    printf("WARNING! Could not set resource limit: CPU-time.\n");
             } }
 
         // Set limit on virtual memory:
@@ -123,46 +138,46 @@ int main(int argc, char** argv)
             if (rl.rlim_max == RLIM_INFINITY || new_mem_lim < rl.rlim_max){
                 rl.rlim_cur = new_mem_lim;
                 if (setrlimit(RLIMIT_AS, &rl) == -1)
-                    printf("c WARNING! Could not set resource limit: Virtual memory.\n");
+                    printf("WARNING! Could not set resource limit: Virtual memory.\n");
             } }
         
         if (argc == 1)
-            printf("c Reading from standard input... Use '--help' for help.\n");
+            printf("Reading from standard input... Use '--help' for help.\n");
         
         gzFile in = (argc == 1) ? gzdopen(0, "rb") : gzopen(argv[1], "rb");
         if (in == NULL)
-            printf("c ERROR! Could not open file: %s\n", argc == 1 ? "<stdin>" : argv[1]), exit(1);
+            printf("ERROR! Could not open file: %s\n", argc == 1 ? "<stdin>" : argv[1]), exit(1);
         
         if (S.verbosity > 0){
-            printf("c ============================[ Problem Statistics ]=============================\n");
-            printf("c |                                                                             |\n"); }
+            printf("============================[ Problem Statistics ]=============================\n");
+            printf("|                                                                             |\n"); }
         
         parse_DIMACS(in, S);
         gzclose(in);
         FILE* res = (argc >= 3) ? fopen(argv[2], "wb") : NULL;
         
         if (S.verbosity > 0){
-            printf("c |  Number of variables:  %12d                                         |\n", S.assignmentTrail.nVars());
-            printf("c |  Number of clauses:    %12d                                         |\n", S.clauseDatabase.nClauses()); }
+            printf("|  Number of variables:  %12d                                         |\n", S.assignmentTrail.nVars());
+            printf("|  Number of clauses:    %12d                                         |\n", S.clauseDatabase.nClauses()); }
         
         double parsed_time = cpuTime();
         if (S.verbosity > 0){
-            printf("c |  Parse time:           %12.2f s                                       |\n", parsed_time - initial_time);
-            printf("c |                                                                             |\n"); }
-
+            printf("|  Parse time:           %12.2f s                                       |\n", parsed_time - initial_time);
+            printf("|                                                                             |\n"); }
+ 
         // Change to signal-handlers that will only notify the solver and allow it to terminate
         // voluntarily:
         signal(SIGINT, SIGINT_interrupt);
         signal(SIGXCPU,SIGINT_interrupt);
-
+       
         if (!S.simplify()){
             if (res != NULL) fprintf(res, "UNSAT\n"), fclose(res);
             if (S.verbosity > 0){
-                printf("c ===============================================================================\n");
-                printf("c Solved by unit propagation\n");
+                printf("===============================================================================\n");
+                printf("Solved by unit propagation\n");
                 printStats(S);
                 printf("\n"); }
-            printf("s UNSATISFIABLE\n");
+            printf("UNSATISFIABLE\n");
             exit(20);
         }
         
@@ -170,22 +185,8 @@ int main(int argc, char** argv)
         lbool ret = S.solveLimited(dummy);
         if (S.verbosity > 0){
             printStats(S);
-            if (ret == l_True) {
-                in = (argc == 1) ? gzdopen(0, "rb") : gzopen(argv[1], "rb");
-                check_solution_DIMACS(in, S);
-                gzclose(in);
-            }
             printf("\n"); }
-        printf(ret == l_True ? "s SATISFIABLE\n" : ret == l_False ? "s UNSATISFIABLE\n" : "s UNKNOWN\n");
-        if (ret == l_True){
-            printf("v ");
-            for (int i = 0; i < S.assignmentTrail.nVars(); i++)
-                if (S.model[i] != l_Undef)
-                    printf("%s%s%d", (i==0)?"":" ", (S.model[i]==l_True)?"":"-", i+1);
-            printf(" 0\n");
-        }
-
-
+        printf(ret == l_True ? "SATISFIABLE\n" : ret == l_False ? "UNSATISFIABLE\n" : "INDETERMINATE\n");
         if (res != NULL){
             if (ret == l_True){
                 fprintf(res, "SAT\n");
@@ -206,8 +207,8 @@ int main(int argc, char** argv)
         return (ret == l_True ? 10 : ret == l_False ? 20 : 0);
 #endif
     } catch (OutOfMemoryException&){
-        printf("c ===============================================================================\n");
-        printf("s UNKNOWN\n");
+        printf("===============================================================================\n");
+        printf("INDETERMINATE\n");
         exit(0);
     }
 }

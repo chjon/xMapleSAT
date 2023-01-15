@@ -165,6 +165,18 @@ namespace Minisat {
         void newVar(Var v);
 
         /**
+         * @brief Add a clause to a database
+         * 
+         * @param ps the clause to add
+         * @param db the database to which to add the clause
+         * @param learnt true if @code{ps} is a learnt clause; false otherwise
+         * @return the CRef of the newly added clause; CRef_Undef if the clause
+         * is unit
+         */
+        template <typename V>
+        CRef addClause(vec<Lit>& ps, V& db, bool learnt);
+
+        /**
          * @brief Add a clause to the learnt clause database
          * 
          * @param ps the list of literals to add as a clause
@@ -374,6 +386,21 @@ namespace Minisat {
     template <>
     inline void vectorPush<std::vector<CRef>, CRef>(std::vector<CRef>& vector, CRef& val) {
         vector.push_back(val);
+    }
+
+    template <typename V>
+    inline CRef ClauseDatabase::addClause(vec<Lit>& ps, V& db, bool learnt) {
+        assert(ps.size() > 0);
+
+        // Don't add unit clauses to the database -- they should be added to the trail instead
+        if (ps.size() == 1) return CRef_Undef;
+        
+        // Allocate clause
+        CRef cr = ca.alloc(ps, learnt);
+        vectorPush(db, cr);
+        attachClause(cr);
+
+        return cr;
     }
 
     inline CRef ClauseDatabase::addLearntClause(vec<Lit>& ps, int lbd, uint64_t conflicts) {

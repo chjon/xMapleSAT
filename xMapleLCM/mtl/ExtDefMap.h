@@ -62,7 +62,7 @@ private:
     // Vectors used for substitution -- allocated here to avoid repeated memory allocation
     mutable vec<int> defLitIndex; // The indices of all the basis literals in a clause
     mutable vec<bool> validIndex; // Flag for whether a literal belongs to the final clause
-    
+
 public:
     inline typename LPMap::const_iterator find(L x) const { return lp_map.find(x); }
     inline typename PLMap::const_iterator find(L a, L b) const { return pl_map.find(mkLitPair(a, b)); }
@@ -127,30 +127,28 @@ public:
     }
 
     // Delete a set of extension variables
-    void erase(const LSet& defsToDelete) {
-        for (typename LSet::const_iterator i = defsToDelete.begin(); i != defsToDelete.end(); i++) {
-            typename LPMap::iterator it = lp_map.find(*i);
-            if (it == lp_map.end()) continue;
-            P& def = it->second;
+    void erase(L l) {
+        typename LPMap::iterator it = lp_map.find(l);
+        if (it == lp_map.end()) return;
+        P& def = it->second;
 
-            // Erase from the forward map
-            pl_map.erase(def);
+        // Erase from the forward map
+        pl_map.erase(def);
 
-            // Decrement count for Lit a
-            L a = def.first;
-            typename RCMap::iterator it1 = rc_map.find(a);
-            if (it1->second == 1) rc_map.erase(it1);
-            else                  it1->second--;
+        // Decrement count for Lit a
+        L a = def.first;
+        typename RCMap::iterator it1 = rc_map.find(a);
+        if (it1->second == 1) rc_map.erase(it1);
+        else                  it1->second--;
 
-            // Decrement count for Lit b
-            L b = def.second;
-            typename RCMap::iterator it2 = rc_map.find(b);
-            if (it2->second == 1) rc_map.erase(it2);
-            else                  it2->second--;
+        // Decrement count for Lit b
+        L b = def.second;
+        typename RCMap::iterator it2 = rc_map.find(b);
+        if (it2->second == 1) rc_map.erase(it2);
+        else                  it2->second--;
 
-            // Erase from the reverse map
-            lp_map.erase(it);
-        }
+        // Erase from the reverse map
+        lp_map.erase(it);
     }
 
     void clear(void) {
@@ -162,7 +160,7 @@ public:
     void absorb(vec<L>& clause) const {
         std::tr1::unordered_map<L, int> basis; // Map basis literals to the index of their extension lits
         validIndex.clear();
-    
+
         // Find all the literals in the definitions of extension literals in the clause
         for (int i = 0; i < clause.size(); i++) {
             validIndex.push(true);
