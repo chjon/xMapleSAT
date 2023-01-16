@@ -267,7 +267,7 @@ inline void ConflictAnalyzer::simplifyClause(vec<Lit>& simplified, const vec<Lit
     switch (ccmin_mode) {
         case ConflictClauseMinimizationMode::DEEP:  return simplifyClauseDeep(simplified, toSimplify);
         case ConflictClauseMinimizationMode::BASIC: return simplifyClauseBasic(simplified, toSimplify);
-        default: return;
+        default: return toSimplify.copyTo(simplified);
     }
 }
 
