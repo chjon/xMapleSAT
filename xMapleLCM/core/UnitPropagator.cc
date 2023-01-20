@@ -123,10 +123,14 @@ static inline CRef propagateSingleBinary(
 ) {
     for (int k = 0; k < ws_bin.size(); k++) {
         Lit the_other = ws_bin[k].blocker;
-        if (at.value(the_other) == l_False) {
+        if (at.value(the_other) == l_True) continue;
+        if (
+            at.value(the_other) == l_False ||
+            !enqueue<simple>(pq, the_other, ws_bin[k].cref)
+        ) {
+            // All literals falsified!
+            pq.clear();
             return ws_bin[k].cref;
-        } else if (at.value(the_other) == l_Undef) {
-            enqueue<simple>(pq, the_other, ws_bin[k].cref);
         }
     }
 
