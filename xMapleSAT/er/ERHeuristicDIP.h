@@ -17,8 +17,8 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **************************************************************************************************/
 
-#ifndef Minisat_ERManager_h
-#define Minisat_ERManager_h
+#ifndef Minisat_ERHeuristicDIP_h
+#define Minisat_ERHeuristicDIP_h
 
 #include <vector>
 #include "core/AssignmentTrail.h"
@@ -55,6 +55,7 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // SOLVER REFERENCES
         AssignmentTrail& assignmentTrail;
+        ClauseAllocator& ca;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -86,37 +87,6 @@ namespace Minisat {
          * @param v the variable to register
          */
         void newVar(Var v);
-
-        /**
-         * @brief Update internal data structures when the solver encounters a conflict.
-         * @details Clears data structures to prepare to populate @code{predecessor} and
-         * @code{predecessorIndex}.
-         * 
-         */
-        void handleEventConflicted(void);
-
-        /**
-         * @brief Update internal data structures when a literal appears in the conflict graph.
-         * @details Adds literals to a stack to prepare to populate @code{predecessor} and
-         * @code{predecessorIndex}.
-         * 
-         * @param l The literal that appears in the conflict graph
-         * 
-         * @note Assumes that literals appear in reverse topological order with respect to the
-         * conflict graph.
-         */
-        void handleEventLitInConflictGraph(Lit l);
-
-        /**
-         * @brief Update internal data structures when a clause is learned.
-         * @details Populates the @code{predecessor} and @code{predecessorIndex} arrays.
-         * 
-         * @param c The learnt clause
-         * 
-         * @pre @code{conflictLits} contains all literals in the conflict graph between the
-         * conflict and the first UIP literal in reverse topological order.
-         */
-        void handleEventLearntClause(const Clause& c);
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,10 +95,6 @@ namespace Minisat {
     inline void ERHeuristicDIP::newVar(Var v) {
         seen.push(false);
         remap.push(0);
-    }
-
-    inline void ERHeuristicDIP::handleEventLitInConflictGraph(Lit l) {
-        conflictLits.push(l);
     }
 }
 

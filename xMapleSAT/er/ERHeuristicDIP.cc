@@ -31,6 +31,7 @@ using namespace Minisat;
 
 ERHeuristicDIP::ERHeuristicDIP(Solver& s)
     : assignmentTrail(s.assignmentTrail)
+    , ca(s.ca)
 {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
