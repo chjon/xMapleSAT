@@ -41,13 +41,13 @@ lbool ERSolver::search(int nof_conflicts) {
     int conflictC = 0;
     starts++;
 
-#if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_RESTART
+#if ER_USER_GEN_LOCATION == ER_LOCATION_AFTER_RESTART
     // Generate extension variable definitions
     // Only try generating more extension variables if there aren't any buffered already
     erManager.checkGenerateDefinitions(conflicts);
 #endif
 
-#if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_RESTART
+#if ER_USER_ADD_LOCATION == ER_LOCATION_AFTER_RESTART
     // Add extension variables
     erManager.introduceExtVars();
 #endif
@@ -63,6 +63,17 @@ lbool ERSolver::search(int nof_conflicts) {
 
             // Check for root-level conflict
             if (assignmentTrail.decisionLevel() == 0) return l_False;
+
+        #if ER_USER_GEN_LOCATION == ER_LOCATION_AFTER_CONFLICT
+            // Generate extension variable definitions
+            // Only try generating more extension variables if there aren't any buffered already
+            erManager.checkGenerateDefinitions(conflicts);
+        #endif
+
+        #if ER_USER_ADD_LOCATION == ER_LOCATION_AFTER_CONFLICT
+            // Add extension variables
+            erManager.introduceExtVars();
+        #endif
 
             // Generate a learnt clause from the conflict graph
             learnt_clause.clear();
@@ -85,17 +96,18 @@ lbool ERSolver::search(int nof_conflicts) {
             if (cr != CRef_Undef)
                 erManager.filterIncremental(cr);
 
-        #if ER_USER_GEN_LOCATION == ER_GEN_LOCATION_AFTER_CONFLICT
+        #if ER_USER_GEN_LOCATION == ER_LOCATION_AFTER_LEARNT
             // Generate extension variable definitions
             // Only try generating more extension variables if there aren't any buffered already
             erManager.checkGenerateDefinitions(conflicts);
         #endif
 
-        #if ER_USER_ADD_LOCATION == ER_ADD_LOCATION_AFTER_CONFLICT
+        #if ER_USER_ADD_LOCATION == ER_LOCATION_AFTER_LEARNT
             // Add extension variables
             erManager.introduceExtVars();
         #endif
 
+        // For comparison purposes ONLY: we implemented GlucosER's technique (LER), but this is not a core part of xMaple*
         #if ER_ENABLE_GLUCOSER
             erManager.generateLER();
             erManager.introduceExtVars(ERManager::HeuristicType::LER);

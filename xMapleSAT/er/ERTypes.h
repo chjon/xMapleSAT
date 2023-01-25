@@ -99,20 +99,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define ER_USER_DELETE_HEURISTIC ER_DELETE_HEURISTIC_NONE
 #endif
 
-// Define heuristics for location to generate variables
-#define ER_GEN_LOCATION_NONE           0 // Do not generate extension variables
-#define ER_GEN_LOCATION_AFTER_RESTART  1 // Generate extension variables after a restart
-#define ER_GEN_LOCATION_AFTER_CONFLICT 2 // Generate extension variables after a conflict
+// Define heuristics for locations to generate/add variables
+#define ER_LOCATION_NONE           0 // Do not generate extension variables
+#define ER_LOCATION_AFTER_RESTART  1 // Generate extension variables after a restart
+#define ER_LOCATION_AFTER_CONFLICT 2 // Generate extension variables after a conflict
+#define ER_LOCATION_AFTER_LEARNT   3 // Generate extension variables after learning a clause
 #ifndef ER_USER_GEN_LOCATION
-    #define ER_USER_GEN_LOCATION ER_GEN_LOCATION_NONE
+    #define ER_USER_GEN_LOCATION ER_LOCATION_NONE
 #endif
-
-// Define heuristics for location to add variables
-#define ER_ADD_LOCATION_NONE           0 // Do not add extension variables
-#define ER_ADD_LOCATION_AFTER_RESTART  1 // Add extension variables after a restart
-#define ER_ADD_LOCATION_AFTER_CONFLICT 2 // Add extension variables after a conflict
 #ifndef ER_USER_ADD_LOCATION
-    #define ER_USER_ADD_LOCATION ER_ADD_LOCATION_NONE
+    #define ER_USER_ADD_LOCATION ER_LOCATION_NONE
 #endif
 
 namespace Minisat {

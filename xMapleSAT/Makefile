@@ -71,6 +71,8 @@ NONE=0
 AFTER_RESTART=1
 # Generate extension variables after a conflict
 AFTER_CONFLICT=2
+# Generate extension variables after learning a clause
+AFTER_LEARNT=3
 
 .PHONY: all clean test
 
