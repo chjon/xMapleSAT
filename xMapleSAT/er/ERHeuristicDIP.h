@@ -30,8 +30,11 @@ namespace Minisat {
         ///////////////////////////////////////////////////////////////////////////////////////////
         // MEMBER VARIABLES
 
+        /// @brief Whether variables have been seen while exploring the conflict graph
+        vec<bool> seen;
+
         /// @brief Literals that participate in the conflict graph, in reverse topological order
-        vec<Lit> stack;
+        vec<Lit> conflictLits;
 
         /// @brief Remapping variables in the conflict graph to the range [0, N]
         vec<int> remappedVariables;
@@ -110,8 +113,8 @@ namespace Minisat {
          * 
          * @param c The learnt clause
          * 
-         * @pre @code{stack} contains all literals in the conflict graph between the conflict and
-         * the first UIP literal in reverse topological order.
+         * @pre @code{conflictLits} contains all literals in the conflict graph between the
+         * conflict and the first UIP literal in reverse topological order.
          */
         void handleEventLearntClause(const Clause& c);
     };
@@ -120,17 +123,12 @@ namespace Minisat {
     // IMPLEMENTATION OF INLINE METHODS
 
     inline void ERHeuristicDIP::newVar(Var v) {
+        seen.push(false);
         remap.push(0);
     }
 
-    inline void ERHeuristicDIP::handleEventConflicted(void) {
-        stack.clear();
-        predecessors.clear();
-        predecessorIndex.clear();
-    }
-
     inline void ERHeuristicDIP::handleEventLitInConflictGraph(Lit l) {
-        stack.push(l);
+        conflictLits.push(l);
     }
 }
 

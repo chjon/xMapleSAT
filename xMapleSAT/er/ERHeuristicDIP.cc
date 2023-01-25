@@ -18,6 +18,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include "er/ERHeuristicDIP.h"
+
+#include <vector>
 #include "er/ERTypes.h"
 #include "er/TwoVertexBottlenecks.h"
 #include "core/Solver.h"
@@ -38,11 +40,14 @@ void ERHeuristicDIP::generateDefinitions(
     std::vector<ExtDef>& extVarDefBuffer,
     unsigned int maxNumNewVars // Ignoring this parameter for now
 ) {
+    // Set up data structures for TwoVertexBottlenecks
+    dipComputationSetup(conflictLits, predecessors, predecessorIndex, seen, assignmentTrail, ca, confl);
+
     // Compute DIP using predecessors
     TwoVertexBottlenecks dipCollector(
-        user_extDefHeuristic_dip_stack.size(),
-        user_extDefHeuristic_dip_predecessors,
-        user_extDefHeuristic_dip_predecessorIndex
+        predecessorIndex.size(),
+        (int*)predecessors,
+        (int*)predecessorIndex
     );
     dipCollector.computeDIPs();
 
@@ -53,8 +58,8 @@ void ERHeuristicDIP::generateDefinitions(
     const Var z = assignmentTrail.nVars() + extVarDefBuffer.size();
     const int dipIndexA = dipCollector.GroupMemberLastLeft();
     const int dipIndexB = dipCollector.GroupMemberLastRight();
-    const Lit a = getLitFromIndex(stack, dipIndexA);
-    const Lit b = getLitFromIndex(stack, dipIndexB);
+    const Lit a = getLitFromIndex(conflictLits, dipIndexA);
+    const Lit b = getLitFromIndex(conflictLits, dipIndexB);
 
     // Add definition
     // Note: we want (z' = a AND b), but we define vars using disjunctions. Then we can define
@@ -62,10 +67,10 @@ void ERHeuristicDIP::generateDefinitions(
     extVarDefBuffer.push(ExtDef{ mkLit(z), ~a, ~b, std::vector< std::vector<int> >() });
 
     // Add helper clauses
-    std::vector<Lit> helperClause1 = getLowerLevelLitsBeforeDIP(dipIndexA, dipIndexB); // 'D'
-    std::vector<Lit> helperClause2 = getLowerLevelLitsAfterDIP(dipIndexA, dipIndexB);  // 'C'
+    std::vector<Lit> helperClause1 = getLowerLevelLitsAfterDIP(litsAfterDIP, dipA, dipB, confl, assignmentTrail, ca); // 'D'
+    std::vector<Lit> helperClause2 = getLowerLevelLitsBeforeDIP(litsBeforeDIP, dipA, dipB, assignmentTrail, ca);      // 'C'
 
-    const Lit uip = stack.last();
+    const Lit uip = conflictLits.last();
     ExtDef& extDef = extVarDefBuffer[extVarDefBuffer.size() - 1];
     helperClause1.push(~uip, ~z);
     helperClause2.push(z);
@@ -75,64 +80,264 @@ void ERHeuristicDIP::generateDefinitions(
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// EVENT HANDLERS
+// HELPER FUNCTIONS
 
-void ERHeuristicDIP::handleEventLearntClause(const Clause& c) {
-    // Read the stack in reverse to get literals in topological order
-    for (int i = stack.size() - 1, numVarsSeen = 0; i >= 0; i--, numVarsSeen++) {
-        const Var v = var(stack[i]);
-        
-        // Remap conflict graph variables to consecutive indices starting from 0
-        // TODO: check whether the DIP algo wants predecessors to contain vars at earlier levels
-        remappedVariables[v] = numVarsSeen;
-        predecessorIndex[remappedVariables[v]] = predecessors.size();
+/**
+ * @brief Get the literals that participate in the conflict graph (up to the first UIP) in reverse
+ * topological order.
+ * 
+ * @details Returns literals at the current decision level and literals at lower decision levels
+ * that participate in propagating literals at the current decision level 
+ * 
+ * @param conflictLits 
+ * @param seen 
+ * @param assignmentTrail 
+ * @param ca 
+ * @param confl 
+ */
+static void getFirstUIPConflictLits(
+    vec<Lit>& conflictLits,
+    vec<bool>& seen,
+    AssignmentTrail& assignmentTrail,
+    ClauseAllocator& ca,
+    CRef confl
+) {
+    // Initialize local data structures
+    Lit p = lit_Undef;
+    int pathC = 0;
+    int index = assignmentTrail.nAssigns() - 1;
+    
+    // Iterate through every clause that participates in the conflict graph, backtracking until the first UIP
+    do {
+        assert(confl != CRef_Undef); // (otherwise should be UIP)
+        Clause& c = ca[confl];
 
-        // Don't store predecessors for the first UIP or for variables at earlier levels
-        if (numVarsSeen == 0 ||
-            assignmentTrail.level(v) < assignmentTrail.currentDecisionLevel()
-        ) {
-            continue;
+        // Iterate through every literal that participates in the conflict graph
+        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
+            Lit q = c[j];
+            if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+            // Mark variable as seen
+            seen[var(q)] = true;
+
+            // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+            if (assignmentTrail.level(var(q)) == assignmentTrail.decisionLevel()) {
+                pathC++;
+
+                // Add variable to list of conflict literals
+                conflictLits.push(q);
+            }
         }
+        
+        // Select next clause to look at:
+        while (!seen[var(assignmentTrail[index--])]);
+        p     = assignmentTrail[index+1];
+        confl = assignmentTrail.reason(var(p));
 
-        // Store predecessors (remapped)
-        const Clause& reasonClause = ca[assignmentTrail.reason(v)];
-        for (int i = 0; i < reasonClause.size(); i++) {
-            const Var x = var(reasonClause[i]);
+        // Mark variable as unseen: it is either at or after the first UIP
+        pathC--;
+    } while (pathC > 0);
+}
+
+/**
+ * @brief Map conflict variables to the range [0,N-1] in topological order
+ * 
+ * @param conflictLits 
+ * @param predecessors 
+ * @param predecessorIndex 
+ * @param assignmentTrail 
+ * @param ca 
+ */
+static void remapConflictLits(
+    vec<Lit>& conflictLits,
+    vec<int>& predecessors,
+    vec<int>& predecessorIndex,
+    vec<int>& remappedVariables,
+    AssignmentTrail& assignmentTrail,
+    ClauseAllocator& ca
+) {
+    for (int i = conflictLits.size() - 1; i >= 0; i--) {
+        const Var v = var(conflictLits[i]);
+
+        // Store index and remap current variable
+        predecessorIndex.push(predecessors.size());
+        remappedVariables[v] = predecessorIndex.size();
+
+        // Store remapped predecessors
+        CRef reason = assignmentTrail.reason(v);
+        if (i = conflictLits.size() - 1 || reason == CRef_Undef) continue;
+        const Clause& reasonClause = ca[reason];
+        for (int j = 0; j < reasonClause.size(); j++) {
+            if (assignmentTrail.level() != assignmentTrail.decisionLevel()) continue;
+            const Var x = var(reasonClause[j]);
             predecessors.push(remappedVariables[x]);
         }
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// HELPER FUNCTIONS
+static void dipComputationSetup(
+    vec<Lit>& conflictLits,
+    vec<int>& predecessors,
+    vec<int>& predecessorIndex,
+    vec<int>& remappedVariables,
+    vec<bool>& seen,
+    AssignmentTrail& assignmentTrail,
+    ClauseAllocator& ca,
+    CRef confl
+) {
+    // Clear data structures
+    conflictLits.clear();
+    predecessors.clear();
+    predecessorIndex.clear();
+
+    // Get conflict literals in reverse topological order
+    getFirstUIPConflictLits(conflictLits, seen, assignmentTrail, ca, confl);
+
+    // Get conflict variables in topological order and remap them to the range [0,N-1]
+    remapConflictLits(conflictLits, predecessors, predecessorIndex, remappedVariables, assignmentTrail, ca);
+
+    // Clean up
+    for (int i = 0; i < conflictLits.size(); i++)
+        seen[var(conflictLits[i])] = false;
+}
 
 /**
  * @brief Get the literal in the conflict graph from the index returned by the DIP algorithm
  * 
- * @param stack the literals in the conflict graph in reverse topological order
+ * @param conflictLits the literals in the conflict graph in reverse topological order
  * @param index the index for which to get the literal
  * @return the literal corresponding to the requested index
  */
-static inline Lit getLitFromIndex(const vec<Lit>& stack, int index) {
-    return stack[stack.size() - index - 1];
+static inline Lit getLitFromIndex(const vec<Lit>& conflictLits, int index) {
+    return conflictLits[conflictLits.size() - index - 1];
+}
+
+/**
+ * @brief Get the literals from earlier levels that participate in the conflict graph after the DIP
+ * 
+ * @param dipA the first DIP literal
+ * @param dipB the second DIP literal
+ * @return a list of literals from earlier levels that participate in the conflict graph after the DIP
+ */
+static inline std::vector<Lit> getLowerLevelLitsAfterDIP(
+    Var dipA,
+    Var dipB,
+    CRef confl,
+    AssignmentTrail& assignmentTrail,
+    ClauseAllocator& ca
+) {
+    // Initialize local data structures
+    Lit p = lit_Undef;
+    int pathC = 0;
+    int dipSeen = 0;
+    int index = 0;
+    vec<Var> bfsQueue;
+
+    std::vector<Lit> litsAfterDIP;
+
+    // Iterate through variables that participate in the conflict graph, backtracking until the DIP
+    do {
+        assert(confl != CRef_Undef); // (otherwise should be UIP)
+        Clause& c = ca[confl];
+
+        // Iterate through every literal that participates in the conflict graph
+        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
+            Lit q = c[j];
+            if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+            // Mark variable as seen
+            seen[var(q)] = true;
+            bfsQueue.push(var(q));
+
+            // Add variable to litsAfterDIP
+            if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
+                litsAfterDIP.push_back(q);
+
+            // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+            if (assignmentTrail.level(var(q)) == assignmentTrail.decisionLevel())
+                pathC++;
+        }
+        
+        // Select next clause to look at:
+        do {
+            p = bfsQueue[index++];
+            confl = assignmentTrail.reason(var(p));
+            seen[var(p)] = false;
+            pathC--;
+
+            if (var(p) == dip1 || var(p) == dip2) {
+                dipSeen++;
+            } else {
+                break;
+            }
+        } while (pathC > 0);
+    } while (dipSeen < 2 && pathC > 0); // Shouldn't need to check pathC if the DIP computation algorithm worked 
+
+    assert(pathC == 2);
+
+    // Clean up
+    for (int i = 0; i < litsAfterDIP.size(); i++)
+        seen[litsAfterDIP[i]] = false;
+
+    return litsAfterDIP;
 }
 
 /**
  * @brief Get the literals from earlier levels that participate in the conflict graph before the DIP
  * 
- * @param stack the literals in the conflict graph in reverse topological order
- * @param indexA the index of the first DIP literal
- * @param indexB the index of the second DIP literal
+ * @param dipA the first DIP literal
+ * @param dipB the second DIP literal
  * @return a list of literals from earlier levels that participate in the conflict graph before the DIP
  */
-static inline std::vector<Lit> getLowerLevelLitsBeforeDIP(const vec<Lit>& stack, int indexA, int indexB);
+static inline std::vector<Lit> getLowerLevelLitsBeforeDIP(
+    Var dipA,
+    Var dipB,
+    AssignmentTrail& assignmentTrail,
+    ClauseAllocator& ca
+) {
+    // Set up data structures to iterate backward from DIP
+    CRef confl = reason(dip1);
+    Lit p = mkLit(dip1);
+    int pathC = 0;
+    int index = 0;
+    vec<Var> bfsQueue;
+    bfsQueue.push(dip2);
 
-/**
- * @brief Get the literals from earlier levels that participate in the conflict graph after the DIP
- * 
- * @param stack the literals in the conflict graph in reverse topological order
- * @param indexA the index of the first DIP literal
- * @param indexB the index of the second DIP literal
- * @return a list of literals from earlier levels that participate in the conflict graph after the DIP
- */
-static inline std::vector<Lit> getLowerLevelLitsAfterDIP(const vec<Lit>& stack, int indexA, int indexB);
+    std::vector<Lit> litsBeforeDIP;
+
+    // Iterate through variables that participate in the conflict graph, backtracking until the UIP
+    do {
+        assert(confl != CRef_Undef); // (otherwise should be UIP)
+        Clause& c = ca[confl];
+
+        // Iterate through every literal that participates in the conflict graph
+        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++){
+            Lit q = c[j];
+            if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+            // Mark variable as seen
+            seen[var(q)] = true;
+            bfsQueue.push(var(q));
+
+            // Add variable to litsBeforeDIP
+            if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
+                litsBeforeDIP.push_back(q);
+
+            // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+            if (assignmentTrail.level(var(q)) == assignmentTrail.decisionLevel())
+                pathC++;
+        }
+        
+        // Select next clause to look at:
+        p = bfsQueue[index++];
+        seen[var(p)] = false;
+        confl = assignmentTrail.reason(var(p));
+        pathC--;
+    } while (pathC > 0);
+
+    // Clean up
+    for (int i = 0; i < litsBeforeDIP.size(); i++)
+        seen[litsBeforeDIP[i]] = false;
+
+    return litsBeforeDIP;
+}
