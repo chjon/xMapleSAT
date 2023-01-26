@@ -365,7 +365,7 @@ void ERManager::user_extDelPredicateSetup_activity() {
     m_threshold_activity = ext_act_threshold;
 #elif ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
     // Copy activities for current variables
-    const vec<double>& activity = solver.branchingHeuristicManager.getActivityVSIDS();
+    const vec<double>& activity = solver.branchingHeuristicManager.getActivity();
     vec<double> currentActivity(originalNumVars);
     for (int i = 0; i < originalNumVars; i++) currentActivity.push(activity[i]);
     for (auto it = extDefs.begin(); it != extDefs.end(); it++) currentActivity.push(activity[it->first]);
@@ -380,7 +380,7 @@ bool ERManager::user_extDelPredicate_none(Var x) { return false; }
 bool ERManager::user_extDelPredicate_all(Var x) { return true; }
 bool ERManager::user_extDelPredicate_activity(Var x) {
 #if ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY || ER_USER_DELETE_HEURISTIC == ER_DELETE_HEURISTIC_ACTIVITY2
-    const double activity = solver.branchingHeuristicManager.getActivityVSIDS()[x];
+    const double activity = solver.branchingHeuristicManager.getActivity()[x];
     return activity < m_threshold_activity;
 #else
     return false;

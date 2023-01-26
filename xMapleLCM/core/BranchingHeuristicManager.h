@@ -266,11 +266,11 @@ namespace Minisat {
         // ACCESSORS
 
         /**
-         * @brief Get the VSIDS activity array
+         * @brief Get the current activity array
          * 
-         * @return the VSIDS activity array 
+         * @return the current activity array 
          */
-        const vec<double>& getActivityVSIDS(void) const;
+        const vec<double>& getActivity(void) const;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -465,8 +465,10 @@ namespace Minisat {
     //////////////
     // ACCESSORS
 
-    inline const vec<double>& BranchingHeuristicManager::getActivityVSIDS() const {
-        return activity_VSIDS;
+    inline const vec<double>& BranchingHeuristicManager::getActivity() const {
+        if (DISTANCE) return activity_distance;
+        if (VSIDS)    return activity_VSIDS;
+        return activity_CHB;
     }
 
     ///////////////////////

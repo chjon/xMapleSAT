@@ -260,7 +260,9 @@ void BranchingHeuristicManager::handleEventConflicted(CRef confl, uint64_t confl
             step_size -= step_size_dec;
     }
 
+    const bool prevDISTANCE = DISTANCE;
     DISTANCE = (conflicts <= 50000);
+    if (prevDISTANCE != DISTANCE) solver.propagationQueue.prioritizeByActivity(getActivity());
     if (VSIDS && DISTANCE)
         solver.conflictAnalyzer.collectFirstUIP(confl);
 }

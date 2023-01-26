@@ -333,7 +333,7 @@ void ERManager::prioritize(const std::vector<ExtDef>& defs) {
 
     // Find maximum activity
     double maxActivity = 0;
-    const vec<double>& activities = branchingHeuristicManager.getActivityVSIDS();
+    const vec<double>& activities = branchingHeuristicManager.getActivity();
     for (int i = 0; i < assignmentTrail.nVars(); i++)
         maxActivity = std::max(maxActivity, activities[i]);
 

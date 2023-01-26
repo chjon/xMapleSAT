@@ -79,7 +79,7 @@ class Heap {
     bool empty     ()          const { return heap.size() == 0; }
     bool inHeap    (int n)     const { return n < indices.size() && indices[n] >= 0; }
     int  operator[](int index) const { assert(index < heap.size()); return heap[index]; }
-
+    void setComp   (const Comp& c)   { assert(empty()); lt = c; }
 
     void decrease  (int n) { assert(inHeap(n)); percolateUp  (indices[n]); }
     void increase  (int n) { assert(inHeap(n)); percolateDown(indices[n]); }
