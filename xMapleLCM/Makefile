@@ -92,6 +92,21 @@ maplelcm_bcp_priority: .prev_maplelcm_bcp_priority
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
+maplelcm_bcp_priority_vsids: .prev_maplelcm_bcp_priority_vsids
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
+maplelcm_bcp_priority_chb: .prev_maplelcm_bcp_priority_chb
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=2" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
+maplelcm_bcp_priority_dist: .prev_maplelcm_bcp_priority_dist
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=2" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
 xmaplelcm: .prev_xmaplelcm
 	gmake CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \

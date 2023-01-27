@@ -155,16 +155,22 @@ lbool Solver::solve_() {
         printf("c ===============================================================================\n");
     }
 
+#if BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC
     branchingHeuristicManager.VSIDS = true;
+#endif
     int init = 10000;
     while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
+#if BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC
     branchingHeuristicManager.VSIDS = false;
+#endif
 
     // Search:
     while (status == l_Undef && withinBudget()) {
+#if BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC
         // Periodically switch branching heuristic
         branchingHeuristicManager.checkSwitchHeuristic(unitPropagator.propagations);
+#endif
 
         // Compute the next number of conflicts before restart
         int numConflictsBeforeRestart = restartHeuristicManager.getRestartConflicts();

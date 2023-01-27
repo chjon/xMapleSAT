@@ -60,10 +60,15 @@ BranchingHeuristicManager::BranchingHeuristicManager(Solver& s)
     , min_step_size(opt_min_step_size)
 
     // LRB
-    , VSIDS(false)
+    , VSIDS(
+        BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_VSIDS
+    )
 
     // Distance
-    , DISTANCE(true)
+    , DISTANCE(
+        BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC ||
+        BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DISTANCE
+    )
     , var_iLevel_inc(1)
     , my_var_decay(0.6)
 
@@ -260,9 +265,11 @@ void BranchingHeuristicManager::handleEventConflicted(CRef confl, uint64_t confl
             step_size -= step_size_dec;
     }
 
+#if BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC
     const bool prevDISTANCE = DISTANCE;
     DISTANCE = (conflicts <= 50000);
     if (prevDISTANCE != DISTANCE) solver.propagationQueue.prioritizeByActivity(getActivity());
+#endif
     if (VSIDS && DISTANCE)
         solver.conflictAnalyzer.collectFirstUIP(confl);
 }

@@ -36,6 +36,15 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define LOOSE_PROP_STAT
 #endif
 
+#define BRANCHING_HEURISTIC_DYNAMIC  0
+#define BRANCHING_HEURISTIC_VSIDS    1
+#define BRANCHING_HEURISTIC_CHB      2
+#define BRANCHING_HEURISTIC_DISTANCE 3
+
+#ifndef BRANCHING_HEURISTIC
+#define BRANCHING_HEURISTIC BRANCHING_HEURISTIC_DYNAMIC
+#endif
+
 #include "core/AssignmentTrail.h"
 #include "core/BranchingHeuristicManager.h"
 #include "core/ClauseDatabase.h"
