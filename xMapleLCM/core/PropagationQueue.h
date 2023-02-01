@@ -156,7 +156,7 @@ namespace Minisat {
          * 
          * @note literals are added from @code{trail[levelHead]} up to @code{trail.last()}
          */
-        void batchEnqueue(vec<Lit>& trail, int levelHead);
+        void batchEnqueue(const vec<Lit>& trail, int levelHead);
 
         /**
          * @brief Get the next literal for propagation
@@ -221,7 +221,7 @@ namespace Minisat {
         return genericEnqueue<true>(p, from);
     }
 
-    inline void PropagationQueue::batchEnqueue(vec<Lit>& trail, int levelHead) {
+    inline void PropagationQueue::batchEnqueue(const vec<Lit>& trail, int levelHead) {
         switch (propagationMode) {
             case PropagationMode::IMMEDIATE:
             case PropagationMode::DELAYED: {
@@ -229,8 +229,8 @@ namespace Minisat {
             } break;
 
             case PropagationMode::OUT_OF_ORDER: {
-                Lit* i; Lit* end;
-                i = static_cast<Lit*>(trail);
+                const Lit* i; const Lit* end;
+                i = static_cast<const Lit*>(trail);
                 end = i + trail.size();
                 while (i != end) {
                     order_heap.insert((i++)->x);
@@ -303,10 +303,17 @@ namespace Minisat {
         bool distanceBranching,
         const vec<double>& activity
     ) {
+        PropagationMode prevPropagationMode = propagationMode;
         propagationMode = distanceBranching
             ? PropagationMode::IMMEDIATE
             : static_cast<PropagationMode>(BCP_PRIORITY_MODE);
 
+        // Check whether prioritization mode changed
+        if (propagationMode != prevPropagationMode) {
+            batchEnqueue(queue, 0);
+        }
+
+        // Set comparator
         switch (propagationMode) {
             case PropagationMode::DELAYED:
             case PropagationMode::OUT_OF_ORDER: {

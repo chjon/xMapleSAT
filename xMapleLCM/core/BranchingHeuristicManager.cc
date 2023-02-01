@@ -266,13 +266,13 @@ void BranchingHeuristicManager::handleEventConflicted(CRef confl, uint64_t confl
     }
 
 #if BRANCHING_HEURISTIC == BRANCHING_HEURISTIC_DYNAMIC
-    const bool prevDISTANCE = DISTANCE;
+    // const bool prevDISTANCE = DISTANCE;
     DISTANCE = (conflicts <= 50000);
-    if (prevDISTANCE != DISTANCE)
-        solver.propagationQueue.updatePrioritizationMode(
-            DISTANCE,
-            getActivity()
-        );
+    // if (prevDISTANCE != DISTANCE)
+    //     solver.propagationQueue.updatePrioritizationMode(
+    //         DISTANCE,
+    //         getActivity()
+    //     );
 #endif
     if (VSIDS && DISTANCE)
         solver.conflictAnalyzer.collectFirstUIP(confl);
