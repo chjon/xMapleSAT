@@ -56,12 +56,16 @@ namespace Minisat {
         template<class T>
         struct LitOrderLt {
             const vec<T>*  activity;
+            bool greater_than;
             bool operator () (Var x, Var y) const {
                 const vec<T>& act = *activity;
                 x >>= 1; y >>= 1;
-                return act[x] > act[y];
+                return greater_than ^ (act[x] <= act[y]);
             }
-            LitOrderLt(const vec<T>&  act) : activity(&act) { }
+            LitOrderLt(const vec<T>&  act, bool ascending)
+                : activity(&act)
+                , greater_than(ascending)
+            {}
         };
 
     private:
@@ -178,7 +182,7 @@ namespace Minisat {
          * 
          * @param activity the activities of each variable
          */
-        void prioritizeByActivity(const vec<double>& activity);
+        void prioritizeByActivity(const vec<double>& activity, bool ascending);
     
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -281,11 +285,11 @@ namespace Minisat {
     #endif
     }
 
-    inline void PropagationQueue::prioritizeByActivity(const vec<double>& activity) {
+    inline void PropagationQueue::prioritizeByActivity(const vec<double>& activity, bool ascending) {
     #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         // No prioritization
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED || BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        order_heap.setComp(LitOrderLt<double>(activity));
+        order_heap.setComp(LitOrderLt<double>(activity, ascending));
     #endif
     }
 

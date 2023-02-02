@@ -85,7 +85,11 @@ lbool Solver::search(int& nof_conflicts) {
         nbconfbeforesimplify += incSimplify;
     }
 
-    propagationQueue.prioritizeByActivity(branchingHeuristicManager.getActivity());
+    propagationQueue.prioritizeByActivity(
+        branchingHeuristicManager.getActivity(),
+        !branchingHeuristicManager.DISTANCE
+    );
+    
     for (;;){
         CRef confl = unitPropagator.propagate();
 
