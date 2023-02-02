@@ -43,10 +43,10 @@ PropagationQueue::PropagationQueue(Solver& s)
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
     , qhead(0)
     , queue(s.assignmentTrail.getTrail()) 
-    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity(), true))
+    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
 
 #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity(), true))
+    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
 
 #endif
 {}
