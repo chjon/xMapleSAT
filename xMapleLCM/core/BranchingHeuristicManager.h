@@ -179,10 +179,8 @@ namespace Minisat {
         /////////////
         // DISTANCE
 
-    public:
         bool DISTANCE;
 
-    protected:
         double var_iLevel_inc;
 
         double my_var_decay;

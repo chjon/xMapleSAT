@@ -59,7 +59,6 @@ public:
 
     // Pointer to first element:
     operator T*       (void)           { return data; }
-    operator const T* (void) const     { return data; }
 
     // Size operations:
     int      size     (void) const     { return sz; }
