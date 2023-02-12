@@ -87,8 +87,33 @@ maplesat: .prev_maplesat
 	mkdir -p bin
 	mv core/maplesat_static bin/$@
 
-maplesat_bcp_priority: .prev_maplesat_bcp_priority
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+maplesat_vsids: .prev_maplesat_vsids
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=0" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
+maplesat_lrb: .prev_maplesat_lrb
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=2" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
+maplesat_bcp_delayed_vsids: .prev_maplesat_bcp_delayed_vsids
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=0 -D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
+maplesat_bcp_delayed_lrb: .prev_maplesat_bcp_delayed_lrb
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=2 -D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
+maplesat_bcp_ooo_vsids: .prev_maplesat_bcp_ooo_vsids
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=0 -D BCP_PRIORITY_MODE=2" -C core rs || exit 1
+	mkdir -p bin
+	mv core/maplesat_static bin/$@
+
+maplesat_bcp_ooo_lrb: .prev_maplesat_bcp_ooo_lrb
+	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=2 -D BCP_PRIORITY_MODE=2" -C core rs || exit 1
 	mkdir -p bin
 	mv core/maplesat_static bin/$@
 
