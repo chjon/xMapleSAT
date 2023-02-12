@@ -768,7 +768,7 @@ namespace Minisat {
 
         // Update data structures for variable selection heuristic
     #if BRANCHING_HEURISTIC == VSIDS
-        bumpActivityVSIDS(v, var_inc);
+        bumpActivityVSIDS(v);
     #elif BRANCHING_HEURISTIC == CHB
         last_conflict[v] = conflicts;
         conflicted[v]++;
