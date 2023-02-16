@@ -97,6 +97,12 @@ namespace Minisat {
         vec<CRef> reasons;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+        /// @brief The head of the propagation queue as an index into the assignment trail
+        int qhead;
+
+        /// @brief A view-only reference to the assignment trail
+        const vec<Lit>& queue;
+
         /// @brief The priority queue for selecting variables to propagate during BCP
         Heap< LitOrderLt<double> > order_heap;
     #endif
@@ -213,13 +219,14 @@ namespace Minisat {
         qhead = levelHead;
         
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        Lit* i;
-        Lit* end;
-        i = static_cast<Lit*>(trail);
-        end = i + trail.size();
-        while (i != end) {
-            order_heap.insert((i++)->x);
-        }
+        qhead = levelHead;
+        // Lit* i;
+        // Lit* end;
+        // i = static_cast<Lit*>(trail);
+        // end = i + trail.size();
+        // while (i != end) {
+        //     order_heap.insert((i++)->x);
+        // }
     #endif
     }
 
@@ -231,8 +238,8 @@ namespace Minisat {
         if (qhead < queue.size()) return queue[qhead++];
 
         // Propagate according to priority queue afterward
-        qhead++;
         if (!order_heap.empty()) {
+            qhead++;
             Lit p = Lit{order_heap.removeMin()};
 
             // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
@@ -243,8 +250,15 @@ namespace Minisat {
         return lit_Undef;
 
     #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        // Always propagate according to priority queue
-        return order_heap.empty() ? lit_Undef : Lit{order_heap.removeMin()};
+        // Propagate along the trail first
+        if (qhead < queue.size()) return queue[qhead++];
+
+        // Check if propagation is done
+        if (order_heap.empty()) return lit_Undef;
+
+        // Propagate according to priority queue afterward
+        qhead++;
+        return Lit{order_heap.removeMin()};
     #endif
     }
 
