@@ -51,6 +51,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 #include "utils/fps.h"
 
+#include "core/PriorityBCP.h"
+
 // duplicate learnts version
 #include <chrono>
 #include <vector>
@@ -254,12 +256,6 @@ protected:
         WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
         bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
     };
-
-    struct VarOrderLt {
-        const vec<double>&  activity;
-        bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
-        VarOrderLt(const vec<double>&  act) : activity(act) { }
-    };
     
     struct ConflictData
 	{
@@ -309,6 +305,11 @@ protected:
     next_L_reduce;
 
     ClauseAllocator     ca;
+
+    // Priority BCP
+    BCPMode             bcp_mode;
+    vec<lbool>          bcp_assigns; // Required because the heap stores variables, not lits
+    Heap<VarOrderLt>    bcp_heap;
     
     // duplicate learnts version    
     std::map<int32_t,std::map<uint32_t,std::unordered_map<uint64_t,uint32_t>>>  ht;

@@ -134,6 +134,18 @@ inline int   toInt  (lbool l) { return l.value; }
 inline lbool toLbool(int   v) { return lbool((uint8_t)v);  }
 
 //=================================================================================================
+// VarOrderLt -- a comparator for ranking variables based on activity
+
+struct VarOrderLt {
+    const vec<double>*  activity;
+    bool operator () (Var x, Var y) const {
+        const vec<double>& act = *activity;
+        return act[x] > act[y];
+    }
+    VarOrderLt(const vec<double>& act) : activity(&act) { }
+};
+
+//=================================================================================================
 // Clause -- a simple class for representing a clause:
 
 class Clause;
