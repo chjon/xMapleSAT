@@ -38,8 +38,8 @@ void default_initialize(FPS* lssolver){
 void alloc_memory(FPS *lssolver){
 	int var_mem = lssolver->num_vars+2;
 	int cls_mem = lssolver->num_clauses+2;
-  int fps_cnum_mem = 10+2;
-  int bandit_cnum_mem = 20+2;
+//   int fps_cnum_mem = 10+2;
+//   int bandit_cnum_mem = 20+2;
 	lssolver->score_inc_vars 	= (int*)malloc(sizeof(int)*var_mem);
 	lssolver->score_inc_flag 	= (int*)malloc(sizeof(int)*var_mem);
 	lssolver->var_lit 			= (lit**)malloc(sizeof(lit*)*var_mem);
@@ -147,9 +147,9 @@ void free_memory(FPS *lssolver)
 //pick a var to be flip
 void pick_var_FPS(FPS *lssolver)
 {
-  int         i,k,c,v;
+  int i,v; // int k,c;
 	int         best_var;
-	lit*		clause_c;
+	// lit*		clause_c;
 	
   lssolver->tabu_step = 1;
  
@@ -336,7 +336,7 @@ void settings(FPS *lssolver,char *soln)
 
 bool local_search(FPS *lssolver)
 {
-	int flipvar;
+	// int flipvar;
 	lssolver->best_cost = lssolver->num_clauses;
   
   struct tms start_time,now;
@@ -633,7 +633,7 @@ void flip2(FPS *lssolver, int flipvar)
 	
 	//lssolver->score_inc_count=0;
 	
-	int i;
+	// int i;
 	int v,c;
 
 	lit* clause_c;
@@ -929,7 +929,7 @@ void set_clause_weighting(FPS *lssolver)
 void unit_propagation(FPS *lssolver)
 {
     lit uc_lit;
-    int uc_clause;
+    // int uc_clause;
     int uc_var;
     bool uc_sense;
     

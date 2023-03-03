@@ -301,10 +301,6 @@ protected:
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
-    // Priority BCP
-    Heap<VarOrderLt>    bcp_heap;
-    vec<bool>           bcp_assigns;
-
     int                 core_lbd_cut;
     float               global_lbd_sum;
     MyQueue<int>        lbd_queue;  // For computing moving averages of recent LBD values.
