@@ -84,14 +84,11 @@ static inline Lit getNextOutOfOrder(
     int& qhead,
     vec<Lit>& trail
 ) {
-    // Prioritize propagating from the trail first
-    if (qhead < trail.size()) return trail[qhead++];
-
     // Check if the heap is empty
-    if (bcp_heap.size() == 0) return lit_Undef;
+    if (bcp_heap.size() == 0) return getNextGreedy(qhead, trail);
+    qhead = trail.size();
 
     // Propagate from the heap
-    qhead++;
     const Var x = bcp_heap.removeMin();
     return mkLit(x, assigns[x] == l_False);
 }
@@ -244,6 +241,7 @@ CRef Solver::propagate()
         for (int k = 0; k < ws_bin.size(); k++){
             Lit the_other = ws_bin[k].blocker;
             if (causesConflict(bcp_mode, the_other, assigns, bcp_assigns, trail)){
+                clearQueue(bcp_mode, bcp_assigns, bcp_heap, qhead, trail);
                 confl = ws_bin[k].cref;
 #ifdef LOOSE_PROP_STAT
                 return confl;
