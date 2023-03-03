@@ -76,6 +76,7 @@ void ClauseDatabase::removeClause(CRef cr) {
 void ClauseDatabase::attachClause(CRef cr) {
     const Clause& c = ca[cr];
     unitPropagator.attachClause(cr);
+    solver.propagationQueue.handleEventNewClause(c);
     if (c.learnt()) learnts_literals += c.size();
     else            clauses_literals += c.size();
 }

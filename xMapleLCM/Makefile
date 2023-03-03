@@ -117,8 +117,18 @@ maplelcm_bcp_delayed_chb: .prev_maplelcm_bcp_delayed_chb
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
-maplelcm_bcp_delayed_dist: .prev_maplelcm_bcp_delayed_dist
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=3" -C core rs || exit 1
+maplelcm_bcp_delayed_mom: .prev_maplelcm_bcp_delayed_mom
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BCP_PRIORITY_HEURISTIC=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
+maplelcm_bcp_delayed_vsids_mom: .prev_maplelcm_bcp_delayed_vsids_mom
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=1 -D BCP_PRIORITY_HEURISTIC=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
+maplelcm_bcp_delayed_chb_mom: .prev_maplelcm_bcp_delayed_chb_mom
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=2 -D BCP_PRIORITY_HEURISTIC=1" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
@@ -134,11 +144,6 @@ maplelcm_bcp_ooo_vsids: .prev_maplelcm_bcp_ooo_vsids
 
 maplelcm_bcp_ooo_chb: .prev_maplelcm_bcp_ooo_chb
 	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=2 -D BRANCHING_HEURISTIC=2" -C core rs || exit 1
-	mkdir -p bin
-	mv core/glucose_static bin/$@
-
-maplelcm_bcp_ooo_dist: .prev_maplelcm_bcp_ooo_dist
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=2 -D BRANCHING_HEURISTIC=3" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 

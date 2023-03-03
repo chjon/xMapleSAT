@@ -5,7 +5,7 @@ MiniSat -- Copyright (c) 2003-2006, Niklas Een, Niklas Sorensson
 Chanseok Oh's MiniSat Patch Series -- Copyright (c) 2015, Chanseok Oh
  
 Maple_LCM, Based on MapleCOMSPS_DRUP -- Copyright (c) 2017, Mao Luo, Chu-Min LI, Fan Xiao: implementing a learnt clause minimisation approach
-Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,�?in IJCAI-2017, 2017, pp. to–appear.
+Reference: M. Luo, C.-M. Li, F. Xiao, F. Manya, and Z. L. , “An effective learnt clause minimization approach for cdcl sat solvers,�?in IJCAI-2017, 2017, pp. to–appear.
 
 Maple_LCM_Dist, Based on Maple_LCM -- Copyright (c) 2017, Fan Xiao, Chu-Min LI, Mao Luo: using a new branching heuristic called Distance at the beginning of search
 
@@ -300,6 +300,10 @@ protected:
     order_heap_VSIDS;
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
+
+    // Priority BCP
+    Heap<VarOrderLt>    bcp_heap;
+    vec<bool>           bcp_assigns;
 
     int                 core_lbd_cut;
     float               global_lbd_sum;

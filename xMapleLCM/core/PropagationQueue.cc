@@ -36,19 +36,15 @@ PropagationQueue::PropagationQueue(Solver& s)
 
     ///////////////////
     // Member variables
-#if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
     , qhead(0)
     , queue(s.assignmentTrail.getTrail()) 
 
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-    , qhead(0)
-    , queue(s.assignmentTrail.getTrail()) 
+#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
+#if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
     , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
-
-#elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-    , qhead(0)
-    , queue(s.assignmentTrail.getTrail()) 
-    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
-
+#elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
+    , order_heap(LitOrderLt<OccurrenceCounter>(occurrences))
 #endif
+#endif
+
 {}

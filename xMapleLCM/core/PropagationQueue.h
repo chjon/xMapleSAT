@@ -33,6 +33,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
 #endif
 
+// Define BCP-prioritization heuristic
+#define BCP_PRIORITY_ACTIVITY   0 // Prioritize high-activity literals
+#define BCP_PRIORITY_MAX_ON_MIN 1 // Prioritize variables that appear a lot on minimum-sized clauses
+
+// Select prioritization heuristic
+#ifndef BCP_PRIORITY_HEURISTIC
+    #define BCP_PRIORITY_HEURISTIC BCP_PRIORITY_ACTIVITY
+#endif
+
+#include <limits.h>
 #include "core/AssignmentTrail.h"
 #include "core/SolverTypes.h"
 #include "mtl/Heap.h"
@@ -66,6 +76,19 @@ namespace Minisat {
             {}
         };
 
+        struct OccurrenceCounter {
+            int clauseSize;
+            int count;
+
+            bool operator < (const OccurrenceCounter other) const {
+                if (clauseSize != other.clauseSize) return clauseSize < other.clauseSize;
+                return count > other.count;
+            }
+            bool operator > (const OccurrenceCounter other) const {
+                return !operator<(other);
+            }
+        };
+
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // SOLVER REFERENCES
@@ -74,40 +97,37 @@ namespace Minisat {
 
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
+        // HEURISTICS
+
+        // Maximum-Occurrences-on-Minimum-sized-Clauses heuristic
+        vec<OccurrenceCounter> occurrences;
+
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
         // MEMBER VARIABLES
 
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         /// @brief The head of the propagation queue as an index into the assignment trail
         int qhead;
 
         /// @brief A view-only reference to the assignment trail
         const vec<Lit>& queue;
 
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        /// @brief The head of the propagation queue as an index into the assignment trail
-        int qhead;
-
-        /// @brief A view-only reference to the assignment trail
-        const vec<Lit>& queue;
-
+    #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
+    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
         /// @brief The priority queue for selecting variables to propagate during BCP
         Heap< LitOrderLt<double> > order_heap;
+    #elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
+        /// @brief The priority queue for selecting variables to propagate during BCP
+        Heap< LitOrderLt<OccurrenceCounter> > order_heap;
+    #endif
+    #endif
 
+    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         /// @brief The polarities of queued variables
         vec<lbool> soft_assigns;
 
         /// @brief The reason clauses for queuing variables for BCP
         vec<CRef> reasons;
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        /// @brief The head of the propagation queue as an index into the assignment trail
-        int qhead;
-
-        /// @brief A view-only reference to the assignment trail
-        const vec<Lit>& queue;
-
-        /// @brief The priority queue for selecting variables to propagate during BCP
-        Heap< LitOrderLt<double> > order_heap;
     #endif
 
     public:
@@ -188,6 +208,12 @@ namespace Minisat {
          */
         void prioritizeByActivity(const vec<double>& activity);
     
+    public:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // EVENT HANDLERS
+
+        void handleEventNewClause(const Clause& c);
+
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // HELPER FUNCTIONS
@@ -218,6 +244,7 @@ namespace Minisat {
         soft_assigns.push(l_Undef);
         reasons.push(CRef_Undef);
     #endif
+        occurrences.push(OccurrenceCounter{INT_MAX, 0});
     }
 
     inline bool PropagationQueue::enqueue(Lit p, CRef from) {
@@ -298,10 +325,10 @@ namespace Minisat {
     }
 
     inline void PropagationQueue::prioritizeByActivity(const vec<double>& activity) {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        // No prioritization
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED || BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+    #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
+    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
         order_heap.setComp(LitOrderLt<double>(activity));
+    #endif
     #endif
     }
 
@@ -338,6 +365,26 @@ namespace Minisat {
     #endif
 
         return true;
+    }
+
+    inline void PropagationQueue::handleEventNewClause(const Clause& c) {
+    #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
+        for (int i = 0; i < c.size(); i++) {
+            Lit l = c[i];
+            Var v = var(l);
+            if (c.size() < occurrences[v].clauseSize) {
+                occurrences[v].clauseSize = c.size();
+                occurrences[v].count = 1;
+
+                if (order_heap.inHeap(l.x)) order_heap.decrease(l.x);
+                if (order_heap.inHeap((~l).x)) order_heap.decrease((~l).x);
+            } else if (c.size() == occurrences[v].clauseSize) {
+                occurrences[v].count++;
+                if (order_heap.inHeap(l.x)) order_heap.decrease(l.x);
+                if (order_heap.inHeap((~l).x)) order_heap.decrease((~l).x);
+            }
+        }
+    #endif
     }
 }
 
