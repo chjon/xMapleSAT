@@ -235,12 +235,15 @@ public:
     vec<uint32_t> canceled;
 #endif
 
-protected:
-
     // Helper structures:
     //
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
+
+protected:
+
+    // Helper structures:
+    //
 
     struct Watcher {
         CRef cref;

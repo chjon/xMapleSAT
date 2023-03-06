@@ -1,6 +1,7 @@
 #include "core/Solver.h"
 
 using namespace Minisat;
+using VarData = Solver::VarData;
 
 static inline void updateCHB(
     Var x, uint64_t conflicts
@@ -27,23 +28,42 @@ static inline void updateCHB(
 #endif
 }
 
-static inline void enqueueGreedy(Lit p, vec<lbool>& assigns, vec<Lit>& trail) {
+static inline void enqueueGreedy(
+    Lit p, int level, CRef from,
+    vec<lbool>& assigns, vec<VarData>& vardata, vec<Lit>& trail
+) {
     const Var x = var(p);
     assigns[x] = lbool(!sign(p));
+    vardata[x] = Solver::mkVarData(from, level);
     trail.push_(p);
 }
 
-static inline void enqueueOutOfOrder(Lit p, vec<lbool>& assigns, Heap<VarOrderLt>& bcp_heap, vec<Lit>& trail) {
+static inline void enqueueOutOfOrder(
+    Lit p, int level, CRef from,
+    vec<lbool>& assigns, vec<VarData>& vardata, Heap<VarOrderLt>& bcp_heap, int qhead, vec<Lit>& trail
+) {
+    // Store reason clause and decision level
     const Var x = var(p);
     assigns[x] = lbool(!sign(p));
-    bcp_heap.insert(x);
+    vardata[x] = Solver::mkVarData(from, level);
+
+    if (qhead == trail.size()) {
+        bcp_heap.insert(x);
+        qhead++;
+    }
     trail.push_(p);
 }
 
-static inline void enqueueDelayed(Lit p, vec<lbool>& bcp_assigns, Heap<VarOrderLt>& bcp_heap) {
-    Var x = var(p);
-    bcp_assigns[x] = lbool(!sign(p));
-    bcp_heap.insert(x);
+static inline void enqueueDelayed(
+    Lit p, int level, CRef from,
+    vec<lbool>& bcp_assigns, vec<VarData>& vardata, Heap<VarOrderLt>& bcp_heap
+) {
+    const Var x = var(p);
+    if (bcp_assigns[x] == l_Undef) { // Needed in case bcp_assigns[x] == l_True
+        bcp_assigns[x] = lbool(!sign(p));
+        vardata[x] = Solver::mkVarData(from, level);
+        bcp_heap.insert(x);
+    }
 }
 
 void Solver::uncheckedEnqueue(Lit p, int level, CRef from) {
@@ -57,17 +77,14 @@ void Solver::uncheckedEnqueue(Lit p, int level, CRef from) {
     #endif
     );
 
-    // Store reason clause and decision level
-    vardata[var(p)] = mkVarData(from, level);
-
     // Add literal to propagation queue
     switch (bcp_mode) {
         case BCPMode::DELAYED:
-            enqueueDelayed(p, bcp_assigns, bcp_heap); break;
+            enqueueDelayed(p, level, from, bcp_assigns, vardata, bcp_heap); break;
         case BCPMode::OUT_OF_ORDER:
-            enqueueOutOfOrder(p, assigns, bcp_heap, trail); break;
+            enqueueOutOfOrder(p, level, from, assigns, vardata, bcp_heap, qhead, trail); break;
         default:
-            enqueueGreedy(p, assigns, trail); break;
+            enqueueGreedy(p, level, from, assigns, vardata, trail); break;
     }
 }
 
@@ -86,7 +103,6 @@ static inline Lit getNextOutOfOrder(
 ) {
     // Check if the heap is empty
     if (bcp_heap.size() == 0) return getNextGreedy(qhead, trail);
-    qhead = trail.size();
 
     // Propagate from the heap
     const Var x = bcp_heap.removeMin();
@@ -109,9 +125,10 @@ static inline Lit getNextDelayed(
     // Propagate from the heap
     qhead++;
     const Var x = bcp_heap.removeMin();
-    const Lit p = mkLit(x, bcp_assigns[x] == l_False);
-    enqueueGreedy(p, assigns, trail);
+    assigns[x] = bcp_assigns[x];
     bcp_assigns[x] = l_Undef;
+    const Lit p = mkLit(x, assigns[x] == l_False);
+    trail.push_(p);
     return p;
 }
 
@@ -143,9 +160,13 @@ static inline bool causesConflictDelayed(
     vec<lbool>& bcp_assigns,
     vec<Lit>& trail
 ) {
-    if ((assigns[var(p)] ^ sign(p)) == l_False) return true;
-    if ((bcp_assigns[var(p)] ^ sign(p)) != l_False) return false;
-    enqueueGreedy(~p, assigns, trail);
+    const Var x = var(p);
+    if ((assigns[x] ^ sign(p)) == l_False) return true;
+    if ((bcp_assigns[x] ^ sign(p)) != l_False) return false;
+
+    assigns[x] = bcp_assigns[x];
+    bcp_assigns[x] = l_Undef;
+    trail.push_(~p);
     return true;
 }
 
