@@ -2,6 +2,7 @@
 
 using namespace Minisat;
 using VarData = Solver::VarData;
+using VarOrderLt = Solver::VarOrderLt;
 
 static inline void updateCHB(
     Var x, uint64_t conflicts
@@ -66,7 +67,7 @@ static inline void enqueueDelayed(
     }
 }
 
-void Solver::uncheckedEnqueue(Lit p, int level, CRef from) {
+void Solver::uncheckedEnqueue(Lit p, CRef from) {
     assert(value(p) == l_Undef);
 
     // Update branching heuristics
@@ -78,6 +79,7 @@ void Solver::uncheckedEnqueue(Lit p, int level, CRef from) {
     );
 
     // Add literal to propagation queue
+    const int level = decisionLevel();
     switch (bcp_mode) {
         case BCPMode::DELAYED:
             enqueueDelayed(p, level, from, bcp_assigns, vardata, bcp_heap); break;
@@ -253,7 +255,6 @@ CRef Solver::propagate()
         p != lit_Undef;
         p = getNext(bcp_mode, assigns, bcp_assigns, bcp_heap, qhead, trail)
     ) {
-        int currLevel = level(var(p));
         vec<Watcher>&  ws  = watches[p];
         Watcher        *i, *j, *end;
         num_props++;
@@ -270,12 +271,7 @@ CRef Solver::propagate()
                 goto ExitProp;
 #endif
             }else if(value(the_other) == l_Undef)
-            {
-                uncheckedEnqueue(the_other, currLevel, ws_bin[k].cref);
-#ifdef  PRINT_OUT                
-                std::cout << "i " << the_other << " l " << currLevel << "\n";
-#endif                
-			}
+                uncheckedEnqueue(the_other, ws_bin[k].cref);
         }
 
         for (i = j = (Watcher*)ws, end = i + ws.size();  i != end;){
@@ -315,42 +311,7 @@ CRef Solver::propagate()
                 while (i < end)
                     *j++ = *i++;
             }else
-            {
-				if (currLevel == decisionLevel())
-				{
-					uncheckedEnqueue(first, currLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << currLevel << "\n";
-#endif					
-				}
-				else
-				{
-					int nMaxLevel = currLevel;
-					int nMaxInd = 1;
-					// pass over all the literals in the clause and find the one with the biggest level
-					for (int nInd = 2; nInd < c.size(); ++nInd)
-					{
-						int nLevel = level(var(c[nInd]));
-						if (nLevel > nMaxLevel)
-						{
-							nMaxLevel = nLevel;
-							nMaxInd = nInd;
-						}
-					}
-
-					if (nMaxInd != 1)
-					{
-						std::swap(c[1], c[nMaxInd]);
-						*j--; // undo last watch
-						watches[~c[1]].push(w);
-					}
-					
-					uncheckedEnqueue(first, nMaxLevel, cr);
-#ifdef PRINT_OUT					
-					std::cout << "i " << first << " l " << nMaxLevel << "\n";
-#endif	
-				}
-			}
+                uncheckedEnqueue(first, cr);
 
 NextClause:;
         }

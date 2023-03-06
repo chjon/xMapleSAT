@@ -46,7 +46,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
-
+#include "core/PriorityBCP.h"
 
 // Don't change the actual numbers.
 #define LOCAL 0
@@ -200,13 +200,18 @@ public:
     vec<uint32_t> canceled;
 #endif
 
-protected:
-
     // Helper structures:
     //
     struct VarData { CRef reason; int level; };
     static inline VarData mkVarData(CRef cr, int l){ VarData d = {cr, l}; return d; }
 
+    struct VarOrderLt {
+        const vec<double>&  activity;
+        bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
+        VarOrderLt(const vec<double>&  act) : activity(act) { }
+    };
+
+protected:
     struct Watcher {
         CRef cref;
         Lit  blocker;
@@ -220,12 +225,6 @@ protected:
         const ClauseAllocator& ca;
         WatcherDeleted(const ClauseAllocator& _ca) : ca(_ca) {}
         bool operator()(const Watcher& w) const { return ca[w.cref].mark() == 1; }
-    };
-
-    struct VarOrderLt {
-        const vec<double>&  activity;
-        bool operator () (Var x, Var y) const { return activity[x] > activity[y]; }
-        VarOrderLt(const vec<double>&  act) : activity(act) { }
     };
 
     // Solver state:
@@ -263,6 +262,11 @@ protected:
 
     uint64_t            next_T2_reduce,
     next_L_reduce;
+
+    // Priority BCP
+    BCPMode             bcp_mode;
+    vec<lbool>          bcp_assigns; // Required because the heap stores variables, not lits
+    Heap<VarOrderLt>    bcp_heap;
 
     ClauseAllocator     ca;
 
