@@ -1885,7 +1885,7 @@ lbool Solver::search(int& nof_conflicts)
                 restart = lbd_queue.full() && (lbd_queue.avg() * 0.8 > global_lbd_sum / conflicts_VSIDS);
                 cached = true;
             }
-            if (restart /*|| !withinBudget()*/){
+            if (restart || !withinBudget()){
                 lbd_queue.clear();
                 cached = false;
                 // Reached bound on number of conflicts:
@@ -2027,7 +2027,7 @@ lbool Solver::solve_()
 
     VSIDS = true;
     int init = 10000;
-    while (status == l_Undef && init > 0 /*&& withinBudget()*/)
+    while (status == l_Undef && init > 0 && withinBudget())
         status = search(init);
     VSIDS = false;
 
@@ -2041,7 +2041,7 @@ lbool Solver::solve_()
     // Search:
     int curr_restarts = 0;
     last_switch_conflicts = starts;
-    while (status == l_Undef /*&& withinBudget()*/){
+    while (status == l_Undef && withinBudget()){
         if (dupl_db_size >= dupl_db_size_limit){    
             printf("c Duplicate learnts added (Minimization) %lu.\n",duplicates_added_minimization);    
             printf("c Duplicate learnts added (conflicts) %lu.\n",duplicates_added_conflicts);    
