@@ -46,6 +46,12 @@ enum BranchingHeuristic: uint8_t {
     VSIDS = 1,
 };
 
+enum BCPMode : uint8_t {
+    IMMEDIATE  = 0,
+    DELAYED    = 1,
+    OUTOFORDER = 2,
+};
+
 //=================================================================================================
 // Variables, literals, lifted booleans, clauses:
 

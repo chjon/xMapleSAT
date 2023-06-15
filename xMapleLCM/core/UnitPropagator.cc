@@ -99,23 +99,33 @@ void UnitPropagator::relocAll(ClauseAllocator& to) {
 }
 
 CRef UnitPropagator::propagate() {
-    return genericPropagate<false>();
+    switch (propagationQueue.current_bcpmode) {
+        default:
+        case BCPMode::IMMEDIATE : return genericPropagate<BCPMode::IMMEDIATE , false>();
+        case BCPMode::DELAYED   : return genericPropagate<BCPMode::DELAYED   , false>();
+        case BCPMode::OUTOFORDER: return genericPropagate<BCPMode::OUTOFORDER, false>();
+    }
 }
 
 CRef UnitPropagator::simplePropagate() {
-    return genericPropagate<true>();
+    switch (propagationQueue.current_bcpmode) {
+        default:
+        case BCPMode::IMMEDIATE : return genericPropagate<BCPMode::IMMEDIATE , true>();
+        case BCPMode::DELAYED   : return genericPropagate<BCPMode::DELAYED   , true>();
+        case BCPMode::OUTOFORDER: return genericPropagate<BCPMode::OUTOFORDER, true>();
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS FOR propagate()
 
-template <bool simple>
+template <BCPMode bcpmode, bool simple>
 static inline bool enqueue(PropagationQueue& propagationQueue, Lit p, CRef from) {
-    if (simple) return propagationQueue.simpleEnqueue(p, from);
-    else        return propagationQueue.enqueue      (p, from);
+    if (simple) return propagationQueue.simpleEnqueue<bcpmode>(p, from);
+    else        return propagationQueue.enqueue      <bcpmode>(p, from);
 }
 
-template <bool simple>
+template <BCPMode bcpmode, bool simple>
 static inline CRef propagateSingleBinary(
     PropagationQueue& pq,
     vec<Watcher>& ws_bin,
@@ -126,7 +136,7 @@ static inline CRef propagateSingleBinary(
         if (at.value(the_other) == l_True) continue;
         if (
             at.value(the_other) == l_False ||
-            !enqueue<simple>(pq, the_other, ws_bin[k].cref)
+            !enqueue<bcpmode, simple>(pq, the_other, ws_bin[k].cref)
         ) {
             // All literals falsified!
             pq.clear();
@@ -153,7 +163,7 @@ static inline bool findNewWatch(
     return false;
 }
 
-template <bool simple>
+template <BCPMode bcpmode, bool simple>
 inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     // Iterate through the watches for p, using pointers instead of array indices for speed
     CRef confl = CRef_Undef;
@@ -195,7 +205,7 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
 
         if (
             assignmentTrail.value(first) == l_False ||
-            !enqueue<simple>(propagationQueue, first, cr)
+            !enqueue<bcpmode, simple>(propagationQueue, first, cr)
         ) {
             // All literals falsified!
             confl = cr;
@@ -210,7 +220,7 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
     return confl;
 }
 
-template <bool simple>
+template <BCPMode bcpmode, bool simple>
 inline CRef UnitPropagator::genericPropagate() {
     // Batch update propagations stat to avoid cost of data non-locality
     CRef confl = CRef_Undef;
@@ -219,11 +229,11 @@ inline CRef UnitPropagator::genericPropagate() {
     watches_bin.cleanAll();
 
     Lit p; // 'p' is enqueued fact to propagate.
-    while ((p = propagationQueue.getNext<simple>()) != lit_Undef) {
+    while ((p = propagationQueue.getNext<bcpmode, simple>()) != lit_Undef) {
         num_props++;
 
         // Propagate binary clauses first.
-        confl = propagateSingleBinary<simple>(propagationQueue, watches_bin[p], assignmentTrail);
+        confl = propagateSingleBinary<bcpmode, simple>(propagationQueue, watches_bin[p], assignmentTrail);
         if (confl != CRef_Undef) {
             if (simple) {
                 break;
@@ -237,7 +247,7 @@ inline CRef UnitPropagator::genericPropagate() {
         }
 
         // Propagate non-binary clauses second.
-        confl = propagateSingleNonBinary<simple>(p);
+        confl = propagateSingleNonBinary<bcpmode, simple>(p);
         if (confl != CRef_Undef) break;
     }
 

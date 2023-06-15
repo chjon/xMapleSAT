@@ -230,7 +230,7 @@ namespace Minisat {
          * @param p the literal to propagate
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef.
          */
-        template <bool simple>
+        template <BCPMode bcpmode, bool simple>
         CRef propagateSingleNonBinary(Lit p);
 
         /**
@@ -239,7 +239,7 @@ namespace Minisat {
          * @tparam simple: true to skip updating stats and notifying event listeners
          * @return The conflicting clause if a conflict arises, otherwise CRef_Undef. 
          */
-        template <bool simple>
+        template <BCPMode bcpmode, bool simple>
         CRef genericPropagate();
     };
 

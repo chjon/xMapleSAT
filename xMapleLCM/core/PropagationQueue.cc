@@ -25,6 +25,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 using namespace Minisat;
 
+#ifndef BCP_PRIORITY_MODE
+#define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
@@ -37,14 +41,13 @@ PropagationQueue::PropagationQueue(Solver& s)
     ///////////////////
     // Member variables
     , qhead(0)
-    , queue(s.assignmentTrail.getTrail()) 
+    , queue(s.assignmentTrail.getTrail())
 
-#if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-#if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
-    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
-#elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
+#if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
     , order_heap(LitOrderLt<OccurrenceCounter>(occurrences))
-#endif
+#else // if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
+    , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
 #endif
 
+    , current_bcpmode(static_cast<BCPMode>(BCP_PRIORITY_MODE))
 {}

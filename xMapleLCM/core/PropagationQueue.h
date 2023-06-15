@@ -112,23 +112,23 @@ namespace Minisat {
         /// @brief A view-only reference to the assignment trail
         const vec<Lit>& queue;
 
-    #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
-    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
-        /// @brief The priority queue for selecting variables to propagate during BCP
-        Heap< LitOrderLt<double> > order_heap;
-    #elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
+    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
         /// @brief The priority queue for selecting variables to propagate during BCP
         Heap< LitOrderLt<OccurrenceCounter> > order_heap;
-    #endif
+    #else // if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
+        /// @brief The priority queue for selecting variables to propagate during BCP
+        Heap< LitOrderLt<double> > order_heap;
     #endif
 
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         /// @brief The polarities of queued variables
         vec<lbool> soft_assigns;
 
         /// @brief The reason clauses for queuing variables for BCP
         vec<CRef> reasons;
-    #endif
+
+    public:
+        /// @brief The current variant of BCP to use
+        BCPMode current_bcpmode;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -167,6 +167,9 @@ namespace Minisat {
          */
         bool enqueue(Lit p, CRef from = CRef_Undef);
 
+        template <BCPMode bcpmode>
+        bool enqueue(Lit p, CRef from = CRef_Undef);
+
         /**
          * @brief Add a literal to the propagation queue without notifying event listeners
          * 
@@ -174,6 +177,9 @@ namespace Minisat {
          * @param from the reason for the literal
          * @return false if the negated version of the literal is already in the queue, true otherwise
          */
+        bool simpleEnqueue(Lit p, CRef from = CRef_Undef);
+
+        template <BCPMode bcpmode>
         bool simpleEnqueue(Lit p, CRef from = CRef_Undef);
 
         /**
@@ -192,7 +198,7 @@ namespace Minisat {
          * @tparam simple: true to skip updating stats and notifying event listeners
          * @return the literal to propagate
          */
-        template <bool simple>
+        template <BCPMode bcpmode, bool simple>
         Lit getNext();
 
         /**
@@ -226,7 +232,7 @@ namespace Minisat {
          * @param from the reason for the literal
          * @return false if the negated version of the literal is already in the queue, true otherwise
          */
-        template <bool simple>
+        template <BCPMode bcpmode, bool simple>
         bool genericEnqueue(Lit p, CRef from = CRef_Undef);
     };
 
@@ -240,72 +246,79 @@ namespace Minisat {
     // STATE MODIFICATION
 
     inline void PropagationQueue::newVar(Var v) {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
         soft_assigns.push(l_Undef);
         reasons.push(CRef_Undef);
-    #endif
         occurrences.push(OccurrenceCounter{INT_MAX, 0});
     }
 
+    template <BCPMode bcpmode>
     inline bool PropagationQueue::enqueue(Lit p, CRef from) {
-        return genericEnqueue<false>(p, from);
+        return genericEnqueue<bcpmode, false>(p, from);
+    }
+
+    inline bool PropagationQueue::enqueue(Lit p, CRef from) {
+        switch (current_bcpmode) {
+            default:
+            case BCPMode::IMMEDIATE : return enqueue<BCPMode::IMMEDIATE >(p, from);
+            case BCPMode::DELAYED   : return enqueue<BCPMode::DELAYED   >(p, from);
+            case BCPMode::OUTOFORDER: return enqueue<BCPMode::OUTOFORDER>(p, from);
+        }
+    }
+
+    template <BCPMode bcpmode>
+    inline bool PropagationQueue::simpleEnqueue(Lit p, CRef from) {
+        return genericEnqueue<bcpmode, true>(p, from);
     }
 
     inline bool PropagationQueue::simpleEnqueue(Lit p, CRef from) {
-        return genericEnqueue<true>(p, from);
+        switch (current_bcpmode) {
+            default:
+            case BCPMode::IMMEDIATE : return simpleEnqueue<BCPMode::IMMEDIATE >(p, from);
+            case BCPMode::DELAYED   : return simpleEnqueue<BCPMode::DELAYED   >(p, from);
+            case BCPMode::OUTOFORDER: return simpleEnqueue<BCPMode::OUTOFORDER>(p, from);
+        }
     }
 
     inline void PropagationQueue::batchEnqueue(vec<Lit>& trail, int levelHead) {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
         qhead = levelHead;
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        qhead = levelHead;
-        
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        qhead = levelHead;
-        // Lit* i;
-        // Lit* end;
-        // i = static_cast<Lit*>(trail);
-        // end = i + trail.size();
-        // while (i != end) {
-        //     order_heap.insert((i++)->x);
-        // }
-    #endif
     }
 
-    template <bool simple>
+    template <BCPMode bcpmode, bool simple>
     inline Lit PropagationQueue::getNext() {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        return qhead == queue.size() ? lit_Undef : queue[qhead++];
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        // Propagate along the trail first
-        if (qhead < queue.size()) return queue[qhead++];
+        switch (bcpmode) {
+            default:
+            case BCPMode::IMMEDIATE: {
+                return qhead == queue.size() ? lit_Undef : queue[qhead++];
+            }
+            case BCPMode::DELAYED: {
+                // Propagate along the trail first
+                if (qhead < queue.size()) return queue[qhead++];
 
-        // Propagate according to priority queue afterward
-        if (!order_heap.empty()) {
-            qhead++;
-            Lit p = Lit{order_heap.removeMin()};
+                // Propagate according to priority queue afterward
+                if (!order_heap.empty()) {
+                    qhead++;
+                    Lit p = Lit{order_heap.removeMin()};
 
-            // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
-            if (simple) assignmentTrail.simpleAssign(p, reasons[var(p)]);
-            else        assignmentTrail.assign(p, reasons[var(p)]);
-            soft_assigns[var(p)] = l_Undef;
-            return p;
+                    // Note: Variable is assigned here because it is not assigned in @code{enqueue()}
+                    if (simple) assignmentTrail.simpleAssign(p, reasons[var(p)]);
+                    else        assignmentTrail.assign(p, reasons[var(p)]);
+                    soft_assigns[var(p)] = l_Undef;
+                    return p;
+                }
+                return lit_Undef;
+            }
+            case BCPMode::OUTOFORDER: {
+                // Propagate along the trail first
+                if (qhead < queue.size()) return queue[qhead++];
+
+                // Check if propagation is done
+                if (order_heap.empty()) return lit_Undef;
+
+                // Propagate according to priority queue afterward
+                qhead++;
+                return Lit{order_heap.removeMin()};
+            }
         }
-        return lit_Undef;
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        // Propagate along the trail first
-        if (qhead < queue.size()) return queue[qhead++];
-
-        // Check if propagation is done
-        if (order_heap.empty()) return lit_Undef;
-
-        // Propagate according to priority queue afterward
-        qhead++;
-        return Lit{order_heap.removeMin()};
-    #endif
     }
 
     inline void PropagationQueue::clear() {
@@ -335,34 +348,36 @@ namespace Minisat {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // HELPER FUNCTIONS
 
-    template<bool simple>
+    template<BCPMode bcpmode, bool simple>
     inline bool PropagationQueue::genericEnqueue(Lit p, CRef from) {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
-        if (simple) assignmentTrail.simpleAssign(p, from);
-        else        assignmentTrail.assign(p, from);
+        switch (bcpmode) {
+            default:
+            case BCPMode::IMMEDIATE: {
+                if (simple) assignmentTrail.simpleAssign(p, from);
+                else        assignmentTrail.assign(p, from);
+            } break;
+            case BCPMode::DELAYED: {
+                if ((soft_assigns[var(p)] ^ sign(p)) == l_False) {
+                    // Ensure conflicting literal is on the trail
+                    if (assignmentTrail.value(p) == l_Undef) {
+                        if (simple) assignmentTrail.simpleAssign(~p, reasons[var(p)]);
+                        else        assignmentTrail.assign(~p, reasons[var(p)]);
+                    }
 
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
-        if ((soft_assigns[var(p)] ^ sign(p)) == l_False) {
-            // Ensure conflicting literal is on the trail
-            if (assignmentTrail.value(p) == l_Undef) {
-                if (simple) assignmentTrail.simpleAssign(~p, reasons[var(p)]);
-                else        assignmentTrail.assign(~p, reasons[var(p)]);
-            }
-
-            return false;
-        } else if ((soft_assigns[var(p)] ^ sign(p)) == l_Undef) {
-            // Note: actual variable assignment is delayed until the literal is popped by @code{getNext()}
-            order_heap.insert(p.x);
-            soft_assigns[var(p)] = lbool(!sign(p));
-            reasons[var(p)] = from;
+                    return false;
+                } else if ((soft_assigns[var(p)] ^ sign(p)) == l_Undef) {
+                    // Note: actual variable assignment is delayed until the literal is popped by @code{getNext()}
+                    order_heap.insert(p.x);
+                    soft_assigns[var(p)] = lbool(!sign(p));
+                    reasons[var(p)] = from;
+                }
+            } break;
+            case BCPMode::OUTOFORDER: {
+                order_heap.insert(p.x);
+                if (simple) assignmentTrail.simpleAssign(p, from);
+                else        assignmentTrail.assign(p, from);
+            } break;
         }
-
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
-        order_heap.insert(p.x);
-        if (simple) assignmentTrail.simpleAssign(p, from);
-        else        assignmentTrail.assign(p, from);
-
-    #endif
 
         return true;
     }
