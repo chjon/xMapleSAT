@@ -37,6 +37,7 @@ PropagationQueue::PropagationQueue(Solver& s)
     // Solver references
     
     : assignmentTrail(s.assignmentTrail)
+    , bcprlManager(s)
 
     ///////////////////
     // Member variables

@@ -85,7 +85,14 @@ lbool Solver::search(int& nof_conflicts) {
         nbconfbeforesimplify += incSimplify;
     }
 
+    propagationQueue.handleEventRestarted(BCPRLStats{
+        nof_conflicts,
+        branchingHeuristicManager.decisions,
+        unitPropagator.propagations,
+        restartHeuristicManager.curr_restarts
+    });
     propagationQueue.prioritizeByActivity(branchingHeuristicManager.getActivity());
+
     for (;;){
         CRef confl = unitPropagator.propagate();
 
@@ -103,6 +110,7 @@ lbool Solver::search(int& nof_conflicts) {
 
             lbd--;
             restartHeuristicManager.handleEventLearntClause(lbd);
+            propagationQueue.handleEventLearntClause(lbd);
 
             CRef cr = clauseDatabase.addLearntClause(learnt_clause, lbd, conflicts);
             propagationQueue.enqueue(learnt_clause[0], cr);

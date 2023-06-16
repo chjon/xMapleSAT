@@ -139,7 +139,7 @@ static inline CRef propagateSingleBinary(
             !enqueue<bcpmode, simple>(pq, the_other, ws_bin[k].cref)
         ) {
             // All literals falsified!
-            pq.clear();
+            pq.clear<bcpmode>();
             return ws_bin[k].cref;
         }
     }
@@ -209,7 +209,7 @@ inline CRef UnitPropagator::propagateSingleNonBinary(Lit p) {
         ) {
             // All literals falsified!
             confl = cr;
-            propagationQueue.clear();
+            propagationQueue.clear<bcpmode>();
             break;
         }
     }

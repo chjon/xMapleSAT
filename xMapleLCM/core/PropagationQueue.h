@@ -26,9 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 // Define BCP-prioritization mode
 #define BCP_PRIORITY_IMMEDIATE    0 // Immediate propagation
 #define BCP_PRIORITY_DELAYED      1 // Delayed propagation
-#define BCP_PRIORITY_OUT_OF_ORDER 2 // Out-of-order propagation
+#define BCP_PRIORITY_OUT_OF_ORDER 3 // Out-of-order propagation
 
-// Select prioritization mode
+// Select initial prioritization mode
 #ifndef BCP_PRIORITY_MODE
     #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
 #endif
@@ -42,8 +42,14 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define BCP_PRIORITY_HEURISTIC BCP_PRIORITY_ACTIVITY
 #endif
 
+// Define BCP switching mode
+#ifndef ENABLE_PRIORITY_BCP_RL
+    #define ENABLE_PRIORITY_BCP_RL false
+#endif
+
 #include <limits.h>
 #include "core/AssignmentTrail.h"
+#include "core/BCPRLManager.h"
 #include "core/SolverTypes.h"
 #include "mtl/Heap.h"
 
@@ -94,6 +100,7 @@ namespace Minisat {
         // SOLVER REFERENCES
 
         AssignmentTrail& assignmentTrail;
+        BCPRLManager     bcprlManager;
 
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +212,7 @@ namespace Minisat {
          * @brief Clear the propagation queue
          * 
          */
+        template <BCPMode bcpmode>
         void clear();
 
         /**
@@ -219,6 +227,10 @@ namespace Minisat {
         // EVENT HANDLERS
 
         void handleEventNewClause(const Clause& c);
+
+        void handleEventRestarted(const BCPRLStats& stats);
+
+        void handleEventLearntClause(uint64_t lbd);
 
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -321,20 +333,22 @@ namespace Minisat {
         }
     }
 
-    inline void PropagationQueue::clear() {
-    #if BCP_PRIORITY_MODE == BCP_PRIORITY_IMMEDIATE
+    template<>
+    inline void PropagationQueue::clear<BCPMode::IMMEDIATE>() {
         qhead = queue.size();
+    }
 
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_DELAYED
+    template<>
+    inline void PropagationQueue::clear<BCPMode::DELAYED>() {
         qhead = queue.size();
         for (int k = 0; k < order_heap.size(); k++)
             soft_assigns[order_heap[k] >> 1] = l_Undef;
         order_heap.clear();
+    }
 
-    #elif BCP_PRIORITY_MODE == BCP_PRIORITY_OUT_OF_ORDER
+    template<>
+    inline void PropagationQueue::clear<BCPMode::OUTOFORDER>() {
         order_heap.clear();
-
-    #endif
     }
 
     inline void PropagationQueue::prioritizeByActivity(const vec<double>& activity) {
@@ -400,6 +414,17 @@ namespace Minisat {
             }
         }
     #endif
+    }
+
+    inline void PropagationQueue::handleEventRestarted(const struct BCPRLStats& stats) {
+        if (ENABLE_PRIORITY_BCP_RL) {
+            current_bcpmode = bcprlManager.selectNextMode(current_bcpmode, stats);
+            bcprlManager.clearScores(stats);
+        }
+    }
+
+    inline void PropagationQueue::handleEventLearntClause(uint64_t lbd) {
+        bcprlManager.handleEventLearntClause(lbd);
     }
 }
 

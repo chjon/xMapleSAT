@@ -49,7 +49,21 @@ enum BranchingHeuristic: uint8_t {
 enum BCPMode : uint8_t {
     IMMEDIATE  = 0,
     DELAYED    = 1,
-    OUTOFORDER = 2,
+    NUM_MODES  = 2,
+    OUTOFORDER = 3,
+};
+
+enum class RLScoreType : uint8_t {
+    LBD = 0, // Literal Block Distance
+    GLR = 1, // Global Learning Rate
+    PPD = 2, // Propagations per Decision
+};
+
+struct BCPRLStats {
+    uint64_t conflicts;
+    uint64_t decisions;
+    uint64_t propagations;
+    uint64_t restarts;
 };
 
 //=================================================================================================
