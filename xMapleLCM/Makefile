@@ -87,6 +87,11 @@ maplelcm: .prev_maplelcm
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
+maplelcm_bcp_rl: .prev_maplelcm_bcp_rl
+	gmake CMD_CFLAGS="-D ENABLE_PRIORITY_BCP_RL=1" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
 maplelcm_vsids: .prev_maplelcm_vsids
 	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=1" -C core rs || exit 1
 	mkdir -p bin
