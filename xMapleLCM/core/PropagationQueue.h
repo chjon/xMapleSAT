@@ -42,14 +42,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define BCP_PRIORITY_HEURISTIC BCP_PRIORITY_ACTIVITY
 #endif
 
-// Define BCP switching mode
-#ifndef ENABLE_PRIORITY_BCP_RL
-    #define ENABLE_PRIORITY_BCP_RL false
-#endif
-
 #include <limits.h>
 #include "core/AssignmentTrail.h"
-#include "core/BCPRLManager.h"
 #include "core/SolverTypes.h"
 #include "mtl/Heap.h"
 
@@ -100,7 +94,6 @@ namespace Minisat {
         // SOLVER REFERENCES
 
         AssignmentTrail& assignmentTrail;
-        BCPRLManager     bcprlManager;
 
     protected:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -135,7 +128,7 @@ namespace Minisat {
 
     public:
         /// @brief The current variant of BCP to use
-        BCPMode current_bcpmode;
+        BCPMode& current_bcpmode;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -227,8 +220,6 @@ namespace Minisat {
         // EVENT HANDLERS
 
         void handleEventNewClause(const Clause& c);
-
-        void handleEventRestarted(const BCPRLStats& stats);
 
         void handleEventLearntClause(uint64_t lbd);
 
@@ -414,17 +405,6 @@ namespace Minisat {
             }
         }
     #endif
-    }
-
-    inline void PropagationQueue::handleEventRestarted(const struct BCPRLStats& stats) {
-        if (ENABLE_PRIORITY_BCP_RL) {
-            current_bcpmode = bcprlManager.selectNextMode(current_bcpmode, stats);
-            bcprlManager.clearScores(stats);
-        }
-    }
-
-    inline void PropagationQueue::handleEventLearntClause(uint64_t lbd) {
-        bcprlManager.handleEventLearntClause(lbd);
     }
 }
 

@@ -45,7 +45,7 @@ void printStats(Solver& solver)
 {
     double cpu_time = cpuTime();
     double mem_used = memUsedPeak();
-    printf("c restarts              : %"    PRIu64 "\n", solver.starts);
+    printf("c restarts              : %-12" PRIu64 "   (%" PRIu64 " bcp delayed)\n", solver.starts, solver.bcprlManager.num_delayed);
     printf("c conflicts             : %-12" PRIu64 "   (%.0f /sec)\n", solver.conflicts   , solver.conflicts   /cpu_time);
     printf("c decisions             : %-12" PRIu64 "   (%4.2f %% random) (%.0f /sec)\n", solver.branchingHeuristicManager.decisions, 0.f, solver.branchingHeuristicManager.decisions   /cpu_time);
     printf("c propagations          : %-12" PRIu64 "   (%.0f /sec)\n", solver.unitPropagator.propagations, solver.unitPropagator.propagations/cpu_time);

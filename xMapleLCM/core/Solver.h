@@ -46,6 +46,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #endif
 
 #include "core/AssignmentTrail.h"
+#include "core/BCPRLManager.h"
 #include "core/BranchingHeuristicManager.h"
 #include "core/ClauseDatabase.h"
 #include "core/ConflictAnalyzer.h"
@@ -162,6 +163,9 @@ public:
 
     /// @brief Assignment trail
     AssignmentTrail assignmentTrail;
+
+    /// @brief Priority BCP RL manager
+    BCPRLManager bcprlManager;
 
     /// @brief Branching heuristic
     BranchingHeuristicManager branchingHeuristicManager;

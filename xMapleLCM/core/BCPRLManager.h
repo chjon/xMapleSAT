@@ -26,6 +26,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "core/SolverTypes.h"
 #include "core/Thompson.h"
 
+// Define BCP switching mode
+#ifndef ENABLE_PRIORITY_BCP_RL
+    #define ENABLE_PRIORITY_BCP_RL false
+#endif
+
 namespace Minisat {
     // Forward declarations
     class Solver;
@@ -52,6 +57,15 @@ namespace Minisat {
         uint64_t prevConflicts;
         uint64_t prevDecisions;
         uint64_t prevPropagations;
+
+    public:
+        /// @brief The current variant of BCP to use
+        BCPMode current_bcpmode;
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // STATISTICS
+
+        uint64_t num_delayed;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -84,6 +98,8 @@ namespace Minisat {
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // EVENT HANDLERS
+
+        inline void handleEventRestarted(const BCPRLStats& stats);
 
         inline void handleEventLearntClause(uint64_t lbd);
     };
@@ -126,6 +142,15 @@ namespace Minisat {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // EVENT HANDLERS
+
+    inline void BCPRLManager::handleEventRestarted(const BCPRLStats& stats) {
+        if (ENABLE_PRIORITY_BCP_RL) {
+            current_bcpmode = selectNextMode(current_bcpmode, stats);
+            clearScores(stats);
+
+            if (current_bcpmode == BCPMode::DELAYED) num_delayed++;
+        }
+    }
 
     inline void BCPRLManager::handleEventLearntClause(uint64_t lbd) {
         lbdsum += lbd;

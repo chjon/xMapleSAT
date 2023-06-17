@@ -58,6 +58,7 @@ Solver::Solver()
 
     // Solver components
     , assignmentTrail          (*this)
+    , bcprlManager             (*this)
     , branchingHeuristicManager(*this)
     , clauseDatabase           (*this)
     , conflictAnalyzer         (*this)
@@ -85,7 +86,7 @@ lbool Solver::search(int& nof_conflicts) {
         nbconfbeforesimplify += incSimplify;
     }
 
-    propagationQueue.handleEventRestarted(BCPRLStats{
+    bcprlManager.handleEventRestarted(BCPRLStats{
         nof_conflicts,
         branchingHeuristicManager.decisions,
         unitPropagator.propagations,
@@ -110,7 +111,7 @@ lbool Solver::search(int& nof_conflicts) {
 
             lbd--;
             restartHeuristicManager.handleEventLearntClause(lbd);
-            propagationQueue.handleEventLearntClause(lbd);
+            bcprlManager.handleEventLearntClause(lbd);
 
             CRef cr = clauseDatabase.addLearntClause(learnt_clause, lbd, conflicts);
             propagationQueue.enqueue(learnt_clause[0], cr);

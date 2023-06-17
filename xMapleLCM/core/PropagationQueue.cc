@@ -37,7 +37,6 @@ PropagationQueue::PropagationQueue(Solver& s)
     // Solver references
     
     : assignmentTrail(s.assignmentTrail)
-    , bcprlManager(s)
 
     ///////////////////
     // Member variables
@@ -50,5 +49,5 @@ PropagationQueue::PropagationQueue(Solver& s)
     , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
 #endif
 
-    , current_bcpmode(static_cast<BCPMode>(BCP_PRIORITY_MODE))
+    , current_bcpmode(s.bcprlManager.current_bcpmode)
 {}

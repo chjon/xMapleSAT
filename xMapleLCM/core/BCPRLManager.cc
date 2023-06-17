@@ -48,4 +48,8 @@ BCPRLManager::BCPRLManager(Solver& s)
     , prevConflicts(0)
     , prevDecisions(0)
     , prevPropagations(0)
+
+    , current_bcpmode(static_cast<BCPMode>(BCP_PRIORITY_MODE))
+
+    , num_delayed(0)
 {}
