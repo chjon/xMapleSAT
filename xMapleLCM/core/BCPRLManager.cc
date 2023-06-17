@@ -30,8 +30,8 @@ using namespace Minisat;
 
 static const char* _cat = "BCPRL";
 
-static DoubleOption opt_bcprl_betadecay  (_cat, "beta-decay" , "The beta distribution shape parameter decay factor", 0.80, DoubleRange(0, false, 1, false));
-static DoubleOption opt_bcprl_scoredecay (_cat, "score-decay", "The historical score decay factor"                 , 0.50, DoubleRange(0, false, 1, false));
+static DoubleOption opt_bcprl_betadecay  (_cat, "bcprlbetadecay" , "The beta distribution shape parameter decay factor", 0.80, DoubleRange(0, false, 1, false));
+static DoubleOption opt_bcprl_scoredecay (_cat, "bcprlscoredecay", "The historical score decay factor"                 , 0.50, DoubleRange(0, false, 1, false));
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
