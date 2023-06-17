@@ -87,10 +87,10 @@ lbool Solver::search(int& nof_conflicts) {
     }
 
     bcprlManager.handleEventRestarted(BCPRLStats{
-        nof_conflicts,
+        static_cast<uint64_t>(nof_conflicts),
         branchingHeuristicManager.decisions,
         unitPropagator.propagations,
-        restartHeuristicManager.curr_restarts
+        static_cast<uint64_t>(restartHeuristicManager.curr_restarts)
     });
     propagationQueue.prioritizeByActivity(branchingHeuristicManager.getActivity());
 
