@@ -92,6 +92,7 @@ lbool Solver::search(int& nof_conflicts) {
         unitPropagator.propagations,
         static_cast<uint64_t>(restartHeuristicManager.curr_restarts)
     });
+    propagationQueue.handleEventRestarted();
     propagationQueue.prioritizeByActivity(branchingHeuristicManager.getActivity());
 
     for (;;){

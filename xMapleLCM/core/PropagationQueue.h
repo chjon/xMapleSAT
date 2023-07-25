@@ -36,6 +36,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 // Define BCP-prioritization heuristic
 #define BCP_PRIORITY_ACTIVITY   0 // Prioritize high-activity literals
 #define BCP_PRIORITY_MAX_ON_MIN 1 // Prioritize variables that appear a lot on minimum-sized clauses
+#define BCP_PRIORITY_RANDOM     2 // Random priority order
 
 // Select prioritization heuristic
 #ifndef BCP_PRIORITY_HEURISTIC
@@ -44,6 +45,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include <limits.h>
 #include "core/AssignmentTrail.h"
+#include "core/RandomNumberGenerator.h"
 #include "core/SolverTypes.h"
 #include "mtl/Heap.h"
 
@@ -115,7 +117,16 @@ namespace Minisat {
     #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
         /// @brief The priority queue for selecting variables to propagate during BCP
         Heap< LitOrderLt<OccurrenceCounter> > order_heap;
-    #else // if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
+    #elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
+        /// @brief The priority queue for selecting variables to propagate during BCP
+        Heap< LitOrderLt<double> > order_heap;
+    #elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_RANDOM
+        /// @brief Random number generator
+        RandomNumberGenerator m_rng;
+
+        /// @brief Score values for prioritizing variables during BCP
+        vec<double> m_priorityScore;
+
         /// @brief The priority queue for selecting variables to propagate during BCP
         Heap< LitOrderLt<double> > order_heap;
     #endif
@@ -223,6 +234,8 @@ namespace Minisat {
 
         void handleEventLearntClause(uint64_t lbd);
 
+        void handleEventRestarted();
+
     private:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // HELPER FUNCTIONS
@@ -252,6 +265,9 @@ namespace Minisat {
         soft_assigns.push(l_Undef);
         reasons.push(CRef_Undef);
         occurrences.push(OccurrenceCounter{INT_MAX, 0});
+    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_RANDOM
+        m_priorityScore.push(m_rng.drand());
+    #endif
     }
 
     template <BCPMode bcpmode>
@@ -404,6 +420,14 @@ namespace Minisat {
                 if (order_heap.inHeap((~l).x)) order_heap.decrease((~l).x);
             }
         }
+    #endif
+    }
+
+    inline void PropagationQueue::handleEventRestarted() {
+    #if BCP_PRIORITY_MODE != BCP_PRIORITY_IMMEDIATE
+    #if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_RANDOM
+        for (int i = 0; i < m_priorityScore.size(); i++) m_priorityScore[i] = m_rng.drand();
+    #endif
     #endif
     }
 }

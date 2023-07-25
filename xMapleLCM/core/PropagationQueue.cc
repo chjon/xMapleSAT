@@ -43,10 +43,12 @@ PropagationQueue::PropagationQueue(Solver& s)
     , qhead(0)
     , queue(s.assignmentTrail.getTrail())
 
-#if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
-    , order_heap(LitOrderLt<OccurrenceCounter>(occurrences))
-#else // if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
+#if BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_ACTIVITY
     , order_heap(LitOrderLt<double>(s.branchingHeuristicManager.getActivity()))
+#elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_MAX_ON_MIN
+    , order_heap(LitOrderLt<OccurrenceCounter>(occurrences))
+#elif BCP_PRIORITY_HEURISTIC == BCP_PRIORITY_RANDOM
+    , order_heap(LitOrderLt<double>(m_priorityScore))
 #endif
 
     , current_bcpmode(s.bcprlManager.current_bcpmode)

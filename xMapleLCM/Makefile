@@ -137,6 +137,11 @@ maplelcm_bcp_delayed_chb_mom: .prev_maplelcm_bcp_delayed_chb_mom
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
+maplelcm_bcp_delayed_random: .prev_maplelcm_bcp_delayed_random
+	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BCP_PRIORITY_HEURISTIC=2" -C core rs || exit 1
+	mkdir -p bin
+	mv core/glucose_static bin/$@
+
 maplelcm_bcp_ooo: .prev_maplelcm_bcp_ooo
 	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=2" -C core rs || exit 1
 	mkdir -p bin
