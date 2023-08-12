@@ -52,4 +52,9 @@ BCPRLManager::BCPRLManager(Solver& s)
     , current_bcpmode(static_cast<BCPMode>(BCP_PRIORITY_MODE))
 
     , num_delayed(0)
+    
+    ////////////////////
+    // Solver references
+
+    , randomNumberGenerator(s.randomNumberGenerator)
 {}

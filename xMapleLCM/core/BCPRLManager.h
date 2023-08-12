@@ -23,12 +23,16 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef Minisat_BCPRLManager_h
 #define Minisat_BCPRLManager_h
 
+#include "core/RandomNumberGenerator.h"
 #include "core/SolverTypes.h"
 #include "core/Thompson.h"
 
 // Define BCP switching mode
 #ifndef ENABLE_PRIORITY_BCP_RL
     #define ENABLE_PRIORITY_BCP_RL false
+#endif
+#ifndef ENABLE_PRIORITY_BCP_RANDOM
+    #define ENABLE_PRIORITY_BCP_RANDOM false
 #endif
 
 namespace Minisat {
@@ -66,6 +70,12 @@ namespace Minisat {
         // STATISTICS
 
         uint64_t num_delayed;
+
+    protected:
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // SOLVER REFERENCES
+
+        RandomNumberGenerator& randomNumberGenerator;
 
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +159,8 @@ namespace Minisat {
             clearScores(stats);
 
             if (current_bcpmode == BCPMode::DELAYED) num_delayed++;
+        } else if (ENABLE_PRIORITY_BCP_RANDOM) {
+            current_bcpmode = (randomNumberGenerator.drand() > 0.5) ? BCPMode::DELAYED : BCPMode::IMMEDIATE;
         }
     }
 
