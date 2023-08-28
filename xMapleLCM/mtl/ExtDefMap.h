@@ -20,6 +20,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef xMaplesat_ExtDefMap_h
 #define xMaplesat_ExtDefMap_h
 
+#ifndef USE_NONBASIS_VAR_SET
+#define USE_NONBASIS_VAR_SET false
+#endif
+
 #include <cstddef>
 #include <tr1/unordered_map> // Hashmap
 #include <tr1/unordered_set> // Hashset
@@ -55,6 +59,11 @@ private:
     // Map of extension variable to definition
     LPMap lp_map;
 
+#if USE_NONBASIS_VAR_SET
+    // Extension variables which do not participate in definitions
+    LitSet nonbasis_lits;
+#endif
+
     static inline P mkLitPair(L a, L b) {
         return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
@@ -80,6 +89,11 @@ public:
     // Check whether a variable is a current extension variable
     inline bool containsExt (L x) const { return lp_map.find(x) != lp_map.end(); }
 
+#if USE_NONBASIS_VAR_SET
+    // Get set of non-basis extension variables
+    inline LSet getNonbasisExtLits () const { return nonbasis_lits; }
+#endif
+
     // Insert a definition for an extension variable
     // x <=> (a v b)
     void insert (L x, L a, L b) {
@@ -89,16 +103,27 @@ public:
         auto lp_pair = lp_map.insert(std::make_pair(x, key));
         auto pl_pair = pl_map.insert(std::make_pair(key, x));
         assert(lp_pair.second && pl_pair.second);
+    #if USE_NONBASIS_VAR_SET
+        nonbasis_lits.insert(x);
+    #endif
 
         // Increment count for Lit a
         typename RCMap::iterator it1 = rc_map.find(a);
-        if (it1 == rc_map.end()) rc_map.insert(std::make_pair(a, 1));
-        else                   it1->second++;
+        if (it1 == rc_map.end()) {
+            rc_map.insert(std::make_pair(a, 1));
+        #if USE_NONBASIS_VAR_SET
+            nonbasis_lits.erase(a); nonbasis_lits.erase(~a);
+        #endif
+        } else it1->second++;
 
         // Increment count for Lit b
         typename RCMap::iterator it2 = rc_map.find(b);
-        if (it2 == rc_map.end()) rc_map.insert(std::make_pair(b, 1));
-        else                   it2->second++;
+        if (it2 == rc_map.end()) {
+            rc_map.insert(std::make_pair(b, 1));
+        #if USE_NONBASIS_VAR_SET
+            nonbasis_lits.erase(b); nonbasis_lits.erase(~b);
+        #endif
+        } else it2->second++;
     }
 
     // Delete the extension variable corresponding to a basis-literal pair
@@ -108,29 +133,52 @@ public:
         // Check if the pair is in the map
         typename PLMap::iterator it = pl_map.find(key);
         if (it == pl_map.end()) return;
+        Lit x = it->second;
+
+    #if USE_NONBASIS_VAR_SET
+        // Erase from the non-basis lit set
+        assert(nonbasis_lits.find(x) != nonbasis_lits.end());
+        nonbasis_lits.erase(x);
+    #endif
 
         // Erase from the reverse map
-        lp_map.erase(it->second);
+        lp_map.erase(x);
 
         // Decrement count for Lit a
         typename RCMap::iterator it1 = rc_map.find(a);
-        if (it1->second == 1) rc_map.erase(it1);
-        else                  it1->second--;
+        if (it1->second == 1) {
+            rc_map.erase(it1);
+        #if USE_NONBASIS_VAR_SET
+            if (lp_map.find( a) != lp_map.end()) nonbasis_lits.insert( a);
+            if (lp_map.find(~a) != lp_map.end()) nonbasis_lits.insert(~a);
+        #endif
+        } else it1->second--;
 
         // Decrement count for Lit b
         typename RCMap::iterator it2 = rc_map.find(b);
-        if (it2->second == 1) rc_map.erase(it2);
-        else                  it2->second--;
+        if (it2->second == 1) {
+            rc_map.erase(it2);
+        #if USE_NONBASIS_VAR_SET
+            if (lp_map.find( b) != lp_map.end()) nonbasis_lits.insert( b);
+            if (lp_map.find(~b) != lp_map.end()) nonbasis_lits.insert(~b);
+        #endif
+        } else it2->second--;
 
         // Erase from the forward map
         pl_map.erase(it);
     }
 
-    // Delete a set of extension variables
+    // Delete an extension variable
     void erase(L l) {
         typename LPMap::iterator it = lp_map.find(l);
         if (it == lp_map.end()) return;
         P& def = it->second;
+
+    #if USE_NONBASIS_VAR_SET
+        // Erase from the non-basis lit set
+        assert(nonbasis_lits.find(l) != nonbasis_lits.end());
+        nonbasis_lits.erase(l);
+    #endif
 
         // Erase from the forward map
         pl_map.erase(def);
@@ -138,14 +186,24 @@ public:
         // Decrement count for Lit a
         L a = def.first;
         typename RCMap::iterator it1 = rc_map.find(a);
-        if (it1->second == 1) rc_map.erase(it1);
-        else                  it1->second--;
+        if (it1->second == 1) {
+            rc_map.erase(it1);
+        #if USE_NONBASIS_VAR_SET
+            if (lp_map.find( a) != lp_map.end()) nonbasis_lits.insert( a);
+            if (lp_map.find(~a) != lp_map.end()) nonbasis_lits.insert(~a);
+        #endif
+        } else it1->second--;
 
         // Decrement count for Lit b
         L b = def.second;
         typename RCMap::iterator it2 = rc_map.find(b);
-        if (it2->second == 1) rc_map.erase(it2);
-        else                  it2->second--;
+        if (it2->second == 1) {
+            rc_map.erase(it2);
+        #if USE_NONBASIS_VAR_SET
+            if (lp_map.find( b) != lp_map.end()) nonbasis_lits.insert( b);
+            if (lp_map.find(~b) != lp_map.end()) nonbasis_lits.insert(~b);
+        #endif
+        } else it2->second--;
 
         // Erase from the reverse map
         lp_map.erase(it);
@@ -155,6 +213,9 @@ public:
         rc_map.clear();
         pl_map.clear();
         lp_map.clear();
+    #if USE_NONBASIS_VAR_SET
+        nonbasis_lits.clear();
+    #endif
     }
 
     void absorb(vec<L>& clause) const {
