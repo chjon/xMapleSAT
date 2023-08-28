@@ -156,12 +156,15 @@ namespace Minisat {
     inline void BCPRLManager::handleEventRestarted(const BCPRLStats& stats) {
         if (ENABLE_PRIORITY_BCP_RL) {
             current_bcpmode = selectNextMode(current_bcpmode, stats);
-            clearScores(stats);
 
             if (current_bcpmode == BCPMode::DELAYED) num_delayed++;
         } else if (ENABLE_PRIORITY_BCP_RANDOM) {
             current_bcpmode = (randomNumberGenerator.drand() > 0.5) ? BCPMode::DELAYED : BCPMode::IMMEDIATE;
         }
+
+        #ifdef ENABLE_PRIORITY_BCP
+        clearScores(stats);
+        #endif
     }
 
     inline void BCPRLManager::handleEventLearntClause(uint64_t lbd) {
