@@ -436,13 +436,11 @@ void ERManager::getExtVarsToDelete(
     VarSet& varsToDelete,
     DeletionPredicate& deletionPredicate
 ) const {
-    // Iterate through current extension variables
-    for (auto it = extDefs.begin(); it != extDefs.end(); it++) {
-        Var x = it->first;
-
-        // Find all extension variables that are not basis literals
-        // Extension variables that participate in definitions of other variables cannot be deleted
-        if (xdm.degree(mkLit(x, false)) > 0 || xdm.degree(mkLit(x, true)) > 0) continue;
+    // Find all extension variables that are not basis literals
+    // Extension variables that participate in definitions of other variables cannot be deleted
+    auto deletableLits = xdm.getNonbasisExtLits();
+    for (auto it = deletableLits.begin(); it != deletableLits.end(); it++) {
+        Var x = var(*it);
 
         // Check whether the solver should delete the variable
         if (!deletionPredicate(x)) continue;
@@ -451,7 +449,7 @@ void ERManager::getExtVarsToDelete(
         tried_del_ext_vars++;
 
         // Check whether any of the extension definition clauses are not removable
-        for (CRef cr : it->second) {
+        for (CRef cr : extDefs.find(x)->second) {
             Clause& c = ca[cr];
             if (assignmentTrail.locked(c))
                 goto NEXT_VAR;

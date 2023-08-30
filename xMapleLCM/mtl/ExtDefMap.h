@@ -89,10 +89,19 @@ public:
     // Check whether a variable is a current extension variable
     inline bool containsExt (L x) const { return lp_map.find(x) != lp_map.end(); }
 
-#if USE_NONBASIS_VAR_SET
     // Get set of non-basis extension variables
-    inline LSet getNonbasisExtLits () const { return nonbasis_lits; }
-#endif
+    inline LSet getNonbasisExtLits () const {
+    #if USE_NONBASIS_VAR_SET
+        return nonbasis_lits;
+    #else
+        LSet tmp;
+        for (auto it = lp_map.begin(); it != lp_map.end(); it++) {
+            const Lit x = it->first;
+            if (degree(x) == 0 && degree(~x) == 0) tmp.insert(x);
+        }
+        return tmp;
+    #endif
+    }
 
     // Insert a definition for an extension variable
     // x <=> (a v b)

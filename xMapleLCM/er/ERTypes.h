@@ -48,15 +48,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #define BUMP_ER false
 #endif
 
-// Define BCP-prioritization mode
-#define BCP_PRIORITY_IMMEDIATE    0 // Immediate propagation
-#define BCP_PRIORITY_DELAYED      1 // Delayed propagation
-#define BCP_PRIORITY_OUT_OF_ORDER 2 // Out-of-order propagation
-
-#ifndef BCP_PRIORITY_MODE
-    #define BCP_PRIORITY_MODE BCP_PRIORITY_IMMEDIATE
-#endif
-
 // Define heuristic for filtering clauses before clause selection
 #define ER_FILTER_HEURISTIC_NONE     0 // Consider all clauses
 #define ER_FILTER_HEURISTIC_RANGE    1 // Consider clauses whose widths are in a certain range 
