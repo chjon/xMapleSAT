@@ -155,8 +155,8 @@ template <class C>
 static inline void enforceBinaryClauseInvariant(const AssignmentTrail& at, C& c) {
     if (c.size() == 2 && at.value(c[0]) == l_False) {
         // Special case for binary clauses - the first one has to be SAT
-        assert(at.value(c[1]) != l_False);
-        std::swap(c[0], c[1]);
+      assert(at.value(c[1]) != l_False);
+      std::swap(c[0], c[1]);
     }
 }
 
@@ -242,7 +242,8 @@ void ConflictAnalyzer::simpleAnalyze(
         if (confl != CRef_Undef){
             reason_clause.push(confl);
             Clause& c = ca[confl];
-            enforceBinaryClauseInvariant(assignmentTrail, c);
+	    if (p != lit_Undef or True_confl == true) 
+	      enforceBinaryClauseInvariant(assignmentTrail, c);
 
             // if True_confl==true, then choose p begin with the 1th index of c;
             for (int j = (p == lit_Undef && True_confl == false) ? 0 : 1; j < c.size(); j++){

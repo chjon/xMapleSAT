@@ -133,6 +133,14 @@ public:
 inline int   toInt  (lbool l) { return l.value; }
 inline lbool toLbool(int   v) { return lbool((uint8_t)v);  }
 
+  inline std::ostream& operator<<(std::ostream& out, const lbool& val) {
+    if (val == l_True) out << "T";
+    else if (val == l_False) out << "F";
+    else out << "U";
+    return out;
+}
+
+  
 //=================================================================================================
 // Clause -- a simple class for representing a clause:
 
