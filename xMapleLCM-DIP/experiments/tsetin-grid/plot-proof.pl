@@ -32,8 +32,8 @@ set ylabel "Resolution steps"
 #set xtics font ",17"
 
 set output "out-proof.png"
-#plot "data-proofs.txt" using 1:4 w lines title "Resolution steps", 2000*x**2 title "2000*x^2", 5000*x**2 title "5000*x^2", 
-plot "data-proofs-complete.txt" using 1:3 w lines title "Lemmas in proofs", 230*x**2 title "230*x^2", 15000*x title "15000*x"
+plot "data-proofs-complete.txt" using 1:4 w lines title "Resolution steps", 2000*x**2 title "2000*x^2", 5000*x**2 title "5000*x^2", 100000*x title "Linear"
+#plot "data-proofs-complete.txt" using 1:3 w lines title "Lemmas in proofs", 230*x**2 title "230*x^2", 15000*x title "15000*x"
 
 #Restore the original file or channel name 
 set output
