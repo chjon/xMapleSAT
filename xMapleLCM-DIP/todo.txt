@@ -1,0 +1,25 @@
+- Cleanup code and add it to github
+
+- Extend experiments with Tseitin to (dis)-prove whether polynomial proofs are found
+
+- Try with other type of Tseitin formulas (cnfgen)
+
+- Understand why solver is good on Tseitin
+
+- Try benchmarks Ian sent (there seems to be some problem):
+  * Multiplication
+  * Crypto
+
+- Try heuristics that distinguish extended/original variables
+
+- Experiment with policies that:
+  * Decide which type of DIPs are considered (closest to conflict, middle, ...)
+  * Whether it pays off to add that particular DIP
+
+- Check whether for PHP we generate poly proofs
+
+- Sparse PHP (d=4)? Other d's as well.
+
+- randomkxor with longer clause width
+
+- Ask Armin whether kissat = resolution
