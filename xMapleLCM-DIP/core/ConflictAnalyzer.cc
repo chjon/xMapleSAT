@@ -39,8 +39,8 @@ static const char* _cat2 = "DIP";
 
 static IntOption    opt_ccmin_mode(_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
 static BoolOption   opt_compute_dip            (_cat2, "compute-dip",   "Compute DIP.", true);
-static BoolOption   opt_learn_two_dip_clauses  (_cat2, "learn-2dip",    "Learn two DIP clauses.", true);
-
+static BoolOption   opt_learn_two_dip_clauses  (_cat2, "dip-2clauses",    "Learn two DIP clauses.", true);
+static IntOption    opt_common_pair_DIP_threshold (_cat2, "DIP-pair-common",  "Specifies the minimum numer of times a DIP has to appear before we introduce it.", 5, IntRange(1, INT32_MAX));
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
@@ -56,6 +56,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
     // Parameters
   , ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
   , compute_dip(opt_compute_dip)
+  , dip_pair_threshold(opt_common_pair_DIP_threshold)
   , learn_two_DIP_clauses(opt_learn_two_dip_clauses)
     
     //////////////////////
@@ -637,7 +638,7 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
 
   
   solver.branchingHeuristicManager.notifyDIPCandidate(~x,~y); 
-  if (not solver.branchingHeuristicManager.isPairCommon(~x,~y,5)) {
+  if (not solver.branchingHeuristicManager.isPairCommon(~x,~y,dip_pair_threshold)) {
     return false;
   }
 

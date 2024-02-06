@@ -102,6 +102,9 @@ namespace Minisat {
     // @brief Controls computation of DIP
     bool compute_dip;
 
+    // @brief Minimum number of times a DIP has to appear before we introduce it
+    int dip_pair_threshold;
+    
   public:
 
     // @brief Learn one or two clauses in DIP learning

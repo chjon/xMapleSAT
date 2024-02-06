@@ -7,4 +7,7 @@ Or
 make xmaplelcm_debug (if we want assertions to be checked)
 
 
-RUN: ./xmaplelcm -compute-dip -learn-2dip -produce-proof file.cnf
+RUN: ./xmaplelcm -compute-dip -dip-2clauses -DIP-pair-common=5 -produce-proof file.cnf
+
+HELP: ./xmaplelcm --help-verb
+display extended information about command-line options
