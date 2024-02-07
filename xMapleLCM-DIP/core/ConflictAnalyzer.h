@@ -104,6 +104,13 @@ namespace Minisat {
 
     // @brief Minimum number of times a DIP has to appear before we introduce it
     int dip_pair_threshold;
+
+    static const int MIDDLE_DIP = 1;
+    static const int CLOSEST_TO_CONFLICT = 2;
+    static const int RANDOM_DIP = 3;
+
+    // @brief Type of DIP computed
+    int dip_type;
     
   public:
 
