@@ -23,3 +23,13 @@
 - randomkxor with longer clause width
 
 - Ask Armin whether kissat = resolution
+
+
+=========================
+
+- Try to only learn one (maybe it is slower because we are learning too many lemmas?)
+
+- Try to have a look at the heuristic. Maybe we are doing something wrong. What if we increase var scores only during the traversal that finds the 1UIP?
+
+- After X decisions, is %decs on ext-vars is < 10% move to standard 1UIP learning
+
