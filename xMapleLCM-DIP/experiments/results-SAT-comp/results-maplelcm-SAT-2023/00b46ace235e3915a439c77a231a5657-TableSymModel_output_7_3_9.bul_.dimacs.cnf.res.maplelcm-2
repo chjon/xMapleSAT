@@ -1,0 +1,55 @@
+c This is COMiniSatPS.
+c WARNING: for repeatability, setting FPU to use double precision
+c ============================[ Problem Statistics ]=============================
+c |                                                                             |
+c |  Number of variables:          7182                                         |
+c |  Number of clauses:           63742                                         |
+c |  Parse time:                   0.01 s                                       |
+c |                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c ===============================================================================
+c restarts              : 150047
+c conflicts             : 40681227       (11350 /sec)
+c decisions             : 166903234      (0.00 % random) (46565 /sec)
+c propagations          : 6802439073     (1897827 /sec)
+c conflict literals     : 3981612016     (25.63 % deleted)
+c Memory used           : 260.00 MB
+c CPU time              : 3584.33 s
+
+s UNKNOWN

@@ -1,0 +1,60 @@
+c This is COMiniSatPS.
+c WARNING: for repeatability, setting FPU to use double precision
+c ============================[ Problem Statistics ]=============================
+c |                                                                             |
+c |  Number of variables:         77328                                         |
+c |  Number of clauses:         8485566                                         |
+c |  Parse time:                   1.04 s                                       |
+c |                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c ===============================================================================
+c restarts              : 15079
+c conflicts             : 7911274        (2209 /sec)
+c decisions             : 24288976       (0.00 % random) (6782 /sec)
+c propagations          : 11271457290    (3147022 /sec)
+c conflict literals     : 1510758243     (7.20 % deleted)
+c Memory used           : 867.00 MB
+c CPU time              : 3581.63 s
+
+s UNKNOWN
