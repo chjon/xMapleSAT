@@ -58,9 +58,22 @@ extract_perc_DIP_overhead ( ){
     echo $t | cut -c2-    
 }
 
+extract_vars ( ){
+    file=$1
+    t=`grep "Number of variables" $file | awk '{print $5}' #print 4th column`
+    echo $t
+}
+
+extract_clauses ( ){
+    file=$1
+    t=`grep "Number of clauses" $file | awk '{print $5}' #print 4th column`
+    echo $t
+}
 
 
-for file in $1/*.res.xmaplelcm-common20*; do
+
+
+for file in $1/*.res.xmaplelcm-common*; do
     time=$(extract_time $file)
     decs=$(extract_decisions $file)
     decs_on_ext=$(extract_decisions_on_ext $file)
@@ -70,9 +83,11 @@ for file in $1/*.res.xmaplelcm-common20*; do
     perc_confs_w_dip=$(extract_perc_conflict_with_DIP $file)
     perc_confs_w_dip_learn=$(extract_perc_conflict_with_DIP_learning $file)
     perc_dip_overhead=$(extract_perc_DIP_overhead $file)
-    
+    vars=$(extract_vars $file)
+    clauses=$(extract_clauses $file)
     name=`basename $file`
 
     #    echo "$name;$stat;$time;$confs;$dip_confs;$decs"
-    echo "$name;$stat;$time;$confs;$decs;$decs_on_ext;$perc_decs_on_ext;$perc_confs_w_dip;$perc_confs_w_dip_learn;$perc_dip_overhead"
+    #echo "$name;$stat;$time;$confs;$decs;$decs_on_ext;$perc_decs_on_ext;$perc_confs_w_dip;$perc_confs_w_dip_learn;$perc_dip_overhead"
+    echo "$name;$vars;$clauses"
 done
