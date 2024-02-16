@@ -33,3 +33,10 @@
 
 - After X decisions, is %decs on ext-vars is < 10% move to standard 1UIP learning
 
+
+
+======================================
+
+- Experiment with where to BJ (DIP or 1UIP). Currently we BJ to DIP (my assumption)
+- Maximize times when DIP does not involve side literals
+- Use % decision on extended to increase the threshold (5,20) or even disable the technique
