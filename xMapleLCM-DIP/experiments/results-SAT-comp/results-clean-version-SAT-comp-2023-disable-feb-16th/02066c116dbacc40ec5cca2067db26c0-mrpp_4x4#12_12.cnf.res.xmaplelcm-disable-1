@@ -1,0 +1,58 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:          2672                                         |
+|  Number of clauses:           16280                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 1166 decisions of which only 0 were on extended
+We had 293696 decisions of which only 0 were on extended
+We had 329161 decisions of which only 0.00941788 were on extended
+We had 360777 decisions of which only 0.0612567 were on extended
+We had 395112 decisions of which only 0.209561 were on extended
+We had 430425 decisions of which only 0.371029 were on extended
+We had 450006 decisions of which only 0.361995 were on extended
+We had 466566 decisions of which only 0.351933 were on extended
+We had 482572 decisions of which only 0.344819 were on extended
+We had 497562 decisions of which only 0.337646 were on extended
+We had 511515 decisions of which only 0.329023 were on extended
+We had 524833 decisions of which only 0.324294 were on extended
+We had 538898 decisions of which only 0.320469 were on extended
+We had 552626 decisions of which only 0.315222 were on extended
+We had 565939 decisions of which only 0.318586 were on extended
+We had 579126 decisions of which only 0.31962 were on extended
+We had 591762 decisions of which only 0.342029 were on extended
+We had 604609 decisions of which only 0.35279 were on extended
+c Switched to VSIDS.
+We had 617279 decisions of which only 0.395931 were on extended
+c ===============================================================================
+restarts                  : 607
+conflicts                 : 180666         (6098 /sec)
+decisions                 : 618071         (0.00 % random) (20861 /sec)
+propagations              : 30542558       (1030842 /sec)
+conflict literals         : 7254101        (33.87 % deleted)
+
+conflicts w/ DIP found    : 119256         (66.01 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 180            (0.10 % of conflicts)
+decisions on ext vars     : 2461           (0.40 % of decisions)
+total ext vars            : 51          
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 51          
+
+Memory used               : 35.00 MB
+CPU time                  : 29.6287 s
+DIP computation time      : 1.42891 s (4.82 % of total time)
+ER_sel time               : 0.186746 s
+ER_add time               : 0.000277 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.242994 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE
