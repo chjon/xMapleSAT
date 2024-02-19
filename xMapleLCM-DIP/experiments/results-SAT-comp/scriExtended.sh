@@ -73,7 +73,7 @@ extract_clauses ( ){
 
 
 
-for file in $1/*.res.xmaplelcm-common*; do
+for file in $1/*.res*disable*; do
     time=$(extract_time $file)
     decs=$(extract_decisions $file)
     decs_on_ext=$(extract_decisions_on_ext $file)
@@ -88,6 +88,6 @@ for file in $1/*.res.xmaplelcm-common*; do
     name=`basename $file`
 
     #    echo "$name;$stat;$time;$confs;$dip_confs;$decs"
-    #echo "$name;$stat;$time;$confs;$decs;$decs_on_ext;$perc_decs_on_ext;$perc_confs_w_dip;$perc_confs_w_dip_learn;$perc_dip_overhead"
-    echo "$name;$vars;$clauses"
+    echo "$name;$stat;$time;$confs;$decs;$decs_on_ext;$perc_decs_on_ext;$perc_confs_w_dip;$perc_confs_w_dip_learn;$perc_dip_overhead"
+#    echo "$name;$vars;$clauses"
 done

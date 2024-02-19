@@ -1,0 +1,83 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:          9007                                         |
+|  Number of clauses:           37899                                         |
+|  Parse time:                   0.01 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 25 decisions of which only 0 were on extended
+We had 76378 decisions of which only 0.0104742 were on extended
+We had 124436 decisions of which only 0.235462 were on extended
+We had 162335 decisions of which only 0.525457 were on extended
+We had 196168 decisions of which only 1.02667 were on extended
+We had 219427 decisions of which only 1.71401 were on extended
+c Switched to VSIDS.
+We had 235966 decisions of which only 1.59472 were on extended
+We had 249940 decisions of which only 1.50556 were on extended
+We had 264667 decisions of which only 1.42216 were on extended
+We had 278384 decisions of which only 1.35676 were on extended
+We had 292060 decisions of which only 1.29323 were on extended
+c Switched to LRB.
+We had 306058 decisions of which only 1.23637 were on extended
+We had 320169 decisions of which only 1.18219 were on extended
+We had 334211 decisions of which only 1.13312 were on extended
+We had 348070 decisions of which only 1.08886 were on extended
+We had 361654 decisions of which only 1.05073 were on extended
+c Switched to VSIDS.
+We had 375082 decisions of which only 1.01818 were on extended
+We had 387171 decisions of which only 0.98871 were on extended
+We had 399286 decisions of which only 0.960965 were on extended
+c Switched to LRB.
+Window full
+Continue
+We had 412570 decisions of which only 0.935114 were on extended
+We had 426142 decisions of which only 0.911668 were on extended
+We had 439233 decisions of which only 0.894059 were on extended
+We had 452115 decisions of which only 0.874777 were on extended
+c Switched to VSIDS.
+We had 464686 decisions of which only 0.858644 were on extended
+We had 477168 decisions of which only 0.842471 were on extended
+We had 489707 decisions of which only 0.823145 were on extended
+We had 502305 decisions of which only 0.805885 were on extended
+We had 514456 decisions of which only 0.790349 were on extended
+c Switched to LRB.
+We had 526463 decisions of which only 0.779162 were on extended
+Window full
+Deactivate
+We had 539735 decisions of which only 0.771119 were on extended
+We had 552726 decisions of which only 0.763489 were on extended
+We had 565524 decisions of which only 0.755936 were on extended
+c Switched to VSIDS.
+We had 576969 decisions of which only 0.75186 were on extended
+We had 588544 decisions of which only 0.746758 were on extended
+c ===============================================================================
+restarts                  : 608
+conflicts                 : 331388         (1949 /sec)
+decisions                 : 590137         (0.00 % random) (3470 /sec)
+propagations              : 333621124      (1961918 /sec)
+conflict literals         : 13509062       (52.88 % deleted)
+
+conflicts w/ DIP found    : 208867         (63.03 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 809            (0.24 % of conflicts)
+decisions on ext vars     : 4407           (0.75 % of decisions)
+total ext vars            : 201         
+tried delete ext vars     : 1           
+deleted ext vars          : 1           
+max ext vars              : 200         
+
+Memory used               : 56.00 MB
+CPU time                  : 170.048 s
+DIP computation time      : 3.79931 s (2.23 % of total time)
+ER_sel time               : 0.346372 s
+ER_add time               : 0.001102 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.452523 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE
