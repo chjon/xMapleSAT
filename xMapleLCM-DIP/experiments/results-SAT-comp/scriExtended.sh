@@ -22,6 +22,12 @@ extract_decisions () {
     echo $t
 }
 
+extract_decisions () {
+    file=$1
+    t=`grep "decisions" $file | tail -2 | head -1 | awk '{print $3}' #print 4th column`
+    echo $t
+}
+
 extract_decisions_on_ext () {
     file=$1
     t=`grep "decisions on ext" $file | awk '{print $6}' #print 4th column`
