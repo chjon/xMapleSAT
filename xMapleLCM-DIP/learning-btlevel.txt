@@ -50,6 +50,8 @@ We have two cases:
    2.B) We backjump to DL 8. This allows C2 to propagate ¬DIP, but we have no guarantee that clause C1 propagates
    anything, because some of the literals in Before has become unassigned.
 
+   What if we just do 1UIP learning? 
+
 All in all, if I am not wrong, the only possible implementation is to always backjump to MaxDL(After).
 This is in fact what is done in the implementation.
    	
