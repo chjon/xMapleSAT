@@ -245,7 +245,7 @@ namespace Minisat {
       // DIP
       bool next_decision_forced;
       Lit next_decision_suggestion_1, next_decision_suggestion_2;
-      const int DIP_WINDOW_SIZE = 20;
+      int DIP_WINDOW_SIZE = 20;
       vector<double> DIPWindow; // each double is the sum of activites of the two DIP components
       int lastAddedInDIPWindow;
       double sumActiviesInWindow;
@@ -482,7 +482,8 @@ namespace Minisat {
     public:
       // DIP
       void nextDecisionBestOf(Lit x, Lit y);
-      void notifyDIPCandidate(Lit x, Lit y);
+      void notifyDIPCandidateWindow(Lit x, Lit y);
+      void notifyDIPCandidateCommonPair(Lit x, Lit y);
       bool isPairBetterThanAverage(Lit x, Lit y);
       bool isPairCommon(Lit x, Lit y, int threshold);
     };

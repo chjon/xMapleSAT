@@ -38,10 +38,13 @@ static const char* _cat = "CORE";
 static const char* _cat2 = "DIP";
 
 static IntOption    opt_ccmin_mode             (_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
+
 static BoolOption   opt_compute_dip            (_cat2, "compute-dip",   "Compute DIP.", true);
 static BoolOption   opt_learn_two_dip_clauses  (_cat2, "dip-2clauses",    "Learn two DIP clauses: UIP -> DIP and DIP -> conflict. If set to false, only DIP -> conflict is learned.", true);
-static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it.", 5, IntRange(1, INT32_MAX));
+static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it. (-1 means disabled)", -1, IntRange(-1, INT32_MAX));
 static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random)", 1, IntRange(1, 3));
+
+static IntOption    opt_DIP_window_size         (_cat2, "dip-window-size",  "Introduce a DIP only if the sum of the activities of the pair is larger than the average of the last DIPs in a window of the given size (-1 means option disabled).", -1, IntRange(-1, INT32_MAX));
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
@@ -58,6 +61,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   , ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
   , compute_dip(opt_compute_dip)
   , dip_pair_threshold(opt_common_pair_DIP_min)
+  , dip_window_size(opt_DIP_window_size)
   , dip_type(opt_dip_type)
   , learn_two_DIP_clauses(opt_learn_two_dip_clauses)
     
@@ -72,7 +76,13 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   , time_DIP(0)
   , conflicts_with_dip(0)
   , conflicts_with_dangerous_dip(0)
-{}
+{
+  if (dip_pair_threshold != -1 and
+      dip_window_size != -1) {
+    cout << "ERROR: Cannot have options \"dip-pair-min\" and \"dip-window\" both enabled" << endl;
+    exit(1);
+  }  
+}
 
 
 /*_________________________________________________________________________________________________
@@ -647,10 +657,14 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
   
   //cout << "DIP " << x << " " << y << " at conflict " << solver.conflicts << endl;
 
-  
-  solver.branchingHeuristicManager.notifyDIPCandidate(~x,~y); 
-  if (not solver.branchingHeuristicManager.isPairCommon(~x,~y,dip_pair_threshold)) {
-    return false;
+
+  if (dip_pair_threshold != -1) { // common pair used
+    solver.branchingHeuristicManager.notifyDIPCandidateCommonPair(~x,~y); 
+    if (not solver.branchingHeuristicManager.isPairCommon(~x,~y,dip_pair_threshold)) return false;
+  }
+  else if (dip_window_size != -1) { // use sliding window
+    solver.branchingHeuristicManager.notifyDIPCandidateWindow(~x,~y);
+    if (not solver.branchingHeuristicManager.isPairBetterThanAverage(~x,~y)) return false;
   }
 
   // 1) add definition clauses

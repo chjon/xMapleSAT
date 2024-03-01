@@ -307,18 +307,17 @@ void BranchingHeuristicManager::orderLits(Lit& x, Lit& y) {
   if (var(x) == var(y) and sign(x)) swap(x,y);
 }
 
-void BranchingHeuristicManager::notifyDIPCandidate(Lit x, Lit y) {
+void BranchingHeuristicManager::notifyDIPCandidateCommonPair(Lit x, Lit y) {
   // This counts how many times
   orderLits(x,y);
   ++occurrences[{x,y}];
-  return;
-  
+}
 
+void BranchingHeuristicManager::notifyDIPCandidateWindow(Lit x, Lit y) {
   
-  //  return;
   double act = getActivity()[var(x)] + getActivity()[var(y)];
 
-  if (DIPWindow.size() < DIP_WINDOW_SIZE) {
+  if (int(DIPWindow.size()) < DIP_WINDOW_SIZE) {
     DIPWindow.push_back(act);
     sumActiviesInWindow += act;
     lastAddedInDIPWindow = DIPWindow.size() - 1;
@@ -331,21 +330,6 @@ void BranchingHeuristicManager::notifyDIPCandidate(Lit x, Lit y) {
     DIPWindow[idxToRemove] = act;
     lastAddedInDIPWindow = idxToRemove;
   }
-
-  // cout << "[";
-  // if (DIPWindow.size() < DIP_WINDOW_SIZE) {
-  //   for (auto x : DIPWindow) cout << x << " ";
-  // }
-  // else {
-  //   int i = (lastAddedInDIPWindow + 1)%DIP_WINDOW_SIZE;
-  //   int elems = DIP_WINDOW_SIZE;
-  //   while (elems > 0) {
-  //     cout << DIPWindow[i] << " ";
-  //     i = (i+1)%DIP_WINDOW_SIZE;
-  //     --elems;
-  //   }
-  // }
-  // cout << "]" << endl;
 }
 
 void BranchingHeuristicManager::nextDecisionBestOf (Lit x, Lit y) {
@@ -357,10 +341,8 @@ void BranchingHeuristicManager::nextDecisionBestOf (Lit x, Lit y) {
 
 
 bool BranchingHeuristicManager::isPairBetterThanAverage(Lit x, Lit y) {
-  //cout << "isPairBetter always return true" << endl;
-  //return true;
   double act = getActivity()[var(x)] + getActivity()[var(y)];
-  return act >= sumActiviesInWindow/DIPWindow.size();
+  return act > sumActiviesInWindow/DIPWindow.size();
 }
 
 bool BranchingHeuristicManager::isPairCommon(Lit x, Lit y, int threshold) {
