@@ -45,6 +45,8 @@ static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifi
 static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random)", 1, IntRange(1, 3));
 
 static IntOption    opt_DIP_window_size         (_cat2, "dip-window-size",  "Introduce a DIP only if the sum of the activities of the pair is larger than the average of the last DIPs in a window of the given size (-1 means option disabled).", -1, IntRange(-1, INT32_MAX));
+
+static IntOption    opt_DIP_max_LBD          (_cat2, "dip-glue",  "Introduce a DIP only if the clause LBD -> conflict has at most the given LBD  (-1 means option disabled).", -1, IntRange(-1, INT32_MAX));
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
@@ -62,6 +64,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   , compute_dip(opt_compute_dip)
   , dip_pair_threshold(opt_common_pair_DIP_min)
   , dip_window_size(opt_DIP_window_size)
+  , dip_max_LBD(opt_DIP_max_LBD)
   , dip_type(opt_dip_type)
   , learn_two_DIP_clauses(opt_learn_two_dip_clauses)
     
@@ -77,9 +80,13 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   , conflicts_with_dip(0)
   , conflicts_with_dangerous_dip(0)
 {
-  if (dip_pair_threshold != -1 and
-      dip_window_size != -1) {
-    cout << "ERROR: Cannot have options \"dip-pair-min\" and \"dip-window\" both enabled" << endl;
+  if ( (dip_pair_threshold != -1 and
+	dip_window_size != -1) or
+       (dip_pair_threshold != -1 and
+	dip_max_LBD != -1) or
+       (dip_window_size != -1 and
+	dip_max_LBD != -1)){
+    cout << "ERROR: At most one of the options ,\"dip-pair-min\", \"dip-window\" and \"dip-glue\" can be enabled" << endl;
     exit(1);
   }  
 }
@@ -635,6 +642,79 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
 
 }
 
+int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
+
+  int dipReached = 0;
+  Lit p = lit_Undef;
+  int index = assignmentTrail.nAssigns() - 1;
+  int heightX = -1, heightY = -1;
+  vector<Lit> afterLits;
+  do {
+    assert(confl != CRef_Undef); // (otherwise should be UIP)
+    Clause& c = ca[confl];
+
+    // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
+    if (p != lit_Undef && c.size() == 2 && assignmentTrail.value(c[0]) == l_False) {
+      assert(assignmentTrail.value(c[1]) == l_True);
+      std::swap(c[0], c[1]);
+    }
+	
+    // Iterate through every literal that participates in the conflict graph
+    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+      Lit q = c[j];
+      if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+      // Mark variable as seen      
+      seen3[var(q)] = 1;
+
+      // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+      if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
+	afterLits.push_back(q);
+    }
+        
+    // Select next clause to look at:
+    while (dipReached != 2) {
+      while (!seen3[var(assignmentTrail[index--])]);
+      p = assignmentTrail[index+1];
+      if (p == x) heightX = index+1;
+      else if (p == y) heightY = index+1;	  
+      if (p != x and p != y) break;
+      else dipReached++;
+    }
+	
+    p     = assignmentTrail[index+1];
+    confl = assignmentTrail.reason(var(p));
+	
+    // Mark variable as unseen: it is either at or after the first UIP
+    seen3[var(p)] = 0;
+    
+  } while (dipReached != 2);
+
+  static vector<int> levels(assignmentTrail.nVars()+1,0);
+  static int times = 0;
+  ++times;
+  if (times > 1e9) {
+    for (int& z : levels) z = 0;
+    times = 1;
+  }
+
+  int LBD = 0;
+  for (auto z : afterLits) {
+    int lev = assignmentTrail.level(var(x));
+    if (levels[lev] != times) {levels[lev] = times; ++LBD;}    
+  }
+  
+  // This was the idea of forcing the heuristic to immediately branch on one of the DIPs
+  //solver.branchingHeuristicManager.nextDecisionBestOf(~x,~y); 
+
+  // Clear marks
+  for (int i = 0; i < afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
+  seen3[var(x)] = seen3[var(y)] = false;
+
+  assert(checkSeen3());
+  return LBD + 1;
+}
+
 bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, vec<Lit>& clause_to_learn, vec<Lit>& clause_to_learn2, Lit UIP, vector<int>& pathA, vector<int>& pathB) {
   assert(clause_to_learn.size() == 0);
 
@@ -666,9 +746,86 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     solver.branchingHeuristicManager.notifyDIPCandidateWindow(~x,~y);
     if (not solver.branchingHeuristicManager.isPairBetterThanAverage(~x,~y)) return false;
   }
+  // else if (dip_max_LBD != -1) { // use maxLBD for DIP clause
+  //   int expectedLBD = computeLBD_DIP2Conflict(confl,x,y) + 1;
+  //   if (expectedLBD > dip_max_LBD) return false;
+  // }
 
-  // 1) add definition clauses
+
+  // 1) Compute first clause: DIP ^ after -> conflict
+  // This is done starting from conflict, doing standard 1UIP reasoning but stopping as soon as we hit the
+  // two elements of the DIP
+  assert(checkSeen3());
+  vector<Lit> toIncreaseActivity;
+  int dipReached = 0;
+  Lit p = lit_Undef;
+  int index = assignmentTrail.nAssigns() - 1;
+  int heightX = -1, heightY = -1;
+  vector<Lit> afterLits;
+  do {
+    assert(confl != CRef_Undef); // (otherwise should be UIP)
+    Clause& c = ca[confl];
+
+    // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
+    if (p != lit_Undef && c.size() == 2 && assignmentTrail.value(c[0]) == l_False) {
+      assert(assignmentTrail.value(c[1]) == l_True);
+      std::swap(c[0], c[1]);
+    }
+	
+    // Iterate through every literal that participates in the conflict graph
+    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+      Lit q = c[j];
+      if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+      // Increment activity heuristic
+      //branchingHeuristicManager.handleEventLitInConflictGraph(q, solver.conflicts);
+      toIncreaseActivity.push_back(q);
+      
+      // Mark variable as seen      
+      seen3[var(q)] = 1;
+
+      // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+      if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
+	afterLits.push_back(q);
+    }
+        
+    // Select next clause to look at:
+    while (dipReached != 2) {
+      while (!seen3[var(assignmentTrail[index--])]);
+      p = assignmentTrail[index+1];
+      if (p == x) heightX = index+1;
+      else if (p == y) heightY = index+1;	  
+      if (p != x and p != y) break;
+      else dipReached++;
+    }
+	
+    p     = assignmentTrail[index+1];
+    confl = assignmentTrail.reason(var(p));
+	
+    // Mark variable as unseen: it is either at or after the first UIP
+    seen3[var(p)] = 0;
+    
+  } while (dipReached != 2);
   
+  // This was the idea of forcing the heuristic to immediately branch on one of the DIPs
+  //solver.branchingHeuristicManager.nextDecisionBestOf(~x,~y); 
+
+  // Clear marks
+  for (int i = 0; i < afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
+  seen3[var(x)] = seen3[var(y)] = false;
+  assert(checkSeen3());
+
+  if (dip_max_LBD != -1) {
+    int LBD = assignmentTrail.computeLBD(afterLits) + 1;
+    if (LBD > dip_max_LBD) return false;
+  }
+  
+  for (Lit z : toIncreaseActivity)
+    branchingHeuristicManager.handleEventLitInConflictGraph(z, solver.conflicts);
+  
+  if (not learn_two_DIP_clauses) return true;
+  
+  // 2) add definition clauses
   auto [newDef, extLit] = erManager->addDIPExtensionVariable(~x,~y);
 
   // cout << extLit << " <-> " << ~x << " v "  << ~y << endl;
@@ -716,72 +873,8 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     solver.proofLogger.addClause(ERClause);
   }
 
-  // 2) Compute first clause: DIP ^ after -> conflict
-  // This is done starting from conflict, doing standard 1UIP reasoning but stopping as soon as we hit the
-  // two elements of the DIP
-  assert(checkSeen3());
-
-  int dipReached = 0;
-  Lit p = lit_Undef;
-  int index = assignmentTrail.nAssigns() - 1;
-  int heightX = -1, heightY = -1;
-  vector<Lit> afterLits;
-  do {
-    assert(confl != CRef_Undef); // (otherwise should be UIP)
-    Clause& c = ca[confl];
-
-    // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
-    if (p != lit_Undef && c.size() == 2 && assignmentTrail.value(c[0]) == l_False) {
-      assert(assignmentTrail.value(c[1]) == l_True);
-      std::swap(c[0], c[1]);
-    }
-	
-    // Iterate through every literal that participates in the conflict graph
-    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
-      Lit q = c[j];
-      if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
-
-      // Increment activity heuristic
-      branchingHeuristicManager.handleEventLitInConflictGraph(q, solver.conflicts);
-      // Mark variable as seen      
-      seen3[var(q)] = 1;
-
-      // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
-      if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
-	afterLits.push_back(q);
-    }
-        
-    // Select next clause to look at:
-    while (dipReached != 2) {
-      while (!seen3[var(assignmentTrail[index--])]);
-      p = assignmentTrail[index+1];
-      if (p == x) heightX = index+1;
-      else if (p == y) heightY = index+1;	  
-      if (p != x and p != y) break;
-      else dipReached++;
-    }
-	
-    p     = assignmentTrail[index+1];
-    confl = assignmentTrail.reason(var(p));
-	
-    // Mark variable as unseen: it is either at or after the first UIP
-    seen3[var(p)] = 0;
-    
-  } while (dipReached != 2);
-  
   clause_to_learn.push(extLit);
   for (auto x : afterLits) clause_to_learn.push(x);
-  
-  // This was the idea of forcing the heuristic to immediately branch on one of the DIPs
-  //solver.branchingHeuristicManager.nextDecisionBestOf(~x,~y); 
-
-  // Clear marks
-  for (int i = 0; i < clause_to_learn.size(); ++i) seen3[var(clause_to_learn[i])] = false;
-  seen3[var(x)] = seen3[var(y)] = false;
-
-  assert(checkSeen3());
-
-  if (not learn_two_DIP_clauses) return true;
 
 
   // 3) UIP ^ before --> DIP

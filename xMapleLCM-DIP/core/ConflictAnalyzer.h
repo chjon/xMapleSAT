@@ -107,7 +107,10 @@ namespace Minisat {
 
     // @brief Window size to determine whether DIP is better than average over sliding window
     int dip_window_size;
-    
+
+    // @brief Introduces DIP only if clause DIP -> conflict has LBD <= dip_max_LBD
+    int dip_max_LBD;
+
     static const int MIDDLE_DIP = 1;
     static const int CLOSEST_TO_CONFLICT = 2;
     static const int RANDOM_DIP = 3;
@@ -309,7 +312,15 @@ namespace Minisat {
      * @return true iff a DIP-learning has been performed
      */
     bool getDIPLearntClauses(CRef confl, vec<Lit>& learntClause, vec<Lit>& learntClause2);
-
+    /**
+     * @brief Computes the LBD of the clause DIP -> conflict
+     * @param confl the conflict clause
+     * @param x first member of the DIP
+     * @param x second member of the DIP
+     * @return LBD
+     */
+    int computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y);
+    
     /**
      * @brief Simplify a learnt clause
      * 
