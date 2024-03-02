@@ -73,7 +73,6 @@ Solver::Solver()
   if (file_proof != "") {
     produce_proof = true;
     proofLogger.drup_file = fopen(file_proof,"w");
-    cout << "File proof " << file_proof << endl;
   }
   else produce_proof = false;
 }
