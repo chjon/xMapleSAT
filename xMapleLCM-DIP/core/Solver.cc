@@ -35,7 +35,7 @@ using namespace Minisat;
 using namespace std;
 
 static const char* _cat = "CORE";
-static BoolOption   opt_produce_proof      (_cat, "produce-proof", "Produce DRAT proof in file proof.txt.", false);
+static StringOption file_proof             (_cat, "proof-file","File where DRAT proof is to be written. Default is no proof","");
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -51,7 +51,6 @@ Solver::Solver()
     , nbconfbeforesimplify(1000)
     , incSimplify(1000)
     , verbosity(0)
-    , produce_proof(opt_produce_proof)
       
     // Statistics: (formerly in 'SolverStats')
     //
@@ -71,8 +70,12 @@ Solver::Solver()
     , restartHeuristicManager  (*this)
     , unitPropagator           (*this)
 {
-  if (produce_proof)
-    proofLogger.drup_file = fopen("proof.txt","w");
+  if (file_proof != "") {
+    produce_proof = true;
+    proofLogger.drup_file = fopen(file_proof,"w");
+    cout << "File proof " << file_proof << endl;
+  }
+  else produce_proof = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

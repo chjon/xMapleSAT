@@ -41,7 +41,7 @@ static IntOption    opt_ccmin_mode             (_cat, "ccmin-mode",  "Controls c
 
 static BoolOption   opt_compute_dip            (_cat2, "compute-dip",   "Compute DIP.", true);
 static BoolOption   opt_learn_two_dip_clauses  (_cat2, "dip-2clauses",    "Learn two DIP clauses: UIP -> DIP and DIP -> conflict. If set to false, only DIP -> conflict is learned.", true);
-static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it. (-1 means disabled)", -1, IntRange(-1, INT32_MAX));
+static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it. (-1 means disabled)", 20, IntRange(-1, INT32_MAX));
 static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random)", 1, IntRange(1, 3));
 
 static IntOption    opt_DIP_window_size         (_cat2, "dip-window-size",  "Introduce a DIP only if the sum of the activities of the pair is larger than the average of the last DIPs in a window of the given size (-1 means option disabled).", -1, IntRange(-1, INT32_MAX));

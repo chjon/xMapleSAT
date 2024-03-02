@@ -126,7 +126,7 @@ public:
     /// @brief The verbosity level of the solver. (0=silent, 1=some, 2=more)
     int verbosity;
 
-    /// @brief Says whether the solver will produce a DRAT proof in file proof.txt
+    /// @brief Says whether the solver will produce a DRAT proof in file
     int produce_proof;
     
     /// @brief If problem is satisfiable, this vector contains the model (if any).
