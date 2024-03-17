@@ -9,7 +9,7 @@ A family of extended resolution SAT solvers
 | `maplesat/`      | MapleSAT base solver                                          |
 | `xMapleLCM/`     | Extended resolution framework based on MapleLCM               |
 | `xMapleSAT/`     | Extended resolution framework based on MapleSAT               |
-| `xMapleLCM-DIP/` | DIP-based Extended resolution solver based on MapleLCM        |
+| `xMapleLCM-DIP/` | DIP-based Extended resolution solver built on MapleLCM        |
 | `README`         |                                                               |
 
 
