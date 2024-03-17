@@ -1,2 +1,0 @@
-/local/var/spool/slurmd/job17584020/slurm_script: line 2:  2162 Killed                  timeout -s SIGINT 3600 ~/systems/cadical --seed=1 -t 3600 /home/oliveras/SAT-comp-2023//15a2ec07aaca45d454a2fbfc0624e75e-hash_table_find_safety_size_29.cnf > results-cadical-2023//15a2ec07aaca45d454a2fbfc0624e75e-hash_table_find_safety_size_29.cnf.res.cadical-1
-slurmstepd: error: Detected 1 oom_kill event in StepId=17584020.batch. Some of the step tasks have been OOM Killed.
