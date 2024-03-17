@@ -77,53 +77,53 @@ AFTER_CONFLICT=2
 all: maplelcm xmaplelcm
 
 .prev_%:
-	gmake -C er clean
-	gmake -C core clean
+	make -C er clean
+	make -C core clean
 	rm -f .prev_*
 	touch $@
 
 maplelcm: .prev_maplelcm
-	gmake -C core rs || exit 1
+	make -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_vsids: .prev_maplelcm_vsids
-	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=1" -C core rs || exit 1
+	make CMD_CFLAGS="-D BRANCHING_HEURISTIC=1" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_chb: .prev_maplelcm_chb
-	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=2" -C core rs || exit 1
+	make CMD_CFLAGS="-D BRANCHING_HEURISTIC=2" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_dist: .prev_maplelcm_dist
-	gmake CMD_CFLAGS="-D BRANCHING_HEURISTIC=3" -C core rs || exit 1
+	make CMD_CFLAGS="-D BRANCHING_HEURISTIC=3" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_bcp_priority: .prev_maplelcm_bcp_priority
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
+	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_bcp_priority_vsids: .prev_maplelcm_bcp_priority_vsids
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=1" -C core rs || exit 1
+	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=1" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_bcp_priority_chb: .prev_maplelcm_bcp_priority_chb
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=2" -C core rs || exit 1
+	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=2" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 maplelcm_bcp_priority_dist: .prev_maplelcm_bcp_priority_dist
-	gmake CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=3" -C core rs || exit 1
+	make CMD_CFLAGS="-D BCP_PRIORITY_MODE=1 -D BRANCHING_HEURISTIC=3" -C core rs || exit 1
 	mkdir -p bin
 	mv core/glucose_static bin/$@
 
 xmaplelcm: .prev_xmaplelcm
-	gmake CMD_CFLAGS="\
+	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_LBD) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -138,7 +138,7 @@ xmaplelcm: .prev_xmaplelcm
 	mv er/xmaplelcm_static bin/$@
 
 xmaplelcm_rnd_rng: .prev_xmaplelcm_rnd_rng
-	gmake CMD_CFLAGS="\
+	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_RANDOM) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_RANGE) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -151,7 +151,7 @@ xmaplelcm_rnd_rng: .prev_xmaplelcm_rnd_rng
 	mv er/xmaplelcm_static bin/$@
 
 xmaplelcm_sub_lbd: .prev_xmaplelcm_sub_lbd
-	gmake CMD_CFLAGS="\
+	make CMD_CFLAGS="\
 		-D ER_USER_ADD_HEURISTIC=$(ER_ADD_HEURISTIC_SUBEXPR) \
 		-D ER_USER_FILTER_HEURISTIC=$(ER_FILTER_HEURISTIC_LBD) \
 		-D ER_USER_SELECT_HEURISTIC=$(ER_SELECT_HEURISTIC_ACTIVITY) \
@@ -164,14 +164,13 @@ xmaplelcm_sub_lbd: .prev_xmaplelcm_sub_lbd
 	mv er/xmaplelcm_static bin/$@
 
 xmaplelcm_glucoser: .prev_xmaplelcm_glucoser
-	gmake CMD_CFLAGS="-D ER_ENABLE_GLUCOSER=1" -C er rs || exit 1
+	make CMD_CFLAGS="-D ER_ENABLE_GLUCOSER=1" -C er rs || exit 1
 	mkdir -p bin
 	mv er/xmaplelcm_static bin/$@
 
 clean:
-	gmake -C er   clean
-	gmake -C core clean
-	gmake -C test clean
+	make -C er   clean
+	make -C core clean
 
 test:
-	gmake CMD_CFLAGS="-D TESTING" -C test
+	make CMD_CFLAGS="-D TESTING" -C test
