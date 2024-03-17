@@ -951,11 +951,11 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     if ((right == l_True and left == l_False) or
 	(right == l_False and left == l_True)) {
       ++conflicts_with_dangerous_dip;
-      static int times = 0;
-      ++times;
-      if (times % 1000 == 1) {
-	cout << "CAREFUL: the definition is falsified in conflict " << solver.conflicts << " at DL " << assignmentTrail.decisionLevel() << " (has happened " << times << " times)" << endl;
-      }
+      // static int times = 0;
+      // ++times;
+      // if (times % 1000 == 1) {
+      // 	cout << "CAREFUL: the definition is falsified in conflict " << solver.conflicts << " at DL " << assignmentTrail.decisionLevel() << " (has happened " << times << " times)" << endl;
+      // }
       //      exit(1);
       return false;
     }
