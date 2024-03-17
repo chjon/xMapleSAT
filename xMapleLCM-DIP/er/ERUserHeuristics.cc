@@ -369,7 +369,7 @@ void ERManager::user_extDelPredicateSetup_activity() {
     vec<double> currentActivity(originalNumVars);
     for (int i = 0; i < originalNumVars; i++) currentActivity.push(activity[i]);
     for (auto it = extDefs.begin(); it != extDefs.end(); it++) currentActivity.push(activity[it->first]);
-    
+
     // Compute threshold activity
     sort(currentActivity);
     m_threshold_activity = currentActivity[(int)((currentActivity.size() - 1) * ext_act_threshold)];

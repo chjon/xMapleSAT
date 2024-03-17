@@ -39,7 +39,6 @@ static const char* _cat2 = "DIP";
 
 static IntOption    opt_ccmin_mode             (_cat, "ccmin-mode",  "Controls conflict clause minimization (0=none, 1=basic, 2=deep)", 2, IntRange(0, 2));
 
-static BoolOption   opt_compute_dip            (_cat2, "compute-dip",   "Compute DIP.", true);
 static BoolOption   opt_learn_two_dip_clauses  (_cat2, "dip-2clauses",    "Learn two DIP clauses: UIP -> DIP and DIP -> conflict. If set to false, only DIP -> conflict is learned.", true);
 static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it. (-1 means disabled)", 20, IntRange(-1, INT32_MAX));
 static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random)", 1, IntRange(1, 3));
@@ -61,7 +60,6 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
     /////////////
     // Parameters
   , ccmin_mode(static_cast<ConflictClauseMinimizationMode>(static_cast<int>(opt_ccmin_mode)))
-  , compute_dip(opt_compute_dip)
   , dip_pair_threshold(opt_common_pair_DIP_min)
   , dip_window_size(opt_DIP_window_size)
   , dip_max_LBD(opt_DIP_max_LBD)
@@ -91,6 +89,113 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   }  
 }
 
+/*_________________________________________________________________________________________________
+|
+|  analyze1UIP : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
+|  
+|  Description:
+|    Analyze conflict and produce a reason clause.
+|  
+|    Pre-conditions:
+|      * 'out_learnt' is assumed to be cleared.
+|      * Current decision level must be greater than root level.
+|  
+|    Post-conditions:
+|      * 'out_learnt[0]' is the asserting literal at level 'out_btlevel'.
+|      * If out_learnt.size() > 1 then 'out_learnt[1]' has the greatest decision level of the 
+|        rest of literals. There may be others from the same level though.
+|  
+|________________________________________________________________________________________________@*/
+void ConflictAnalyzer::analyze1UIP(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd) {
+    // Generate conflict clause:
+    mainLearnedClause.clear();
+    getFirstUIPClause(confl, mainLearnedClause);
+    max_literals += mainLearnedClause.size();
+
+    // Simplify conflict clause:
+    simplifyClause(out_learnt, mainLearnedClause);
+    tot_literals += out_learnt.size();
+
+    // Compute output LBD
+    out_lbd = assignmentTrail.computeLBD(out_learnt);
+    if (out_lbd <= 6 && out_learnt.size() <= 30) // Try further minimization?
+        if (binResMinimize(out_learnt))
+            out_lbd = assignmentTrail.computeLBD(out_learnt); // Recompute LBD if minimized.
+
+    // Enforce watcher invariant
+    enforceWatcherInvariant(out_learnt);
+
+    // Find correct backtrack level
+    out_btlevel = (out_learnt.size() == 1) ? 0 : assignmentTrail.level(var(out_learnt[1]));
+
+    // Update data structures for branching heuristics
+    branchingHeuristicManager.handleEventLearnedClause(out_learnt, seen, out_btlevel);
+
+    // Clean up
+    // TODO: can this be moved before updating the branching heuristic?
+    // it is currently polluted by simplifyClause
+    for (int j = 0; j < toClear.size(); j++)
+        seen[toClear[j]] = false;
+    toClear.clear();
+
+    // Clear 'seen[]'
+    for (int j = 0; j < mainLearnedClause.size(); j++)
+        seen[var(mainLearnedClause[j])] = false;
+}
+
+inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& out_learnt) {
+    Lit p = lit_Undef;
+    int pathC = 0;
+    int index = assignmentTrail.nAssigns() - 1;
+    out_learnt.push(); // (leave room for the asserting literal)
+
+    do {
+        assert(confl != CRef_Undef); // (otherwise should be UIP)
+        Clause& c = ca[confl];
+
+        // For binary clauses, we don't rearrange literals in propagate(), so check and make sure the first is an implied lit.
+        if (p != lit_Undef && c.size() == 2 && assignmentTrail.value(c[0]) == l_False) {
+            assert(assignmentTrail.value(c[1]) == l_True);
+            std::swap(c[0], c[1]);
+        }
+
+        solver.clauseDatabase.handleEventClauseInConflictGraph(confl, solver.conflicts);
+
+        // Iterate through every literal that participates in the conflict graph
+        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+            Lit q = c[j];
+            if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
+
+            // Mark variable as seen
+            branchingHeuristicManager.handleEventLitInConflictGraph(q, solver.conflicts);
+            seen[var(q)] = 1;
+
+            // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
+            if (assignmentTrail.level(var(q)) >= assignmentTrail.decisionLevel())
+                pathC++;
+            // Add literals from earlier decision levels to the conflict clause
+            else
+                out_learnt.push(q);
+        }
+        
+        // Select next clause to look at:
+        while (!seen[var(assignmentTrail[index--])]);
+        p     = assignmentTrail[index+1];
+        confl = assignmentTrail.reason(var(p));
+
+        // Mark variable as unseen: it is either at or after the first UIP
+        seen[var(p)] = 0;
+        pathC--;
+
+    } while (pathC > 0);
+
+    // Add first UIP literal at index 0
+    out_learnt[0] = ~p;
+    seen[var(p)] = true;
+
+    // Note: at this point, seen[v] is true iff v is in the learnt clause
+}
+
 
 /*_________________________________________________________________________________________________
   |
@@ -111,7 +216,7 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   |  
   |________________________________________________________________________________________________@*/
 bool ConflictAnalyzer::analyze (CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd, vec<Lit>& out_learnt_UIP_to_DIP) {
-  
+
   // First of all, depending on whether DIP learning has been performed, we compute
   // 1) [No-DIP learning]: mainLearnedClause is the 1UIP clause
   // 2) [DIP-learning]: mainLearnedClause is DIP -> conflict
@@ -823,8 +928,6 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
   for (Lit z : toIncreaseActivity)
     branchingHeuristicManager.handleEventLitInConflictGraph(z, solver.conflicts);
   
-  if (not learn_two_DIP_clauses) return true;
-  
   // 2) add definition clauses
   auto [newDef, extLit] = erManager->addDIPExtensionVariable(~x,~y);
 
@@ -875,6 +978,9 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
 
   clause_to_learn.push(extLit);
   for (auto x : afterLits) clause_to_learn.push(x);
+
+  if (not learn_two_DIP_clauses) return true;
+    
 
 
   // 3) UIP ^ before --> DIP
@@ -1058,21 +1164,19 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
   vector<Lit> litsToNotifyBranchingHeuristic; // ALBERT: should explain and understand this
 
   // Start by adding the edges from the negation of the lits  the conflicting clause to the "CONFLICT" node
-  if (compute_dip) {
-    literalsInAnalysis.push_back(mkLit(assignmentTrail.nVars(),false)); // Fake literal corresponding to conflict
-    predIndex.push_back(predecessorsLits.size());      
-    Clause& confClause = ca[confl];  
-    for (int i = 0; i < confClause.size(); ++i) {
-      if (write) writeEdgeInGraph(outAll,~confClause[i],mkLit(assignmentTrail.nVars(),false),confClause.learnt());
-      if (assignmentTrail.level(var(confClause[i])) == assignmentTrail.decisionLevel()) {
-	predecessorsLits.push_back(~confClause[i]);       	
-	if (write) {
-	  currentNodes.insert(~confClause[i]);
-	  writeEdgeInGraph(outCurrent,~confClause[i],mkLit(assignmentTrail.nVars(),false),confClause.learnt());
-	}
+  literalsInAnalysis.push_back(mkLit(assignmentTrail.nVars(),false)); // Fake literal corresponding to conflict
+  predIndex.push_back(predecessorsLits.size());      
+  Clause& confClause = ca[confl];  
+  for (int i = 0; i < confClause.size(); ++i) {
+    if (write) writeEdgeInGraph(outAll,~confClause[i],mkLit(assignmentTrail.nVars(),false),confClause.learnt());
+    if (assignmentTrail.level(var(confClause[i])) == assignmentTrail.decisionLevel()) {
+      predecessorsLits.push_back(~confClause[i]);       	
+      if (write) {
+	currentNodes.insert(~confClause[i]);
+	writeEdgeInGraph(outCurrent,~confClause[i],mkLit(assignmentTrail.nVars(),false),confClause.learnt());
       }
-      else if (write) previousNodes.insert(~confClause[i]);
     }
+    else if (write) previousNodes.insert(~confClause[i]);
   }
 
   // Start standard 1UIP learning algorithm
@@ -1125,23 +1229,20 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
     pathC--;
     if (pathC > 0) {
       Clause& cTmp = ca[confl];
-
-      if (compute_dip) {
-	literalsInAnalysis.push_back(p);
-	predIndex.push_back(predecessorsLits.size());	    
-	for (int i = 0; i < cTmp.size(); ++i)
-	  if (var(cTmp[i]) != var(p)) {
-	    if (write) writeEdgeInGraph(outAll,~cTmp[i],p,cTmp.learnt());		
-	    if (assignmentTrail.level(var(cTmp[i])) == assignmentTrail.decisionLevel()) {
-	      predecessorsLits.push_back(~cTmp[i]);				
-	      if (write) {
-		currentNodes.insert(~cTmp[i]);
-		writeEdgeInGraph(outCurrent,~cTmp[i],p,cTmp.learnt());
-	      }
+      literalsInAnalysis.push_back(p);
+      predIndex.push_back(predecessorsLits.size());	    
+      for (int i = 0; i < cTmp.size(); ++i)
+	if (var(cTmp[i]) != var(p)) {
+	  if (write) writeEdgeInGraph(outAll,~cTmp[i],p,cTmp.learnt());		
+	  if (assignmentTrail.level(var(cTmp[i])) == assignmentTrail.decisionLevel()) {
+	    predecessorsLits.push_back(~cTmp[i]);				
+	    if (write) {
+	      currentNodes.insert(~cTmp[i]);
+	      writeEdgeInGraph(outCurrent,~cTmp[i],p,cTmp.learnt());
 	    }
-	    else if (write) previousNodes.insert(~cTmp[i]);
 	  }
-      }      
+	  else if (write) previousNodes.insert(~cTmp[i]);
+	}
     }
     else if (pathC == 0) { // 1UIP found
       predIndex.push_back(predecessorsLits.size());
@@ -1160,84 +1261,83 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
 
   bool foundDIP = false;
 
-  if (compute_dip) {
-    clock_t start = clock(), end;
+  clock_t start = clock(), end;
+  
+  vector<int> predecessors;
+  for (auto lit : literalsInAnalysis) encoder.Solver2Sam(lit); // encode in topological order
+  for (auto lit : predecessorsLits) predecessors.push_back(encoder.Solver2Sam(lit)); // map vec<Lit> to vec<int>
+  TwoVertexBottlenecks dip;
+  vector<int> pathA, pathB; // the two disjoint paths
+  int res = dip.CalcBottlenecks(predecessors,predIndex,pathA,pathB);
+  
+  foundDIP =  (res > 0);
+  
+  
+  if (write) 
+    writeDIPComputationInfo(dip,encoder,predecessors,predecessorsLits,predIndex,literalsInAnalysis,foundDIP,pathA,pathB);
+  
+  if (foundDIP) {
     
-    vector<int> predecessors;
-    for (auto lit : literalsInAnalysis) encoder.Solver2Sam(lit); // encode in topological order
-    for (auto lit : predecessorsLits) predecessors.push_back(encoder.Solver2Sam(lit)); // map vec<Lit> to vec<int>
-    TwoVertexBottlenecks dip;
-    vector<int> pathA, pathB; // the two disjoint paths
-    int res = dip.CalcBottlenecks(predecessors,predIndex,pathA,pathB);
-
-    foundDIP =  (res > 0);
+    ++conflicts_with_dip;
     
+    // Decode
+    //    The return code res will equal:
+    //                  res = 4 + 2a + b
+    //    where:  a==1 if the first element of VertPairListA is an immediate
+    //                 ancestor of the sink node
+    //            b==1 if the first element of VertPairListB is an immediate
+    //                 ancestor of the sink node
+    //    and a, b are otherwise equal to 0.    
+    res -=4;
+    int b = res%2;
+    res/=2;
+    int a = res;     
     
-    if (write) 
-      writeDIPComputationInfo(dip,encoder,predecessors,predecessorsLits,predIndex,literalsInAnalysis,foundDIP,pathA,pathB);
-
-    if (foundDIP) {
-
-      ++conflicts_with_dip;
-      
-      // Decode
-      //    The return code res will equal:
-      //                  res = 4 + 2a + b
-      //    where:  a==1 if the first element of VertPairListA is an immediate
-      //                 ancestor of the sink node
-      //            b==1 if the first element of VertPairListB is an immediate
-      //                 ancestor of the sink node
-      //    and a, b are otherwise equal to 0.    
-      res -=4;
-      int b = res%2;
-      res/=2;
-      int a = res;     
-
-      vec<Lit> dip_clause_to_learn;
-      vec<Lit> dip_clause_to_learn2;
-
-      bool ok = computeDIPClauses(a,b,origConfl,dip,encoder,dip_clause_to_learn,dip_clause_to_learn2,UIP,pathA, pathB);
-      // If DIP-clause learning seems a good idea
-      if (ok) {
+    vec<Lit> dip_clause_to_learn;
+    vec<Lit> dip_clause_to_learn2;
+    
+    bool ok = computeDIPClauses(a,b,origConfl,dip,encoder,dip_clause_to_learn,dip_clause_to_learn2,UIP,pathA, pathB);
+    // If DIP-clause learning seems a good idea
+    if (ok) {
 	// Clear seen marks
-	for (int i = 1; i < out_learnt.size(); ++i) seen[var(out_learnt[i])] = false; // clearing the 1st UIP lemma
-	if (learn_two_DIP_clauses) for (int i = 0; i < dip_clause_to_learn.size(); ++i) seen[var(dip_clause_to_learn[i])] = true;
+      for (int i = 1; i < out_learnt.size(); ++i) seen[var(out_learnt[i])] = false; // clearing the 1st UIP lemma
+      if (learn_two_DIP_clauses) for (int i = 0; i < dip_clause_to_learn.size(); ++i) seen[var(dip_clause_to_learn[i])] = true;
 #if DEBUG
-	for (int k = 1; k < dip_clause_to_learn.size(); ++k)
-	  assert(assignmentTrail.value(dip_clause_to_learn[k]) == l_False);
+      for (int k = 1; k < dip_clause_to_learn.size(); ++k)
+	assert(assignmentTrail.value(dip_clause_to_learn[k]) == l_False);
 #endif 	  
-	// Copy dip_clause_to_learn (DIP -> conflict) to out_learnt
-	out_learnt.clear();
-	for (int i = 0; i < dip_clause_to_learn.size() ;++i)
-	  out_learnt.push(dip_clause_to_learn[i]);
-
-	if (learn_two_DIP_clauses) {
-	  // Copy dip_clause_to_learn2 (1UIP -> conflict) to out_learnt_UIP_to_DIP
-	  out_learnt_UIP_to_DIP.clear();
-	  for (int i = 0; i < dip_clause_to_learn2.size() ;++i)
-	    out_learnt_UIP_to_DIP.push(dip_clause_to_learn2[i]);
-	}
-	
-	end = clock();
-	time_DIP += double(end - start)/CLOCKS_PER_SEC;
-	return true;
+      // Copy dip_clause_to_learn (DIP -> conflict) to out_learnt
+      out_learnt.clear();
+      for (int i = 0; i < dip_clause_to_learn.size() ;++i)
+	out_learnt.push(dip_clause_to_learn[i]);
+      
+      if (learn_two_DIP_clauses) {
+	// Copy dip_clause_to_learn2 (1UIP -> conflict) to out_learnt_UIP_to_DIP
+	out_learnt_UIP_to_DIP.clear();
+	for (int i = 0; i < dip_clause_to_learn2.size() ;++i)
+	  out_learnt_UIP_to_DIP.push(dip_clause_to_learn2[i]);
       }
-      else { // DIP existed but not good enough or some generated clause is dangerous (to be fixed?)
-	// In this case learn 1UIP clause (which is inside out_learnt)
-	end = clock();
-	time_DIP += double(end - start)/CLOCKS_PER_SEC;
-
-	out_learnt[0] = ~p; 
-	seen[var(p)] = true;
-	for (auto l : litsToNotifyBranchingHeuristic) // If 1UIP learning, activity should be like 1UIP learning
-	  branchingHeuristicManager.handleEventLitInConflictGraph(l, solver.conflicts);
-	return false; // no DIP found	
-      }
+      
+      end = clock();
+      time_DIP += double(end - start)/CLOCKS_PER_SEC;
+      return true;
     }
-    end = clock();    
-    time_DIP += double(end - start)/CLOCKS_PER_SEC;
+    else { // DIP existed but not good enough or some generated clause is dangerous (to be fixed?)
+      // In this case learn 1UIP clause (which is inside out_learnt)
+      end = clock();
+      time_DIP += double(end - start)/CLOCKS_PER_SEC;
+      
+      out_learnt[0] = ~p; 
+      seen[var(p)] = true;
+      for (auto l : litsToNotifyBranchingHeuristic) // If 1UIP learning, activity should be like 1UIP learning
+	branchingHeuristicManager.handleEventLitInConflictGraph(l, solver.conflicts);
+      return false; // no DIP found	
+    }
   }
-
+  end = clock();    
+  time_DIP += double(end - start)/CLOCKS_PER_SEC;
+  
+  
   //    out << "UIP is " << p << endl;
   // Add first UIP literal at index 0
   for (auto l : litsToNotifyBranchingHeuristic)

@@ -44,6 +44,12 @@ namespace Minisat {
         /// @brief The extended resolution component
         ERManager erManager;
 
+        /// @brief Whether to use DIPs
+        bool use_dip;
+
+      /// @brief Whether to dynamically decide to disable DIP computation
+      bool allow_dip_disabling ;
+
     public:
         ///////////////////////////////////////////////////////////////////////////////////////////
         // CONSTRUCTORS
@@ -119,9 +125,12 @@ namespace Minisat {
          * @param cr the reference to the clause that was deleted
          */
         virtual void handleEventClauseDeleted(const Clause& c, CRef cr);
-      
-    };
 
+    private:
+      void disable_DIP_computation_if_needed();
+    };
+  
+  
   
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // IMPLEMENTATION OF INLINE FUNCTIONS

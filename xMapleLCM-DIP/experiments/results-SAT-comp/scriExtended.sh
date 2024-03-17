@@ -79,7 +79,7 @@ extract_clauses ( ){
 
 
 
-for file in $1/*.res*disable*; do
+for file in $1/*.res*closestDIP*; do
     time=$(extract_time $file)
     decs=$(extract_decisions $file)
     decs_on_ext=$(extract_decisions_on_ext $file)

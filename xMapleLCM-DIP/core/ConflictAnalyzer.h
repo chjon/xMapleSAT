@@ -99,9 +99,6 @@ namespace Minisat {
     /// @brief Controls conflict clause minimization
     ConflictClauseMinimizationMode ccmin_mode;
 
-    // @brief Controls computation of DIP
-    bool compute_dip;
-
     // @brief Minimum number of times a DIP has to appear before we introduce it
     int dip_pair_threshold;
 
@@ -241,6 +238,8 @@ namespace Minisat {
      */
     bool analyze(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd, vec<Lit>& out_learnt_UIP_to_DIP);
 
+    void analyze1UIP(CRef confl, vec<Lit>& out_learnt, int& out_btlevel, int& out_lbd);
+    void getFirstUIPClause(CRef confl, vec<Lit>& out_learnt);
     // Hack (Albert) We might want to make this nicer
     void notifyERManager(ERManager* erm);
       

@@ -25,11 +25,19 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 using namespace Minisat;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// OPTIONS
+static const char* _cat2 = "DIP";
+static BoolOption   opt_compute_dip            (_cat2, "compute-dip",   "Compute DIP.", true);
+static BoolOption   disabling_dip              (_cat2, "disabling-dip",   "Allows dynamically disabling DIP computation if the perc. of decisions on exteded variables is low.", false);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
 
 ERSolver::ERSolver()
   : Solver()
   , erManager(*this)
+  , use_dip(opt_compute_dip)
+  , allow_dip_disabling(disabling_dip)
 {
   this->conflictAnalyzer.notifyERManager(&erManager);
 }
@@ -37,6 +45,26 @@ ERSolver::ERSolver()
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // HELPER FUNCTIONS
 
+void ERSolver::disable_DIP_computation_if_needed ( ){
+  if (not allow_dip_disabling) return;
+  static bool some_very_high = false;
+  static bool some_evaluation = false;
+  static vector<double> window;  
+  if (use_dip and not some_very_high) {
+    if (conflicts%10000 == 0) {
+      window.push_back(double(erManager.branchOnExt)/branchingHeuristicManager.decisions*100);
+      if ((not some_evaluation and window.size() == 20) or (some_evaluation and window.size() == 10)) {
+	some_evaluation = true;
+	//	cout << "Window full" << endl;
+	if (window.back() >= 5) {/*cout << "Some very high" << endl;*/ some_very_high = true;}
+	if (some_very_high or
+	    (window.back() - window[0] > 0)) {/*cout << "Continue" << endl;*/}
+	else {/*cout << "Deactivate" << endl;*/use_dip = false;}
+	window.clear();
+      }
+    }
+  }
+}
 
 lbool ERSolver::search(int& nof_conflicts) {
   assert(ok);
@@ -70,6 +98,12 @@ lbool ERSolver::search(int& nof_conflicts) {
     CRef confl = unitPropagator.propagate();
  
     if (confl != CRef_Undef) {
+
+      disable_DIP_computation_if_needed();
+      // if (conflicts % 10000 == 0)
+      // 	cout << "We had " << branchingHeuristicManager.decisions << " decisions of which only " << double(erManager.branchOnExt)/branchingHeuristicManager.decisions*100 << " were on extended" << endl;
+
+      
       // CONFLICT
       assert(conflictAnalyzer.checkSeen());
       conflicts++;
@@ -80,31 +114,38 @@ lbool ERSolver::search(int& nof_conflicts) {
       branchingHeuristicManager.handleEventConflicted(confl, conflicts);
       learnt_clause.clear();
       learnt_clause_UIP_to_DIP.clear();
-      if (conflictAnalyzer.analyze(confl, learnt_clause, backtrack_level, lbd, learnt_clause_UIP_to_DIP))
-	dip_conflicts++;
+
+      if (use_dip) {     
+	if (conflictAnalyzer.analyze(confl, learnt_clause, backtrack_level, lbd, learnt_clause_UIP_to_DIP))
+	  dip_conflicts++;
+      }
+      else conflictAnalyzer.analyze1UIP(confl, learnt_clause, backtrack_level, lbd);
+	
       assert(conflictAnalyzer.checkSeen());
       assignmentTrail.cancelUntilLevel(backtrack_level);
-	    
-      // EXTENDED RESOLUTION - substitute disjunctions with extension variables. This must be
-      // called after backtracking because extension variables might need to be propagated.
-      bool subst = erManager.substitute(learnt_clause);
 
-
-      if (subst) {
-	// Check for largest DL not counting UIP and move it to 2n pos
-	int max_pos = 1;
-	int max_level = assignmentTrail.level(var(learnt_clause[1]));
-	for (int k = 2; k < learnt_clause.size(); ++k)
-	  if (assignmentTrail.level(var(learnt_clause[k])) > max_level) {
-	    max_level = assignmentTrail.level(var(learnt_clause[k]));
-	    max_pos = k;
-	  }
-	      
-	if (max_pos != 1)
-	  swap(learnt_clause[1],learnt_clause[max_pos]);
-
-	assignmentTrail.cancelUntilLevel(max_level);
-	lbd = assignmentTrail.computeLBD(learnt_clause); // it might have changed
+      if (use_dip) {
+	// EXTENDED RESOLUTION - substitute disjunctions with extension variables. This must be
+	// called after backtracking because extension variables might need to be propagated.
+	bool subst = erManager.substitute(learnt_clause);
+	
+	
+	if (subst) {
+	  // Check for largest DL not counting UIP and move it to 2n pos
+	  int max_pos = 1;
+	  int max_level = assignmentTrail.level(var(learnt_clause[1]));
+	  for (int k = 2; k < learnt_clause.size(); ++k)
+	    if (assignmentTrail.level(var(learnt_clause[k])) > max_level) {
+	      max_level = assignmentTrail.level(var(learnt_clause[k]));
+	      max_pos = k;
+	    }
+	  
+	  if (max_pos != 1)
+	    swap(learnt_clause[1],learnt_clause[max_pos]);
+	  
+	  assignmentTrail.cancelUntilLevel(max_level);
+	  lbd = assignmentTrail.computeLBD(learnt_clause); // it might have changed
+	}
       }
 	    
       lbd--;
