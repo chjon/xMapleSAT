@@ -1,0 +1,65 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:            92                                         |
+|  Number of clauses:             368                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c ===============================================================================
+restarts              : 22208
+conflicts             : 18914796       (33379 /sec)
+decisions             : 26892830       (0.00 % random) (47458 /sec)
+propagations          : 5680869000     (10024986 /sec)
+conflict literals     : 352792490      (12.60 % deleted)
+total ext vars        : 4638        
+tried delete ext vars : 64          
+deleted ext vars      : 64          
+max ext vars          : 4574        
+conflict ext clauses  : 0              (0 /sec)
+learnt ext clauses    : 0              (0 /sec)
+decisions on ext vars : 20663       
+Memory used           : 55.00 MB
+CPU time              : 566.671 s
+ER_sel time           : 12.706 s
+ER_add time           : 11.5112 s
+ER_delC time          : 0 s
+ER_delV time          : 0.555492 s
+ER_sub time           : 0 s
+ER_stat time          : 0 s
+
+INDETERMINATE

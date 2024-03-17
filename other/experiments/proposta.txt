@@ -1,0 +1,71 @@
+VARIANTS de xMapleSAT (8)
+- Sense DIP
+- DIP, 2 clauses, common-pair 20, middle (millor?)
+- DIP, 1 clauses, common-pair 20, middle
+- DIP, 2 clauses, common.pair 5, middle
+- DIP, 2 clauses, window 20, middle
+- DIP, 2 clauses, glue 2, middle
+- DIP, 2 clauses, common.pair 20, random
+- DIP, 2 clauses, common.pair 20, closest
+
+INTERVALS
+==========
+
+Ja tenim resultats sobre 8 nodes de KISSAT i de suposada millor opció.
+Hi ha 23 benchmarks, podria executar sobre 5000s, que és el que vaig fer.
+En solucionem 7.
+
+FALTEN 6 variants nostres (no DIP no cal, pq ja sabem que no funciona, i tampoc la millor) més cryptominisat + SBVA sobre els 8 nodes.
+[tot executat]
+
+8x23x5000 = 255 hores 
+
+TSEITIN
+=======
+
+GRID:
+----
+
+Tenim plots xulos de temps/proofs
+
+FALTEN fer alguns càlculs sobre el de sobretaula per veure com escalen (màxim 10 minuts???):
+millor opcio, kissat, cryptominisat, SBVA
+Els necessitarem per fer un plot.
+
+REGULAR:
+-------
+
+FALTEN fer càlculs sobre el portàtil per veure com escalen (4 i 6 regular): [4 regular ja està fet, 6 regular ja està fet] millor opcio, kissat, cryptominisat, SBVA [10 minuts de temps límit]
+
+Els voldrem per fer plot
+
+FALTEN agafar 5 benchmarks de grid, 5 de 4-regular i 5 de 6-regular i executar
+7 variants nostres (totes menys la que no fa DIP). Jo agafaria, de cada un, un que trigui 10 minuts, 15, 20, 25 i 30 aprox. Posar temps limit de 5000. Sobre els 18 nodes.
+[Grid ja executat]
+[Regular ja executat]
+
+7x15x5000 = 145 hores
+
+RANDOM KXOR
+===========
+
+Tenim ja com escalen kissat, cryptominisat, SBVA i DIP (millor)
+
+FALTEN agafar 3 benchmarks de cada un dels 6 tipus = 18 benchmarks, que triguin 10, 20 i 30' aprox en el nostre (aixo potser es xungo) i executar les 7 variants sobre els 18 nodes.
+
+kxor-3-or-3 [executat]
+kxor-3-or-2 [running]
+kxor-3-xor-2 [running]
+
+7x18x5000 = 175h
+
+
+=========================================================================================================
+=========================================================================================================
+=========================================================================================================
+
+Sembla que window introdueix moltissimes variables, moltissimes!!!!!!
+Sembla que glue no n'introdueix gaires
+
+Potser s'haurien d'ajustar els paràmetres una mica a ull per executar això i reexecutar.
+

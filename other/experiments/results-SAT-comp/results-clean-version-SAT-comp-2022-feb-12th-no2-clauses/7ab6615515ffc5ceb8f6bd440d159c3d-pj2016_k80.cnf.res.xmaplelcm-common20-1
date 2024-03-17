@@ -1,0 +1,38 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:       7051071                                         |
+|  Number of clauses:        18071374                                         |
+|  Parse time:                   4.33 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c ===============================================================================
+restarts                  : 27
+conflicts                 : 11554          (3 /sec)
+decisions                 : 872919151      (0.00 % random) (244729 /sec)
+propagations              : 19903424764    (5580065 /sec)
+conflict literals         : 78719          (33.30 % deleted)
+
+conflicts w/ DIP found    : 9484           (82.08 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 0              (0.00 % of conflicts)
+decisions on ext vars     : 0              (0.00 % of decisions)
+total ext vars            : 0           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 0           
+
+Memory used               : 2866.00 MB
+CPU time                  : 3566.88 s
+DIP computation time      : 0.112962 s (0.00 % of total time)
+ER_sel time               : 0.011453 s
+ER_add time               : 0 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.022451 s
+ER_stat time              : 0 s
+
+INDETERMINATE

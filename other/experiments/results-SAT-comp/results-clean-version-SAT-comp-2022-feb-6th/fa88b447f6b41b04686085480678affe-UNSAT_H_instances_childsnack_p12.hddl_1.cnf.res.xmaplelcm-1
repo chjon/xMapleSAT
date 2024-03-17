@@ -1,0 +1,35 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:         79506                                         |
+|  Number of clauses:       213994530                                         |
+|  Parse time:                  23.34 s                                       |
+|                                                                             |
+===============================================================================
+Solved by unit propagation
+restarts                  : 0
+conflicts                 : 0              (0 /sec)
+decisions                 : 0              (0.00 % random) (0 /sec)
+propagations              : 554            (24 /sec)
+conflict literals         : 0              (-nan % deleted)
+
+conflicts w/ DIP found    : 0              (-nan % of conflicts)
+conflicts w/ dangerous DIP: 0              (-nan % of conflicts)
+conflicts w/ DIP-learning : 0              (-nan % of conflicts)
+decisions on ext vars     : 0              (-nan % of decisions)
+total ext vars            : 0           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 0           
+
+Memory used               : 11041.00 MB
+CPU time                  : 23.3441 s
+DIP computation time      : 0 s (0.00 % of total time)
+ER_sel time               : 0 s
+ER_add time               : 0 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

@@ -1,0 +1,48 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:           700                                         |
+|  Number of clauses:           27256                                         |
+|  Parse time:                   0.01 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c ===============================================================================
+restarts                  : 76818
+conflicts                 : 17043939       (4906 /sec)
+decisions                 : 32558973       (0.00 % random) (9371 /sec)
+propagations              : 526768124      (151620 /sec)
+conflict literals         : 4379424145     (8.48 % deleted)
+
+conflicts w/ DIP found    : 10373518       (60.86 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 0              (0.00 % of conflicts)
+decisions on ext vars     : 0              (0.00 % of decisions)
+total ext vars            : 0           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 0           
+
+Memory used               : 383.00 MB
+CPU time                  : 3474.26 s
+DIP computation time      : 121.749 s (3.50 % of total time)
+ER_sel time               : 34.2268 s
+ER_add time               : 0 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 25.1368 s
+ER_stat time              : 0 s
+
+INDETERMINATE

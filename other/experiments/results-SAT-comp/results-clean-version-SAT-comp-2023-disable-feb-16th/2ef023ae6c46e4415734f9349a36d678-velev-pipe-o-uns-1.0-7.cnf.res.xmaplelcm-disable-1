@@ -1,0 +1,153 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:         24415                                         |
+|  Number of clauses:          711049                                         |
+|  Parse time:                   0.11 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 4357 decisions of which only 0 were on extended
+We had 2688475 decisions of which only 0.00156222 were on extended
+We had 3885898 decisions of which only 0.00195579 were on extended
+We had 5696445 decisions of which only 0.0331259 were on extended
+We had 7403864 decisions of which only 0.049042 were on extended
+We had 7785456 decisions of which only 0.0530476 were on extended
+c Switched to VSIDS.
+We had 7841924 decisions of which only 0.0530227 were on extended
+We had 7939453 decisions of which only 0.0527996 were on extended
+We had 8032212 decisions of which only 0.0526879 were on extended
+We had 8113907 decisions of which only 0.0528599 were on extended
+We had 8202710 decisions of which only 0.0529947 were on extended
+c Switched to LRB.
+We had 8278310 decisions of which only 0.0531026 were on extended
+We had 8322281 decisions of which only 0.0529182 were on extended
+We had 8374407 decisions of which only 0.0526366 were on extended
+We had 8421602 decisions of which only 0.0524366 were on extended
+We had 8465815 decisions of which only 0.0522218 were on extended
+c Switched to VSIDS.
+We had 8528583 decisions of which only 0.0519195 were on extended
+We had 8611431 decisions of which only 0.0517219 were on extended
+We had 8708520 decisions of which only 0.0520754 were on extended
+Window full
+Continue
+We had 8785916 decisions of which only 0.0517191 were on extended
+We had 8856606 decisions of which only 0.0519386 were on extended
+c Switched to LRB.
+We had 8925907 decisions of which only 0.0520059 were on extended
+We had 8975405 decisions of which only 0.0519308 were on extended
+We had 9013741 decisions of which only 0.0521981 were on extended
+We had 9042593 decisions of which only 0.0531042 were on extended
+We had 9083201 decisions of which only 0.0538577 were on extended
+We had 9124549 decisions of which only 0.0562439 were on extended
+We had 9176273 decisions of which only 0.0565589 were on extended
+c Switched to VSIDS.
+We had 9254816 decisions of which only 0.0563923 were on extended
+Window full
+Continue
+We had 9344238 decisions of which only 0.0562486 were on extended
+We had 9428169 decisions of which only 0.0563418 were on extended
+We had 9513354 decisions of which only 0.0563208 were on extended
+We had 9583992 decisions of which only 0.0565526 were on extended
+We had 9664635 decisions of which only 0.056774 were on extended
+c Switched to LRB.
+We had 9745726 decisions of which only 0.057338 were on extended
+We had 9799024 decisions of which only 0.057169 were on extended
+We had 9837831 decisions of which only 0.057472 were on extended
+We had 9880784 decisions of which only 0.0580926 were on extended
+We had 9919825 decisions of which only 0.0587611 were on extended
+Window full
+Continue
+We had 9963769 decisions of which only 0.0594153 were on extended
+We had 10007291 decisions of which only 0.0600162 were on extended
+c Switched to VSIDS.
+We had 10070574 decisions of which only 0.0614662 were on extended
+We had 10136388 decisions of which only 0.0619254 were on extended
+We had 10205474 decisions of which only 0.0627114 were on extended
+We had 10270344 decisions of which only 0.0632695 were on extended
+We had 10334036 decisions of which only 0.0637795 were on extended
+We had 10404272 decisions of which only 0.0651655 were on extended
+We had 10471717 decisions of which only 0.0653952 were on extended
+We had 10535721 decisions of which only 0.0654535 were on extended
+c Switched to LRB.
+Window full
+Continue
+We had 10587719 decisions of which only 0.0679183 were on extended
+We had 10629975 decisions of which only 0.0686549 were on extended
+We had 10656585 decisions of which only 0.0697503 were on extended
+We had 10693051 decisions of which only 0.0715979 were on extended
+We had 10728129 decisions of which only 0.0726595 were on extended
+We had 10767265 decisions of which only 0.0748844 were on extended
+We had 10810372 decisions of which only 0.0755663 were on extended
+We had 10846748 decisions of which only 0.0787517 were on extended
+We had 10874347 decisions of which only 0.0895042 were on extended
+We had 10902717 decisions of which only 0.126198 were on extended
+c Switched to VSIDS.
+Window full
+Continue
+We had 10963740 decisions of which only 0.133914 were on extended
+We had 11040471 decisions of which only 0.135139 were on extended
+We had 11113457 decisions of which only 0.135538 were on extended
+We had 11181492 decisions of which only 0.136529 were on extended
+We had 11228108 decisions of which only 0.137405 were on extended
+We had 11286366 decisions of which only 0.138167 were on extended
+We had 11341452 decisions of which only 0.140282 were on extended
+We had 11389104 decisions of which only 0.141214 were on extended
+c Switched to LRB.
+We had 11446078 decisions of which only 0.144215 were on extended
+We had 11498050 decisions of which only 0.145312 were on extended
+Window full
+Continue
+We had 11529542 decisions of which only 0.146467 were on extended
+We had 11558991 decisions of which only 0.148101 were on extended
+We had 11611456 decisions of which only 0.149258 were on extended
+We had 11660965 decisions of which only 0.150819 were on extended
+We had 11711314 decisions of which only 0.153894 were on extended
+We had 11746254 decisions of which only 0.15691 were on extended
+We had 11782895 decisions of which only 0.159053 were on extended
+We had 11824178 decisions of which only 0.162481 were on extended
+We had 11862036 decisions of which only 0.163791 were on extended
+We had 11900502 decisions of which only 0.165901 were on extended
+Window full
+Continue
+We had 11943133 decisions of which only 0.167083 were on extended
+c Switched to VSIDS.
+We had 11985594 decisions of which only 0.17043 were on extended
+We had 12047887 decisions of which only 0.173018 were on extended
+We had 12091164 decisions of which only 0.179296 were on extended
+We had 12133475 decisions of which only 0.18299 were on extended
+We had 12184622 decisions of which only 0.18731 were on extended
+We had 12223983 decisions of which only 0.190642 were on extended
+We had 12271294 decisions of which only 0.194568 were on extended
+c Switched to LRB.
+We had 12323668 decisions of which only 0.19994 were on extended
+We had 12366777 decisions of which only 0.202745 were on extended
+c ===============================================================================
+restarts                  : 2395
+conflicts                 : 883423         (3806 /sec)
+decisions                 : 12383369       (0.00 % random) (53355 /sec)
+propagations              : 685759854      (2954667 /sec)
+conflict literals         : 111473835      (28.61 % deleted)
+
+conflicts w/ DIP found    : 446359         (50.53 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 9036           (1.02 % of conflicts)
+decisions on ext vars     : 25219          (0.20 % of decisions)
+total ext vars            : 842         
+tried delete ext vars     : 1           
+deleted ext vars          : 1           
+max ext vars              : 841         
+
+Memory used               : 206.00 MB
+CPU time                  : 232.094 s
+DIP computation time      : 5.98983 s (2.58 % of total time)
+ER_sel time               : 1.13033 s
+ER_add time               : 0.004061 s
+ER_delC time              : 0 s
+ER_delV time              : 2.6e-05 s
+ER_sub time               : 1.4214 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

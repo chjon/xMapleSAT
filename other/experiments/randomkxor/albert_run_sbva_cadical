@@ -1,0 +1,15 @@
+#!/bin/bash
+
+SBVA=./bva
+SOLVER=./cadical
+
+OUTER_TIMEOUT=$1
+INNER_TIMEOUT=$2
+
+python3 wrapper.py \
+    --input $3 \
+    --output $4 \
+    --bva $SBVA \
+    --t1 $INNER_TIMEOUT \
+    --t2 $OUTER_TIMEOUT \
+    --solver $SOLVER

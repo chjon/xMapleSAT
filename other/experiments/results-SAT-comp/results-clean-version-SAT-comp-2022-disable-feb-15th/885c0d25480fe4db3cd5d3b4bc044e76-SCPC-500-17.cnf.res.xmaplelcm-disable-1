@@ -1,0 +1,112 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:           500                                         |
+|  Number of clauses:           15607                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 269 decisions of which only 0 were on extended
+We had 84346 decisions of which only 0 were on extended
+We had 112360 decisions of which only 0 were on extended
+We had 135190 decisions of which only 0 were on extended
+We had 159187 decisions of which only 0 were on extended
+We had 181816 decisions of which only 0 were on extended
+We had 195671 decisions of which only 0 were on extended
+We had 209740 decisions of which only 0 were on extended
+We had 223382 decisions of which only 0 were on extended
+We had 236927 decisions of which only 0 were on extended
+We had 250137 decisions of which only 0 were on extended
+We had 263489 decisions of which only 0 were on extended
+We had 276980 decisions of which only 0 were on extended
+We had 290606 decisions of which only 0 were on extended
+We had 304226 decisions of which only 0 were on extended
+We had 317815 decisions of which only 0 were on extended
+We had 331213 decisions of which only 0 were on extended
+We had 344818 decisions of which only 0 were on extended
+We had 358464 decisions of which only 0 were on extended
+Window full
+Deactivate
+We had 372392 decisions of which only 0 were on extended
+We had 385904 decisions of which only 0 were on extended
+We had 399217 decisions of which only 0 were on extended
+We had 412388 decisions of which only 0 were on extended
+We had 425541 decisions of which only 0 were on extended
+We had 438951 decisions of which only 0 were on extended
+We had 452585 decisions of which only 0 were on extended
+We had 466037 decisions of which only 0 were on extended
+We had 479250 decisions of which only 0 were on extended
+We had 492740 decisions of which only 0 were on extended
+We had 506594 decisions of which only 0 were on extended
+We had 520410 decisions of which only 0 were on extended
+We had 534444 decisions of which only 0 were on extended
+We had 548936 decisions of which only 0 were on extended
+We had 562872 decisions of which only 0 were on extended
+We had 576695 decisions of which only 0 were on extended
+We had 590657 decisions of which only 0 were on extended
+We had 604827 decisions of which only 0 were on extended
+We had 619075 decisions of which only 0 were on extended
+We had 633202 decisions of which only 0 were on extended
+We had 647346 decisions of which only 0 were on extended
+We had 661798 decisions of which only 0 were on extended
+We had 676105 decisions of which only 0 were on extended
+We had 690562 decisions of which only 0 were on extended
+We had 704664 decisions of which only 0 were on extended
+We had 718431 decisions of which only 0 were on extended
+We had 732017 decisions of which only 0 were on extended
+We had 746066 decisions of which only 0 were on extended
+We had 759775 decisions of which only 0 were on extended
+We had 773392 decisions of which only 0 were on extended
+We had 787540 decisions of which only 0 were on extended
+We had 801089 decisions of which only 0 were on extended
+We had 814756 decisions of which only 0 were on extended
+We had 828479 decisions of which only 0 were on extended
+We had 842261 decisions of which only 0 were on extended
+We had 856531 decisions of which only 0 were on extended
+We had 870475 decisions of which only 0 were on extended
+We had 884791 decisions of which only 0 were on extended
+We had 898602 decisions of which only 0 were on extended
+We had 912549 decisions of which only 0 were on extended
+We had 926637 decisions of which only 0 were on extended
+We had 940702 decisions of which only 0 were on extended
+We had 954254 decisions of which only 0 were on extended
+We had 967941 decisions of which only 0 were on extended
+c Switched to VSIDS.
+We had 982304 decisions of which only 0 were on extended
+We had 996808 decisions of which only 0 were on extended
+We had 1010815 decisions of which only 0 were on extended
+We had 1024676 decisions of which only 0 were on extended
+We had 1038354 decisions of which only 0 were on extended
+We had 1052034 decisions of which only 0 were on extended
+We had 1065557 decisions of which only 0 were on extended
+We had 1078761 decisions of which only 0 were on extended
+c ===============================================================================
+restarts                  : 1440
+conflicts                 : 701481         (4290 /sec)
+decisions                 : 1080705        (0.00 % random) (6610 /sec)
+propagations              : 34904273       (213472 /sec)
+conflict literals         : 32403871       (29.56 % deleted)
+
+conflicts w/ DIP found    : 115200         (16.42 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 0              (0.00 % of conflicts)
+decisions on ext vars     : 0              (0.00 % of decisions)
+total ext vars            : 0           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 0           
+
+Memory used               : 75.00 MB
+CPU time                  : 163.507 s
+DIP computation time      : 1.04978 s (0.64 % of total time)
+ER_sel time               : 0.862449 s
+ER_add time               : 0 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.170157 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

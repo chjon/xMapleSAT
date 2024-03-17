@@ -1,0 +1,86 @@
+c ---- [ banner ] ------------------------------------------------------------
+c
+c Kissat SAT Solver
+c 
+c Copyright (c) 2021-2023 Armin Biere University of Freiburg
+c Copyright (c) 2019-2021 Armin Biere Johannes Kepler University Linz
+c 
+c Version 3.1.1 unknown
+c gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0 -W -Wall -O3 -DNDEBUG
+c Mon Feb 26 18:18:52 CET 2024 Linux OptiPlex-7080 5.15.0-88-generic x86_64
+c
+c ---- [ parsing ] -----------------------------------------------------------
+c
+c opened and reading DIMACS file:
+c
+c   tseitin-9.cnf
+c
+c parsed 'p cnf 18 72' header
+c closing input after reading 1282 bytes (1 KB)
+c finished parsing after 0.00 seconds
+c
+c ---- [ solving ] -----------------------------------------------------------
+c
+c  seconds switched conflicts irredundant variables
+c         MB reductions redundant  trail  remaining
+c          level restarts   binary    glue
+c
+c *  0.00  3 0 0 0  0   0   0   0 72 0% 0 18 95%
+c {  0.00  4 0 0 0  0   0   0   0 72 0% 0 18 95%
+c u  0.00  4 6 0 0  0 366 245  14 72 86% 4 18 95%
+c v  0.00  4 6 0 0  0 366  79 180 72 86% 4 18 95%
+c w  0.00  4 6 0 0  0 366  79 182 70 86% 4 18 95%
+c t  0.00  4 6 0 0  0 366  79   2 70 86% 4 18 95%
+c i  0.00  4 6 0 0 17 566 251  10 70 84% 4 17 89%
+c i  0.00  4 6 0 0 17 692 347  15 70 86% 4 16 84%
+c i  0.00  4 5 0 0 17 761 399  20 70 86% 4 15 79%
+c i  0.00  4 5 0 0 17 794 420  24 70 86% 4 14 74%
+c i  0.00  4 5 0 0 17 814 430  27 70 85% 4 13 68%
+c i  0.00  4 5 0 0 17 825 431  31 70 85% 4 12 63%
+c i  0.00  4 5 0 0 17 832 431  34 70 85% 4 10 53%
+c }  0.00  4 5 0 0 17 834 431  34 70 85% 4  7 37%
+c 0  0.00  4 5 0 0 17 834 431  34 70 85% 4  7 37%
+c
+c ---- [ result ] ------------------------------------------------------------
+c
+s UNSATISFIABLE
+c
+c ---- [ profiling ] ---------------------------------------------------------
+c
+c           0.00   58.04 %  search
+c           0.00   56.19 %  focused
+c           0.00   20.17 %  parse
+c           0.00   19.15 %  probe
+c           0.00   19.15 %  simplify
+c           0.00   14.05 %  vivify
+c           0.00    2.29 %  sweep
+c           0.00    1.45 %  substitute
+c           0.00    1.01 %  transitive
+c           0.00    0.26 %  backbone
+c =============================================
+c           0.00  100.00 %  total
+c
+c ---- [ statistics ] --------------------------------------------------------
+c
+c conflicts:                              834           269466.88 per second
+c decisions:                              907                1.09 per conflict
+c jumped_reasons:                           3                0 %  propagations
+c propagations:                          5137          1659774    per second
+c queue_decisions:                        892               98 %  decision
+c random_decisions:                        15                2 %  decision
+c random_sequences:                         1              834    interval
+c restarts:                                17               49.06 interval
+c score_decisions:                          0                0 %  decision
+c switched:                                 0                0    interval
+c vivified:                               186               57 %  checks
+c vivify_checks:                          327              327    per vivify
+c vivify_units:                             0                0 %  variables
+c
+c ---- [ resources ] ---------------------------------------------------------
+c
+c maximum-resident-set-size:          3932160 bytes          4 MB
+c process-time:                                              0.00 seconds
+c
+c ---- [ shutting down ] -----------------------------------------------------
+c
+c exit 20

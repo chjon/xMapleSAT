@@ -1,0 +1,40 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:            78                                         |
+|  Number of clauses:             832                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+CAREFUL: the definition is falsified in conflict 112225 at DL 35 (has happened 1 times)
+c Switched to VSIDS.
+c ===============================================================================
+restarts                  : 2071
+conflicts                 : 1383797        (55570 /sec)
+decisions                 : 2064990        (0.00 % random) (82925 /sec)
+propagations              : 48324665       (1940607 /sec)
+conflict literals         : 26185608       (14.85 % deleted)
+
+conflicts w/ DIP found    : 537584         (38.85 % of conflicts)
+conflicts w/ dangerous DIP: 43             (0.00 % of conflicts)
+conflicts w/ DIP-learning : 35462          (2.56 % of conflicts)
+decisions on ext vars     : 720695         (34.90 % of decisions)
+total ext vars            : 7631        
+tried delete ext vars     : 7282        
+deleted ext vars          : 7275        
+max ext vars              : 432         
+
+Memory used               : 39.00 MB
+CPU time                  : 24.9018 s
+DIP computation time      : 0.154478 s (0.62 % of total time)
+ER_sel time               : 0.366519 s
+ER_add time               : 0.009912 s
+ER_delC time              : 0 s
+ER_delV time              : 0.036852 s
+ER_sub time               : 0.406729 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

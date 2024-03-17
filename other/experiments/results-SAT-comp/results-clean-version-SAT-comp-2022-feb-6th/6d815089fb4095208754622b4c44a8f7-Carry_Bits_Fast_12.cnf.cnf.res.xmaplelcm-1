@@ -1,0 +1,38 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:          5892                                         |
+|  Number of clauses:           23300                                         |
+|  Parse time:                   0.01 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c ===============================================================================
+restarts                  : 226
+conflicts                 : 26890          (7060 /sec)
+decisions                 : 830493         (0.00 % random) (218050 /sec)
+propagations              : 9305040        (2443086 /sec)
+conflict literals         : 1243272        (29.23 % deleted)
+
+conflicts w/ DIP found    : 19146          (71.20 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 75             (0.28 % of conflicts)
+decisions on ext vars     : 7828           (0.94 % of decisions)
+total ext vars            : 59          
+tried delete ext vars     : 8           
+deleted ext vars          : 8           
+max ext vars              : 51          
+
+Memory used               : 16.00 MB
+CPU time                  : 3.80872 s
+DIP computation time      : 0.254087 s (6.67 % of total time)
+ER_sel time               : 0.029119 s
+ER_add time               : 0.000236 s
+ER_delC time              : 0 s
+ER_delV time              : 0.00011 s
+ER_sub time               : 0.036941 s
+ER_stat time              : 0 s
+
+SATISFIABLE

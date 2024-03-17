@@ -1,0 +1,39 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:        134781                                         |
+|  Number of clauses:          648661                                         |
+|  Parse time:                   0.14 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 2222 decisions of which only 0 were on extended
+c ===============================================================================
+restarts                  : 27
+conflicts                 : 4012           (2129 /sec)
+decisions                 : 1531037        (0.00 % random) (812382 /sec)
+propagations              : 6474205        (3435273 /sec)
+conflict literals         : 116161         (6.08 % deleted)
+
+conflicts w/ DIP found    : 3531           (88.01 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 15             (0.37 % of conflicts)
+decisions on ext vars     : 0              (0.00 % of decisions)
+total ext vars            : 2           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 2           
+
+Memory used               : 82.00 MB
+CPU time                  : 1.88463 s
+DIP computation time      : 0.041979 s (2.23 % of total time)
+ER_sel time               : 0.003936 s
+ER_add time               : 3.6e-05 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.005365 s
+ER_stat time              : 0 s
+
+SATISFIABLE

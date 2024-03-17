@@ -1,0 +1,57 @@
+Whenever we find a conflict and we introduce a new variable DIP = (l1 ^ l2), we can generate two clauses:
+
+UIP ^ Before -> DIP
+DIP ^ After -> CONFLICT
+
+Where "Before" is the set of literals that belong to previous decision levels and appear in the conflict graph between the UIP and the DIP.
+
+Similarly "After" is the set of literals that belong to previous decision levels and appear in the conflict graph between the DIP and the CONFLICT node.
+
+Note that standard 1UIP learning would learn the clause:
+
+UIP ^ Before ^ After -> CONFLICT
+
+In DIP-learning, if we want to learn the two clauses above, written now as proper clauses:
+
+C1: ¬UIP v ¬Before v DIP
+C2: ¬DIP v ¬After
+
+we have to decide at which decision level (DL) we should backjump to.
+
+Let us consider that the conflict is found at DL 10, and that DIP is either unassigned or asserted at DL 10.
+
+We know that the maximum DL of Before (denoted by MaxDL(Before)) is strictly smaller than 10. Also, MaxDL(After) < 10.
+
+We have two cases:
+
+1) MaxDL(Before) <= MaxDL(After)
+
+   To make it simpler, let us assume MaxDL(Before) = 8, MaxDL(After) = 9.
+
+   Two possibilities:
+   
+   1.A) We backjump to DL 9. This allows C2 to propagate ¬DIP at DL 9 and then, C1 propagates ¬UIP at DL 9.
+   	This is perfectly OK and we propagate ¬DIP and ¬UIP, which seems the ideal situation.
+
+   1.B) We backjump to DL 8. Neither C1 nor C2 propagates. Hence, no learned clause is asserting and we are
+   	in trouble. Hence, this is not a good idea.
+
+2) MaxDL(Before) > MaxDL(After)
+
+   To make it simpler, let us assume MaxDL(Before) = 9, MaxDL(After) = 8.
+
+   Two possibilities:
+
+   2.A) We backjump to DL 9. This allows C2 to propagate ¬DIP. We are in trouble because we should have propagated
+   	¬DIP due to reason C2 at DL 8. Doing it at DL 9 will cause problems in the implementation, because
+	it is assumed that literals are asserted at the right decision level. We would need to implement
+	Chronological Backtracking and this is currently not supported by MapleSAT.
+
+   2.B) We backjump to DL 8. This allows C2 to propagate ¬DIP, but we have no guarantee that clause C1 propagates
+   anything, because some of the literals in Before has become unassigned.
+
+   What if we just do 1UIP learning? 
+
+All in all, if I am not wrong, the only possible implementation is to always backjump to MaxDL(After).
+This is in fact what is done in the implementation.
+   	

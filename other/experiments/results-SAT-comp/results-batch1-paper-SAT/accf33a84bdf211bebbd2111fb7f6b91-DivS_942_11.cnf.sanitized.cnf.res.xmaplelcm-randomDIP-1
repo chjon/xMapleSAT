@@ -1,0 +1,39 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:           942                                         |
+|  Number of clauses:          936584                                         |
+|  Parse time:                   0.62 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c ===============================================================================
+restarts                  : 1815
+conflicts                 : 1406503        (4703 /sec)
+decisions                 : 42220254       (0.00 % random) (141171 /sec)
+propagations              : 51017260       (170585 /sec)
+conflict literals         : 17003579       (0.66 % deleted)
+
+conflicts w/ DIP found    : 43068          (3.06 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 2              (0.00 % of conflicts)
+decisions on ext vars     : 102            (0.00 % of decisions)
+total ext vars            : 1           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 1           
+
+Memory used               : 261.00 MB
+CPU time                  : 299.072 s
+DIP computation time      : 3.86195 s (1.29 % of total time)
+ER_sel time               : 1.12847 s
+ER_add time               : 3.2e-05 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 1.37826 s
+ER_stat time              : 0 s
+
+SATISFIABLE

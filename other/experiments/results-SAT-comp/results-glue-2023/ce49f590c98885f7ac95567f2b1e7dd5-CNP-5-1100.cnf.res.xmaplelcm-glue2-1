@@ -1,0 +1,73 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:         22585                                         |
+|  Number of clauses:          163824                                         |
+|  Parse time:                   0.04 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+CAREFUL: the definition is falsified in conflict 432349 at DL 33 (has happened 1 times)
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c Switched to LRB.
+c ===============================================================================
+restarts                  : 11830
+conflicts                 : 5594994        (1574 /sec)
+decisions                 : 14227350       (0.00 % random) (4003 /sec)
+propagations              : 8408639693     (2365685 /sec)
+conflict literals         : 557046776      (31.22 % deleted)
+
+conflicts w/ DIP found    : 4477110        (80.02 % of conflicts)
+conflicts w/ dangerous DIP: 1              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 88754          (1.59 % of conflicts)
+decisions on ext vars     : 231653         (1.63 % of decisions)
+total ext vars            : 87643       
+tried delete ext vars     : 122         
+deleted ext vars          : 122         
+max ext vars              : 87521       
+
+Memory used               : 363.00 MB
+CPU time                  : 3554.42 s
+DIP computation time      : 75.4762 s (2.12 % of total time)
+ER_sel time               : 9.72019 s
+ER_add time               : 0.394036 s
+ER_delC time              : 0 s
+ER_delV time              : 0.000122 s
+ER_sub time               : 15.0533 s
+ER_stat time              : 0 s
+
+INDETERMINATE

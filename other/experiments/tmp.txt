@@ -1,0 +1,7 @@
+solver_call_1="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -no-dip-2clauses -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-1clause-$seed"
+solver_call_2="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -dip-pair-min=5 -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-pair5-$seed"
+solver_call_3="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -dip-window-size=20 -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-window20-$seed"
+solver_call_4="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -dip-glue=2 -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-glue2-$seed"
+solver_call_5="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -dip-type=2 -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-closest-$seed"
+solver_call_6="timeout -s SIGINT $time_limit systems/xmaplelcm -cpu-lim=$time_limit -dip-type=3 -rnd-init -rnd-seed=$seed $input_file > $output_file.res.DIP-random-$seed"
+

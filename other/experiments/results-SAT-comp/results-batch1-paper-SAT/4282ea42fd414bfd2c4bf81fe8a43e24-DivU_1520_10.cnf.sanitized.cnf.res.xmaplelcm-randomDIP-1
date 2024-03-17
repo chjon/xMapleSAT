@@ -1,0 +1,39 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:          1520                                         |
+|  Number of clauses:          766890                                         |
+|  Parse time:                   0.49 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c ===============================================================================
+restarts                  : 1030
+conflicts                 : 692775         (7099 /sec)
+decisions                 : 36653286       (0.00 % random) (375578 /sec)
+propagations              : 42404015       (434504 /sec)
+conflict literals         : 7286536        (0.72 % deleted)
+
+conflicts w/ DIP found    : 16282          (2.35 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 0              (0.00 % of conflicts)
+decisions on ext vars     : 0              (0.00 % of decisions)
+total ext vars            : 0           
+tried delete ext vars     : 0           
+deleted ext vars          : 0           
+max ext vars              : 0           
+
+Memory used               : 195.00 MB
+CPU time                  : 97.5917 s
+DIP computation time      : 1.81734 s (1.86 % of total time)
+ER_sel time               : 0.541473 s
+ER_add time               : 0 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.600298 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

@@ -1,0 +1,66 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:          1040                                         |
+|  Number of clauses:            6991                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+We had 148 decisions of which only 0 were on extended
+We had 182305 decisions of which only 0.025781 were on extended
+We had 227243 decisions of which only 0.176023 were on extended
+We had 260751 decisions of which only 0.354361 were on extended
+We had 304694 decisions of which only 0.756497 were on extended
+We had 347686 decisions of which only 0.910304 were on extended
+CAREFUL: the definition is falsified in conflict 56634 at DL 50 (has happened 1 times)
+We had 387269 decisions of which only 1.43957 were on extended
+We had 419649 decisions of which only 2.45634 were on extended
+We had 441052 decisions of which only 4.21787 were on extended
+We had 460423 decisions of which only 6.04227 were on extended
+We had 474868 decisions of which only 7.94874 were on extended
+We had 488735 decisions of which only 9.77073 were on extended
+We had 502918 decisions of which only 11.5828 were on extended
+We had 514764 decisions of which only 13.3859 were on extended
+We had 527000 decisions of which only 15.0683 were on extended
+We had 538819 decisions of which only 16.688 were on extended
+We had 550677 decisions of which only 18.2205 were on extended
+We had 562815 decisions of which only 19.7083 were on extended
+We had 574162 decisions of which only 21.1357 were on extended
+Window full
+Some very high
+Continue
+We had 586005 decisions of which only 22.5155 were on extended
+We had 596836 decisions of which only 23.827 were on extended
+We had 608058 decisions of which only 25.0647 were on extended
+We had 618877 decisions of which only 26.2781 were on extended
+We had 630020 decisions of which only 27.4383 were on extended
+c ===============================================================================
+restarts                  : 643
+conflicts                 : 236800         (8033 /sec)
+decisions                 : 637318         (0.00 % random) (21620 /sec)
+propagations              : 22344714       (758013 /sec)
+conflict literals         : 7747779        (27.32 % deleted)
+
+conflicts w/ DIP found    : 101047         (42.67 % of conflicts)
+conflicts w/ dangerous DIP: 6              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 1562           (0.66 % of conflicts)
+decisions on ext vars     : 179817         (28.21 % of decisions)
+total ext vars            : 293         
+tried delete ext vars     : 2           
+deleted ext vars          : 2           
+max ext vars              : 291         
+
+Memory used               : 33.00 MB
+CPU time                  : 29.478 s
+DIP computation time      : 1.5753 s (5.34 % of total time)
+ER_sel time               : 0.212965 s
+ER_add time               : 0.001042 s
+ER_delC time              : 0 s
+ER_delV time              : 0 s
+ER_sub time               : 0.272413 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

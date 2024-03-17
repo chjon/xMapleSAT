@@ -1,0 +1,27 @@
+
+c This is glucoser 1.0 --  based on MiniSAT (Many thanks to MiniSAT team)
+
+c ============================[ Problem Statistics ]=============================
+c |                                                                             |
+c |  Number of variables:  92                                                   |
+c |  Number of clauses:    368                                                  |
+c |  Parsing time:         0.00         s                                       |
+============================[ Search Statistics ]==============================
+| Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+|           |    Vars  Clauses extended |  nextRed  Clauses Lit/Cl |          |
+===============================================================================
+|         0 |      92      368        0 |     5000        0   -nan |  0.000 % |
+===============================================================================
+c restarts              : 1
+c nb ReduceDB           : 61
+c nb learnts DL2        : 600
+c nb learnts size 2     : 232
+c nb learnts size 1     : 15
+c conflicts             : 2183557        (39909 /sec)
+c decisions             : 2450310        (1.35 % random) (44784 /sec)
+c propagations          : 348039782      (6361105 /sec)
+c conflict literals     : 96902173       (282356379571.78 % deleted)
+c Memory used           : 63.00 MB
+c CPU time              : 54.7137 s
+
+s UNSATISFIABLE

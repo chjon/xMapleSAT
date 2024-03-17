@@ -1,0 +1,38 @@
+WARNING: for repeatability, setting FPU to use double precision
+============================[ Problem Statistics ]=============================
+|                                                                             |
+|  Number of variables:           398                                         |
+|  Number of clauses:             741                                         |
+|  Parse time:                   0.00 s                                       |
+|                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c ===============================================================================
+restarts                  : 139
+conflicts                 : 28511          (43688 /sec)
+decisions                 : 235445         (0.00 % random) (360773 /sec)
+propagations              : 564494         (864976 /sec)
+conflict literals         : 421424         (6.92 % deleted)
+
+conflicts w/ DIP found    : 16485          (57.82 % of conflicts)
+conflicts w/ dangerous DIP: 0              (0.00 % of conflicts)
+conflicts w/ DIP-learning : 134            (0.47 % of conflicts)
+decisions on ext vars     : 19994          (8.49 % of decisions)
+total ext vars            : 69          
+tried delete ext vars     : 17          
+deleted ext vars          : 17          
+max ext vars              : 52          
+
+Memory used               : 9.00 MB
+CPU time                  : 0.652612 s
+DIP computation time      : 0.094048 s (14.41 % of total time)
+ER_sel time               : 0.020532 s
+ER_add time               : 0.000207 s
+ER_delC time              : 0 s
+ER_delV time              : 0.000201 s
+ER_sub time               : 0.025889 s
+ER_stat time              : 0 s
+
+UNSATISFIABLE

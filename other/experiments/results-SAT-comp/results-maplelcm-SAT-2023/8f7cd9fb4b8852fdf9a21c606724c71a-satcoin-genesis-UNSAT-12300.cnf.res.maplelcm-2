@@ -1,0 +1,25 @@
+c This is COMiniSatPS.
+c WARNING: for repeatability, setting FPU to use double precision
+c ============================[ Problem Statistics ]=============================
+c |                                                                             |
+c |  Number of variables:        134781                                         |
+c |  Number of clauses:          648661                                         |
+c |  Parse time:                   0.13 s                                       |
+c |                                                                             |
+c ============================[ Search Statistics ]==============================
+c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |
+c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |
+c ===============================================================================
+c Switched to VSIDS.
+c Switched to LRB.
+c Switched to VSIDS.
+c ===============================================================================
+c restarts              : 332
+c conflicts             : 111418         (121 /sec)
+c decisions             : 14526742       (0.00 % random) (15814 /sec)
+c propagations          : 3077088356     (3349746 /sec)
+c conflict literals     : 5684394        (67.70 % deleted)
+c Memory used           : 134.00 MB
+c CPU time              : 918.603 s
+
+s UNSATISFIABLE

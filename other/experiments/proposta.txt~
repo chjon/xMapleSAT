@@ -1,0 +1,55 @@
+VARIANTS de xMapleSAT (8)
+- Sense DIP
+- DIP, 2 clauses, common-pair 20, middle (millor?)
+- DIP, 1 clauses, common-pair 20, middle
+- DIP, 2 clauses, common.pair 5, middle
+- DIP, 2 clauses, window, middle
+- DIP, 2 clauses, glue, middle
+- DIP, 2 clauses, common.pair 20, random
+- DIP, 2 clauses, common.pair 20, closest
+
+INTERVALS
+==========
+
+Ja tenim resultats sobre 8 nodes de KISSAT i de suposada millor opció.
+Hi ha 23 benchmarks, podria executar sobre 5000s, que és el que vaig fer.
+En solucionem 7.
+
+FALTEN 6 variants nostres (no DIP no cal, pq ja sabem que no funciona) més cryptominisat + SBVA sobre els 8 nodes.
+
+8x23x5000 = 255 hores
+
+TSEITIN
+=======
+
+GRID:
+----
+
+Tenim plots xulos de temps/proofs
+
+FALTEN fer alguns càlculs sobre el de sobretaula per veure com escalen (màxim 10 minuts???):
+kissat, cryptominisat, SBVA
+Els necessitarem per fer un plot.
+
+REGULAR:
+-------
+
+FALTEN fer càlculs sobre el portàtil per veure com escalen (4 i 6 regular):
+millor opcio, kissat, cryptominisat, SBVA
+Jo els faria de manera independent per matar-ho quan ja veiem que no solucionen en, no sé, 10 minuts????.
+
+Els voldrem per fer plot
+
+FALTEN agafar 5 benchmarks de grid, 5 de 4-regular i 5 de 6-regular i executar
+7 variants nostres (totes menys la que no fa DIP). Jo agafaria, de cada un, un que trigui 10 minuts, 15, 20, 25 i 30 aprox. Posar temps limit de 5000. Sobre els 18 nodes.
+
+7x15x5000 = 145 hores
+
+RANDOM KXOR
+===========
+
+Tenim ja com escalen kissat, cryptominisat, SBVA i DIP (millor)
+
+FALTEN agafar 3 benchmarks de cada un dels 6 tipus = 18 benchmarks, que triguin 10, 20 i 30' aprox en el nostre (aixo potser es xungo) i executar les 7 variants sobre els 18 nodes.
+
+7x18x5000 = 175h

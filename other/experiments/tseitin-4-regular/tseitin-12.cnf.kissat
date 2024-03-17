@@ -1,0 +1,85 @@
+c ---- [ banner ] ------------------------------------------------------------
+c
+c Kissat SAT Solver
+c 
+c Copyright (c) 2021-2023 Armin Biere University of Freiburg
+c Copyright (c) 2019-2021 Armin Biere Johannes Kepler University Linz
+c 
+c Version 3.1.1 unknown
+c gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0 -W -Wall -O3 -DNDEBUG
+c Mon Feb 26 18:18:52 CET 2024 Linux OptiPlex-7080 5.15.0-88-generic x86_64
+c
+c ---- [ parsing ] -----------------------------------------------------------
+c
+c opened and reading DIMACS file:
+c
+c   tseitin-12.cnf
+c
+c parsed 'p cnf 24 96' header
+c closing input after reading 1668 bytes (2 KB)
+c finished parsing after 0.00 seconds
+c
+c ---- [ solving ] -----------------------------------------------------------
+c
+c  seconds switched conflicts irredundant variables
+c         MB reductions redundant  trail  remaining
+c          level restarts   binary    glue
+c
+c *  0.00  3 0 0 0  0   0   0   0 96 0% 0 24 96%
+c {  0.00  4 0 0 0  0   0   0   0 96 0% 0 24 96%
+c u  0.00  4 8 0 0  0 412 205   0 96 88% 4 24 96%
+c v  0.00  4 8 0 0  0 412 205   0 96 88% 4 24 96%
+c -  0.00  4 8 0 1 146 1000 484   1 96 70% 5 24 96%
+c }  0.00  4 8 1 1 146 1000 484   1 96 70% 5 24 96%
+c [  0.00  4 0 1 1 146 1000 484   1 96 0% 0 24 96%
+c u  0.00  4 0 1 1 146 1000 474  11 96 0% 0 24 96%
+c v  0.00  4 0 1 1 146 1000 326 159 96 0% 0 24 96%
+c =  0.00  4 0 1 1 146 1000 326 159 96 0% 0  0 0%
+c ]  0.00  4 0 1 1 146 1000 326 159 96 0% 0  0 0%
+c 0  0.00  4 8 1 1 146 1000 326 159 96 70% 5  0 0%
+c
+c ---- [ result ] ------------------------------------------------------------
+c
+s UNSATISFIABLE
+c
+c ---- [ profiling ] ---------------------------------------------------------
+c
+c           0.00   53.48 %  probe
+c           0.00   53.48 %  simplify
+c           0.00   35.41 %  search
+c           0.00   34.13 %  focused
+c           0.00   26.01 %  sweep
+c           0.00   25.62 %  vivify
+c           0.00    9.89 %  parse
+c           0.00    1.59 %  reduce
+c           0.00    1.40 %  substitute
+c           0.00    0.33 %  stable
+c           0.00    0.16 %  backbone
+c           0.00    0.16 %  transitive
+c =============================================
+c           0.00  100.00 %  total
+c
+c ---- [ statistics ] --------------------------------------------------------
+c
+c conflicts:                             1000           171320.88 per second
+c decisions:                             1871                1.87 per conflict
+c propagations:                          8052          1379476    per second
+c queue_decisions:                       1807               97 %  decision
+c random_decisions:                        64                3 %  decision
+c random_sequences:                         1             1000    interval
+c reductions:                               1             1000    interval
+c restarts:                               146                6.85 interval
+c score_decisions:                          0                0 %  decision
+c switched:                                 1             1000    interval
+c vivified:                               327               32 %  checks
+c vivify_checks:                         1031              516    per vivify
+c vivify_units:                             0                0 %  variables
+c
+c ---- [ resources ] ---------------------------------------------------------
+c
+c maximum-resident-set-size:          3932160 bytes          4 MB
+c process-time:                                              0.00 seconds
+c
+c ---- [ shutting down ] -----------------------------------------------------
+c
+c exit 20
