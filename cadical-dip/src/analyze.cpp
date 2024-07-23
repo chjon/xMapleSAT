@@ -1316,29 +1316,17 @@ void Internal::iterate () {
   assert (clause.empty ());
   assert (lrat_chain.empty ());
 
-  // if (max_var >= 493) {
-  //   Clause* tmp = find_binary_extended_clause_in_DB(493,209);	
-  //   if (tmp == NULL)
-  //     cout << "Clause not found before try_analyze_dip" << endl; 
-  //   else cout << "Found before try_analyze_dip (garbage " << tmp->garbage << ")" << endl;
-  // }
-
   //cout << "Analyze conflict " << stats.conflicts << endl;
   vector<int> main_clause, secondary_clause, analyzed_lits;
   bool dip_possible = try_dip_analysis(main_clause,secondary_clause,analyzed_lits);
   //cout << "DIP_possible " << dip_possible << endl;
-  // if (max_var >= 493) {
-  //   Clause* tmp = find_binary_extended_clause_in_DB(493,209);	
-  //   if (tmp == NULL)
-  //     cout << "Clause not found after try_analyze_dip" << endl; 
-  //   else cout << "Found after try_analyze_dip (garbage " << tmp->garbage << ")" << endl;
-  // }
 
   if (dip_possible) ++stats.dip_conflicts;
   assert(check_all_literals_cleared());
   assert(check_all_levels_cleared());
   assert(analyzed.empty());
   assert(levels.empty());
+
   //  cout << "Conflict " << stats.conflicts << " DIP possible " << dip_possible << " level " << level << endl;
   // cout << "Main clause: ";
   // for (int x : main_clause) cout << x << "(val " << int(val(x)) << ", lev " << var(x).level << ") ";
