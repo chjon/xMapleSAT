@@ -306,34 +306,13 @@ namespace CaDiCaL {
     }
 
     while (!res) {
-      // if (max_var >= 493) {
-      // 	Clause* tmp = find_binary_extended_clause_in_DB(493,209);	
-      // 	if (tmp == NULL)
-      // 	  cout << "Clause not found at the beginning" << endl; 
-      // 	else cout << "Found at the beginning (garbage " << tmp->garbage << ")" << endl;
-      // }
-      
       assert(wtab.size() > 0);
       if (unsat)
 	res = 20;
       else if (unsat_constraint)
 	res = 20;
       else if (!propagate ()){
-      // 	if (max_var >= 493) {
-      // 	  Clause* tmp = find_binary_extended_clause_in_DB(493,209);	
-      // 	  if (tmp == NULL)
-      // 	    cout << "Clause not found before analyze_dip" << endl; 
-      // 	  else cout << "Found before analyze_dip (garbage " << tmp->garbage << ")" << endl;
-      // }
-	
 	analyze_dip (); // propagate and analyze
-      // 	if (max_var >= 493) {
-      // 	  Clause* tmp = find_binary_extended_clause_in_DB(493,209);	
-      // 	  if (tmp == NULL)
-      // 	    cout << "Clause not found after analyze_dip" << endl; 
-      // 	  else cout << "Found after analyze_dip (garbage " << tmp->garbage << ")" << endl;
-      // }
-	
       }
       else if (iterating){
 	iterate ();                               // report learned unit
@@ -366,42 +345,26 @@ namespace CaDiCaL {
 	reduce (); // collect useless clauses
       }
       else if (false and probing ()){
-	cout << "PROB" << endl;
 	probe (); // failed literal probing
       }
       else if (false and subsuming ()) {
-	cout << "SUBS" << endl;
-
 	subsume (); // subsumption algorithm
-
       }
      else if (false and eliminating ()){
-       cout << "ELIM" << endl;
 	elim (); // variable elimination
       }
       else if (false and compacting ()){
-	cout << "COMP" << endl;
 	compact (); // collect variables
       }
       else if (false and conditioning ()){
-	cout << "CONDITI" << endl;
 	condition (); // globally blocked clauses
       }
       else if (removing_extended()){
-	cout << "REM_EXT" << endl;
 	remove_extended();
       }
       else {
 	res = decide (); // next decision
       }
-
-      // if (max_var >= 493) {
-      // 	Clause* tmp = find_binary_extended_clause_in_DB(493,209);
-	
-      // 	if (tmp == NULL)
-      // 	  cout << "Clause not found at the end" << endl; 
-      // 	else cout << "Found at the end (garbage " << tmp->garbage << ")" << endl;
-      // }
     }
 
     if (stable) {
