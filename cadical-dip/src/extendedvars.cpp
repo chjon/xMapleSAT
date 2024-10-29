@@ -121,7 +121,9 @@ namespace CaDiCaL {
     int skip = 0;
     for (int k = 0; k < first_kept; ++k) {
       int v = candidates[k].second; // Delete v
-      vector<Clause*> cls = find_definition_clauses(v);
+      vector<Clause*> cls = find_definition_clauses(v); // This is slow, but so far the only way to do it
+                                                        // Since not many rounds of ext_var_delete are performed
+                                                        // this might be a big problem
       if (cls.size() == 0) {
 	//cout << "Definition for " << v << " not deleted because not found" << endl;
 	mark_var_actively_deleted(v,true);

@@ -872,6 +872,12 @@ void Internal::otfs_strengthen_clause (Clause *c, int lit, int new_size,
   external->check_shrunken_clause (c);
 }
 
+  void Internal::analyze ( ){
+    disable_dip_computation_if_appropriate( );
+    if (opts.diplearning) analyze_dip();
+    else analyze_1UIP();
+  }
+  
 /*------------------------------------------------------------------------*/
 
 // This is the main conflict analysis routine.  It assumes that a conflict
@@ -881,7 +887,7 @@ void Internal::otfs_strengthen_clause (Clause *c, int lit, int new_size,
 // chronological backtracking (see discussion above) the algorithm becomes
 // slightly more involved.
 
-void Internal::analyze () {
+void Internal::analyze_1UIP () {
 
   START (analyze);
 
@@ -1318,6 +1324,7 @@ void Internal::iterate () {
 
   //cout << "Analyze conflict " << stats.conflicts << endl;
   vector<int> main_clause, secondary_clause, analyzed_lits;
+  // Secondary clause is ignored for the moment
   bool dip_possible = try_dip_analysis(main_clause,secondary_clause,analyzed_lits);
   //cout << "DIP_possible " << dip_possible << endl;
 
@@ -1337,23 +1344,16 @@ void Internal::iterate () {
   //
   clause = main_clause;
 
-  //if (stats.conflicts > 6*1e6) cout << endl << "dip_possible " << dip_possible << "(" << stats.conflicts << ")" << endl;
   substitute_definitions_in_clause();
   
   int size = (int) clause.size ();
 
-  //const int glue = (int) levels.size () - 1;
-
-  // We now have levels clear so we neet to recompute glue
+    // We now have levels clear so we neet to recompute glue
   set<int> tmp_levels;
-  //cout << "Glue computation: ";
   for (int l : clause) {
-    //cout << l << "(val " << int(val(l)) << ",lev " << var(l).level << ") ";
     if (val(l)) tmp_levels.insert(var(l).level);
   }
-  //cout << endl;
   const int glue = (int) tmp_levels.size() - 1;
-  //  cout << "Glue is " << glue << endl;
 
   assert(check_all_literals_cleared());
   LOG (clause, "1st UIP size %d and glue %d clause", size, glue);
@@ -1391,7 +1391,7 @@ void Internal::iterate () {
     if (opts.bump) 
       bump_variables ();
 
-    clear_analyzed_literals(); // bump sets some seen to treu
+    clear_analyzed_literals(); // bump sets some seen to true
     assert(check_all_literals_cleared());
     
     if (external->learner)

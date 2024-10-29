@@ -674,6 +674,7 @@ struct Internal {
   int otfs_find_backtrack_level (int &forced);
   Clause *on_the_fly_strengthen (Clause *conflict, int lit);
   void analyze ();
+  void analyze_1UIP ();
   void iterate (); // report learned unit clause
 
   // Learning from external propagator in 'external_propagate.cpp'
@@ -1190,6 +1191,9 @@ struct Internal {
       
   void analyze_literal_dip (int lit, int &open);
   void analyze_reason_dip  (int lit, Clause *reason, int &open);
+  // Returns whether DIP analysis is a good option. If so, dip2conflict is the clause from the DIP to the conflict
+  // uip2dip is the clause from the UIP tothe DIP and analyzed_lits contain the literals that were resolved
+  // away during conflict analysis so that its activity score is bumped
   bool try_dip_analysis ( vector<int>& dip2conflict, vector<int>& uip2dip, vector<int>& analyzed_lits);
   void analyze_dip ();
   bool computeDIPClauses (int a, int b, Clause* confl, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, vector<int>& clause_to_learn, vector<int>& clause_to_learn2, int UIP, vector<int>& pathA, vector<int>& pathB, vector<int>& lits_to_bump);
@@ -1199,7 +1203,8 @@ struct Internal {
   bool computeClosestDIPToConflict (int a, int b, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, int& x, int& y); 
 
   void substitute_definitions_in_clause ( );
-  
+  void disable_dip_computation_if_appropriate ( );
+    
   // END DIP -----------
 
   // Extended variables management in extendedvars.cpp

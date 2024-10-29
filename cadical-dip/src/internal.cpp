@@ -312,7 +312,7 @@ namespace CaDiCaL {
       else if (unsat_constraint)
 	res = 20;
       else if (!propagate ()){
-	analyze_dip (); // propagate and analyze
+	analyze (); // propagate and analyze
       }
       else if (iterating){
 	iterate ();                               // report learned unit
@@ -321,13 +321,13 @@ namespace CaDiCaL {
 	if (unsat)
 	  continue;
 	else
-	  analyze_dip ();
+	  analyze ();
       } else if (satisfied ()) { // found model
 	if (!external_check_solution () || unsat) {
 	  if (unsat)
 	    continue;
 	  else
-	    analyze_dip ();
+	    analyze ();
 	} else if (satisfied ())
 	  res = 10;
       } else if (search_limits_hit ())
@@ -701,7 +701,7 @@ namespace CaDiCaL {
       if (decide ())
 	break;
       while (!unsat && !propagate ())
-	analyze_dip ();
+	analyze ();
     }
     notify_assignments ();
     if (unsat)

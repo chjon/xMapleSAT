@@ -181,6 +181,9 @@ namespace CaDiCaL {
     // Once the analysis is done, we only have to convert the predecessorLits into a vector<int>
     // to get the correct input to DIP-detection
 
+    // We first compute the 1UIP clause and construct the conflict graph and fed it to encoder
+    // so that DIPs are detected
+    
     // Start by adding the edges from the negation of the lits  the conflicting clause to the "CONFLICT" node
     int conflictLit = max_var + 1;
     literalsInAnalysis.push_back(conflictLit);// Fake literal corresponding to conflict
@@ -290,6 +293,9 @@ namespace CaDiCaL {
     assert(check_all_levels_cleared());
     
     LOG ("first UIP %d", uip);
+
+    // 1UIP clause has been computed and is now stored in UIP_clase
+    // We now start the DIP computation
     
     vector<int> predecessors;
     for (auto lit : literalsInAnalysis) encoder.Solver2Sam(lit); // encode in topological order
@@ -311,6 +317,8 @@ namespace CaDiCaL {
       int a = res;     
       
       vector<int> lits_to_bump;
+
+      // So far we are ignoring clause uip2dip
       bool ok = computeDIPClauses(a,b,conflict,dip,encoder,dip2conflict,uip2dip,uip,pathA, pathB, lits_to_bump);
       assert(check_all_literals_cleared());
       assert(check_all_levels_cleared());
@@ -533,7 +541,7 @@ namespace CaDiCaL {
       cout << "DIP " << x << " height " << var(x).trail << " and " << y << " height " << var(y).trail << " at conflict " << stats.conflicts << endl;
     }
 
-    // Decidir si es prou bo.
+    // It collects information that is later used to decide whether it is a good enough DIP
     notify_DIP(x,y);
 
     //cout << "DIP: " << x << " " << y << endl;
@@ -541,6 +549,11 @@ namespace CaDiCaL {
     if (occurrences_DIP(x,y) < 20) return false;
 
     int ext_var = er_manager.find_definition(-x,-y);
+
+    // There are a few situation that I still do not totally understand/control when the DIP has already has
+    // an extended variables associated
+    // For the moment, I count it as a dangerous DIP and do not use it
+    // So far I have not observed a large number of them, so it does not seem urgen to fix it
     if (ext_var != 0) {
       if (flags(ext_var).fixed()) { 
 	assert(val(ext_var) > 0); // in this case we should be able to remove the DIP from the clause!
@@ -558,18 +571,8 @@ namespace CaDiCaL {
 	++stats.dip_dangerous;
 	return false;
       }
-
     }
     
-    // if (dip_pair_threshold != -1) { // common pair used
-    //   solver.branchingHeuristicManager.notifyDIPCandidateCommonPair(~x,~y); 
-    //   if (not solver.branchingHeuristicManager.isPairCommon(~x,~y,dip_pair_threshold)) return false;
-    // }
-    // else if (dip_window_size != -1) { // use sliding window
-    //   solver.branchingHeuristicManager.notifyDIPCandidateWindow(~x,~y);
-    //   if (not solver.branchingHeuristicManager.isPairBetterThanAverage(~x,~y)) return false;
-    // }
-
     // 1) Compute first clause: DIP ^ after -> conflict
     // This is done starting from conflict, doing standard 1UIP reasoning but stopping as soon as we hit the
     // two elements of the DIP
@@ -600,12 +603,8 @@ namespace CaDiCaL {
       assert (reason != external_reason);
     }
 
-    // Pensar que passa amb els analitzats perque s'ha d'incrementar heuristica
-    // for (Lit z : toIncreaseActivity)
-    //   branchingHeuristicManager.handleEventLitInConflictGraph(z, solver.conflicts);
-
     clause_to_learn = clause; // do it before add_extended_var since this function modifies clause
-    lits_to_bump = analyzed;
+    lits_to_bump = analyzed; // Typically variables resolved away have their activity counter bumped
     clear_analyzed_levels();
     clear_analyzed_literals();
     clause.clear();
@@ -646,7 +645,7 @@ namespace CaDiCaL {
 
     assert(clause.empty());
 
-    // if (newDef and solver.produce_proof) { // Add definition to proof
+    // if (newDef and solver.produce_proof) { // Add definition to proof (ported from xMapleLCM)
     //   static vec<Lit> ERClause;
     //   ERClause.clear();
     //   ERClause.push(~extLit);     ERClause.push(~x);     ERClause.push(~y); 
@@ -662,6 +661,10 @@ namespace CaDiCaL {
     // }
 
     return true;
+
+    // This part is not (100%) ready yet. However, the best result in xMapleLCM did not include this,
+    // so this is not urgent to incoporate
+    
     // 3) UIP ^ before --> DIP
     // This is done as standard 1UIP but starting with the two DIP lits being marked
     // Also, we start having a look at the trail at the max height of the DIPs lits  
@@ -688,7 +691,6 @@ namespace CaDiCaL {
       while (!p) {
 	assert (i > 0);
 	const int lit = (*t)[--i];
-	//	cout << "Trobo " << lit << " amb seen " << flags(lit).seen << endl;
 	if (!flags (lit).seen)  continue;
 	if (var (lit).level == level) p = lit;
       }
@@ -705,7 +707,7 @@ namespace CaDiCaL {
       assert(var(clause_to_learn2[i]).level < level);
 #endif
     if (write) {
-      cout << "UIP --> DIP clause is: "; // Falta posar UIP i DIP a la clausula
+      cout << "UIP --> DIP clause is: "; 
       for (int x : clause_to_learn2) cout << x << "(val " << int(val(x)) << ",lev " << var(x).level << ") ";
       cout << endl;
     }
@@ -807,6 +809,26 @@ namespace CaDiCaL {
       }
       
     }
+  }
+
+  void Internal::disable_dip_computation_if_appropriate ( ) {
+    static bool some_very_high = false;
+    static bool some_evaluation = false;
+    static vector<double> window;  
+    if (opts.diplearning and not some_very_high) {
+      if (stats.conflicts%10000 == 9999) {
+	window.push_back(double(stats.dip_decision)/stats.decisions*100);
+	if ((not some_evaluation and window.size() == 20) or (some_evaluation and window.size() == 10)) {
+	  some_evaluation = true;
+	  cout << "Window full" << endl;
+	  if (window.back() >= 5) {cout << "Some very high" << endl; some_very_high = true;}
+	  if (some_very_high or
+	      (window.back() - window[0] > 0)) {cout << "Continue" << endl;}
+	  else {cout << "Deactivate" << endl; opts.diplearning = false;}
+	  window.clear();
+	}
+      }
+    }    
   }
   
 } // namespace CaDiCaL
