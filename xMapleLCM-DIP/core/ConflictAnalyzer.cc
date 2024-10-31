@@ -41,7 +41,7 @@ static IntOption    opt_ccmin_mode             (_cat, "ccmin-mode",  "Controls c
 
 static BoolOption   opt_learn_two_dip_clauses  (_cat2, "dip-2clauses",    "Learn two DIP clauses: UIP -> DIP and DIP -> conflict. If set to false, only DIP -> conflict is learned.", true);
 static IntOption    opt_common_pair_DIP_min    (_cat2, "dip-pair-min",  "Specifies the minimum numer of times a DIP has to appear before we introduce it. (-1 means disabled)", 20, IntRange(-1, INT32_MAX));
-static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random)", 1, IntRange(1, 3));
+static IntOption    opt_dip_type               (_cat2, "dip-type",  "Specifies the type of DIP computed (1 = middle, 2 = closest to conflict, 3 = random, 4 = heuristic)", 1, IntRange(1, 4));
 
 static IntOption    opt_DIP_window_size         (_cat2, "dip-window-size",  "Introduce a DIP only if the sum of the activities of the pair is larger than the average of the last DIPs in a window of the given size (-1 means option disabled).", -1, IntRange(-1, INT32_MAX));
 
@@ -747,6 +747,22 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
 
 }
 
+// Returns whether a DIP has been found
+// INPUT: a, b (return values of DIP computation)
+//        info --> class that computed all DIPs
+//        encoder --> mapping between ints in the DIP computation algorithm and literals
+//        pathA, pathB --> paths in the DIP computation
+// OUTPUT: x, y --> DIP pair
+//
+// I would recommend to have a look at computeBestMiddleDIP. It uses all these data structures for computing
+// another type of DIP
+bool ConflictAnalyzer::computeHeuristicDIP (int a, int b, const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, const vector<int>& pathA, const vector<int>& pathB, Lit& x, Lit& y) {
+  const vec<double>& acts = branchingHeuristicManager.getActivity(); // indexed by variable
+  
+  
+  return true;
+}
+
 int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
 
   int dipReached = 0;
@@ -827,11 +843,12 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     
   Lit x, y; // {x,y} are a DIP
   // 3 DIP computations: random, closest to conflict, the one in the middle
-
+  
   bool dip_found = false;
   if (dip_type == MIDDLE_DIP) dip_found = computeBestMiddleDIP(info,encoder,pathA,pathB,x,y);
   else if (dip_type == CLOSEST_TO_CONFLICT) dip_found = computeClosestDIPToConflict(a,b,info,encoder,x,y);
   else if (dip_type == RANDOM_DIP) dip_found = computeRandomDIP(a,b,info,encoder,x,y);
+  else if (dip_type == HEURISTIC_DIP) dip_found = computeHeuristicDIP(a,b,info,encoder,pathA,pathB,x,y);
   else assert(false);
 
   if (not dip_found) return false;

@@ -111,7 +111,8 @@ namespace Minisat {
     static const int MIDDLE_DIP = 1;
     static const int CLOSEST_TO_CONFLICT = 2;
     static const int RANDOM_DIP = 3;
-
+    static const int HEURISTIC_DIP = 4;
+    
     // @brief Type of DIP computed
     int dip_type;
     
@@ -356,7 +357,8 @@ namespace Minisat {
     bool computeBestMiddleDIP (const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, const vector<int>& pathA, const vector<int>& pathB, Lit& x, Lit& y);
     bool computeRandomDIP (int a, int b, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y);
     bool computeClosestDIPToConflict (int a, int b, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y);
-
+    bool computeHeuristicDIP (int a, int b, const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, const vector<int>& pathA, const vector<int>& pathB, Lit& x, Lit& y);
+    
     bool computeDIPClauses (int a, int b, CRef confl, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, vec<Lit>& clause_to_learn1, vec<Lit>& clause_to_learn2, Lit UIP, vector<int>& pathA, vector<int>& pathB);
     bool ok_DIP (Lit dip1, Lit dip2, Lit UIP, CRef confl);
     bool checkSeen3();

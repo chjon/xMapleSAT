@@ -494,6 +494,7 @@ namespace Minisat {
     //////////////
     // ACCESSORS
 
+ 
     inline const vec<double>& BranchingHeuristicManager::getActivity() const {
         if (DISTANCE) return activity_distance;
         if (VSIDS)    return activity_VSIDS;

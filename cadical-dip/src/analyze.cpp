@@ -872,7 +872,7 @@ void Internal::otfs_strengthen_clause (Clause *c, int lit, int new_size,
   external->check_shrunken_clause (c);
 }
 
-  void Internal::analyze ( ){
+void Internal::analyze ( ){
     disable_dip_computation_if_appropriate( );
     if (opts.diplearning) analyze_dip();
     else analyze_1UIP();

@@ -162,7 +162,7 @@ namespace CaDiCaL {
     
     // if (stats.conflicts == 6730534) exit(1);
     // bool write = stats.conflicts == 6730533; // To write conflict graph only of a concrete conflict
-#define write 0// quicker for release mode
+    #define write 0// quicker for release mode
     if (write) {
       outAll.open(filename1.c_str(),fstream::out);
       outCurrent.open(filename2.c_str(),fstream::out);
