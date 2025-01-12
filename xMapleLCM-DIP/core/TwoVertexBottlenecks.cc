@@ -5,13 +5,13 @@
 //   Version 1.1. October 17, 2023. Minor revisions & Phase C performance fix.
 //   Version 2.0. October 30, 2023. Major revision, bug fix, and interface change.
 // .
-//   Author: Sam Buss (sbuss@ucsd.edu) with Jonathan Chung, Vijayi Ganesh and Albert Oliveras
+//   Author: Sam Buss (sbuss@ucsd.edu) with Jonathan Chung, Vijay Ganesh and Albert Oliveras
 //   This code has no warranties of correctness or appropriateness.
 //   May be used freely, however acknowledgement of use 
 //         is expected and appreciated.
 // 
 //  ************************************************
-//  * Main routines for TwoVectexBottlenecks       *
+//  * Main routines for TwoVertexBottlenecks       *
 //  *                                              *
 //  * See TwoVertexBottleneck.h for usage.         *
 //  ************************************************
@@ -19,7 +19,6 @@
 #include "TwoVertexBottlenecks.h"
 #include <algorithm>
 #include <limits>
-#include <iostream>
 
 inline void UpdateMax(int& runningMax, int newValue) {
     if (runningMax < newValue) {
@@ -37,7 +36,7 @@ inline void UpdateMin(int& runningMin, int newValue) {
 // Internal data structures.
 // ********************************************
 
-//   vertInfo-- uSed in Phases A, B, C
+//   vertInfo-- Used in Phases A, B, C
 //   Tracks for each vertex: whether it is on a path
 //           and whether it has been visited the depth first searches.
 
@@ -60,19 +59,10 @@ public:
     bool TestOnPath(int leftFlag) const { return status & (0x01 << leftFlag); } 
 
     bool TestReachedPhaseB() const { return status & 0x04; }
-    // Mark as reached in Phase B.  Returns true is already was reached in Phase B
+    // Mark as reached in Phase B.  Returns true if already was reached in Phase B
     bool ReachedInPhaseB() {
         bool ret = status & 0x04;
         status = status | 0x04;
-        return ret;
-    }
-
-    // Mark as reached in Phase C.  Returns true is already was reached in Phase C
-    // leftFlag will be 0 or 1 for working on reachability 
-    //     from left path vertices or from right path vertices (respectively)
-    bool ReachedInPhaseC( int leftFlag ) {
-        bool ret = status & (0x08 << leftFlag);
-        status = status | (0x08 << leftFlag);
         return ret;
     }
 };
@@ -101,10 +91,10 @@ public:
 };
 
 class pivotInfoPlus {
-    // In the array of pathJumpingInfoPlus objects:
+    // In the arrays of left/rightPathPivot's:
     //     First PivotVert 0. (Sink)   Last PivotVert is N-1. (Source)
     //     MaxReachOtherPath may not be non-decreasing, but it
-    //         would be once points on the other path which are not pivots are skipped.
+    //         will be once points on the other path which are not pivots are skipped.
     //     MinAncestorOtherPath is non-decreasing.
     //     MaxReachOtherPath is initially used for the max reachable vertex on the same path,
     //         but then is replaced with the max reachable vertex on the other path.
@@ -119,7 +109,7 @@ public:
     int MinAncestorOtherPath;
 };
 
-int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const int predIndex[], std::vector<int>& pathA, std::vector<int>& pathB, int maxNumGroups)
+int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const int predIndex[], int maxNumGroups)
 {
     // Allocate vertex info array.
     std::vector<vertInfo> verts(N);
@@ -210,7 +200,7 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
             backtrackVert = nextBacktrack;
         }
         if (backtrackVert == maxReachedOnPath) {
-            SingleVertBottleneck = maxReachedOnPath;    // First bottlenext wertex.
+            SingleVertBottleneck = maxReachedOnPath;    // First bottlenext vertex.
             return -1;                              // Failed to find path onward. There are not two vertex-disjoint paths
         }
 
@@ -222,33 +212,35 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
     // Phase B.4.  Label the nodes on the second (right) path as being on the second path.
     //             Currently all nodes on both paths are labelled as being on the first path.
 
+    // The vertex (after N-1) at the top of path 1 is verts[N-1].succ.
+    // The vertex (after N-1) at the top of path 2 is lastVertSecondPath.
+    // After that, the verts[].succ pointers give successors along the paths.
+    const int& lastVertSecondPath = maxReachedFrom;
 
-    //std::cout << "Path B: " << N-1;
+    // The parts of the code below setting infomation abut PathA and PathB are
+    //     for reporting purposes only. The calling program might find
+    //     it useful to have information about PathA and PathB, but this 
+    //     is not needed anymore by CalcBottlenecks.
+    PathA.clear();
     verts[N - 1].SetOnSecond();
-    pathA.push_back(N-1);
-    for (curVert = maxReachedFrom; curVert != 0; curVert = verts[curVert].succ) {
-      //std::cout << " " << curVert;
-      pathA.push_back(curVert);
-      verts[curVert].SetOnSecond();
-      verts[curVert].ResetOnFirst();
+    PathA.push_back(N - 1);
+    for (curVert = lastVertSecondPath; curVert != 0; curVert = verts[curVert].succ) {
+        verts[curVert].SetOnSecond();
+        verts[curVert].ResetOnFirst();
+        PathA.push_back(curVert);
     }
     verts[0].SetOnSecond();
-    //    std::cout << " 0" << std::endl;
-    pathA.push_back(0);
+    PathA.push_back(0);
 
-    //std::cout << "Path A: " << N - 1;
-    pathB.push_back(N-1);
-    for (int k = N-2; k > 0; --k)
-      if (verts[k].TestOnFirst()) {
-	//std::cout << " " << k;
-	pathB.push_back(k);
-      }
-    //std::cout << " 0" << std::endl;
-    pathB.push_back(0);
-    
-    // The vertex at the top of path 1 is verts[N-1].succ.
-    // The vertex at the top of path 2 is lastVertSecondPath.
-    const int& lastVertSecondPath = maxReachedFrom;
+    PathB.clear();
+    for (curVert = N - 1; ; curVert = verts[curVert].succ) {
+        assert(verts[curVert].TestOnFirst());
+        PathB.push_back(curVert);
+        if (curVert == 0) {
+            break;
+        }
+    }
+
 
     // *****************************************************
     // PHASE C-1.  Gather preliminary information on
@@ -258,9 +250,10 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
     //   We gather information for each vertex x on path 1 (resp. path 2)
     //     (a) the maximum nodes on paths 1 and 2 which
     //         can be reached from x without first encountering any
-    //         vertex from either path.
+    //         vertex from *either* path ("maxDirectReachOnPath")
     //     (b) the minimum node on path 2 (resp. path 1) that is an
     //         predecessor of x (that is, on a path towards N-1).
+    //         This node ("minAncestorOnPath") is on the *other* path from x's path.
     //   To do this, we collect these data items for *every* vertex
     //     in the graph, obtaining the values for min-reachable and
     //     max-directly-reachable nodes in both paths.
@@ -274,12 +267,11 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
     std::vector<reachInfo> directReach2;
 
     directReach1.emplace_back(N - 1, N - 1);  // First entry is for vertex N-1 (the source)
-    directReach2.emplace_back(N - 1 , N - 1);  // ditto
+    directReach2.emplace_back(N - 1, N - 1);  // ditto
     int lastPredIdx = predIndex[N - 1] - 1;  // No predecessor is traversed yet.
     for (int i = N - 2; i >= 0; i--) {
         // Traverse sequentially backwards (from source to sink)
         //   through all vertices in the graph.
-        const vertInfo& thisVert = verts[i];
         int firstPredIdx = predIndex[i];        // Index in predecessors[] of the first precessor of vertex i.
         int newMin1 = N - 1, newMin2 = N - 1;
         int newMax1 = 0, newMax2 = 0;
@@ -289,15 +281,15 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
             int predVertNum = predecessors[lastPredIdx--];
             int testOnPaths = verts[predVertNum].TestOnPath();
             assert(testOnPaths != 3 || predVertNum == N - 1);
-            if (testOnPaths == 0) {
+            if (testOnPaths == 0) {     // If on neither path
                 UpdateMax(newMax1, directReach1[N - 1 - predVertNum].maxDirectReachOnPath);
                 UpdateMax(newMax2, directReach2[N - 1 - predVertNum].maxDirectReachOnPath);
             }
             else {
-                if (testOnPaths & 0x01) {
+                if (testOnPaths & 0x01) {     // If predecessor is on path one
                     UpdateMax(newMax1, predVertNum);
                 }
-                if (testOnPaths & 0x02) {
+                if (testOnPaths & 0x02) {     // If predecessor is on path two (only on both if vertex N-1).
                     UpdateMax(newMax2, predVertNum);
                 }
             }
@@ -318,22 +310,23 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
     // ++++++++++++++++++++++++++++++++++++++++++++++
     // Phase C-2.  
     // Build the lists of vertices for paths 1 and 2
-    //   that could be in a two-vertex bottleneck.
+    //   that could be in a two-vertex bottleneck,
+    //   i.e., removing vertices that are bypassed.
     // At the same time, preserve the information about
     //    the min-reachable on the other path,
-    // And update the max-reachable vertex on the other
-    //    path to include *only( reachable from nodes which are
+    // And update the max-direct-reachable vertex on the other
+    //    path to include *only* reachable from nodes which are
     //    *below* the current node. 
     //    (This makes the max-reachable-other values non-decreasing)
-    // All this information is stored in leftPathPivotsBis
-    //    and rightPathPivotsBis
+    // All this information is stored in leftPathPivots
+    //    and rightPathPivots
     // **********************************************
-    std::vector<pivotInfoPlus> leftPathPivotsBis;
-    std::vector<pivotInfoPlus> rightPathPivotsBis;
+    std::vector<pivotInfoPlus> leftPathPivots;
+    std::vector<pivotInfoPlus> rightPathPivots;
     for (int leftFlag = 0; leftFlag <= 1; leftFlag++) {
         // leftFlag==0 - finding the pivots for the left path
         // leftFlag==1 - finding the pivots for the right path.
-        std::vector<pivotInfoPlus>& thisPathPivots = (leftFlag == 0) ? leftPathPivotsBis : rightPathPivotsBis;
+        std::vector<pivotInfoPlus>& thisPathPivots = (leftFlag == 0) ? leftPathPivots : rightPathPivots;
         const std::vector<reachInfo>& directReachThis = (leftFlag == 0) ? directReach2 : directReach1;
         const std::vector<reachInfo>& directReachOther = (leftFlag == 0) ? directReach1 : directReach2;
         int nextOnPath = leftFlag == 0 ? lastVertSecondPath : verts[N - 1].succ;
@@ -351,7 +344,7 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
         auto toEntry = thisPathPivots.begin();
         auto fromEntry = toEntry;  
         int runningMaxAncestorOnPath = directReachThis[N - 1].maxDirectReachOnPath;  // Pick up sink's (Vertex 0's) direct reach
-        int runningMaxReachOtherPath = directReachOther[N - 1].maxDirectReachOnPath;
+        int runningMaxReachOtherPath = directReachOther[N - 1].maxDirectReachOnPath; // Ditto
         while (fromEntry != thisPathPivots.end()) {
             int thisPivotVert = (fromEntry++)->PivotVert;  // Increment fromEntry for loop control.
             if (thisPivotVert >= runningMaxAncestorOnPath) {
@@ -363,51 +356,87 @@ int TwoVertexBottlenecks::CalcBottlenecks(int N, const int predecessors[], const
             UpdateMax(runningMaxAncestorOnPath, directReachThis[N - 1 - thisPivotVert].maxDirectReachOnPath);
         }
         thisPathPivots.resize(std::distance(thisPathPivots.begin(), toEntry));
+        if (thisPathPivots.size() == 0) {
+            return 0;                   // No potential DIP members. The graph is three connected.
+        }
         thisPathPivots.emplace_back(N - 1, N - 1);
     }
 
     // ****************************************************
-    // Phase D - Complete the analysis of two-vertex bottlenecks.
+    // Phases D-1 & D-2 - Complete the analysis of two-vertex bottlenecks.
     //   Fill in the information in VertListA and VertListB with
     //   the complete specification of allowable two vertex bottlenecks
     //   the minAncestor information.
+    // 
+    // Phase D-1.  Compute for each vertex x in each path (left and right), 
+    //   an upper and lower bound on the vertices y in the other path (right and left, resp.)
+    //   such that (x,y) forms a two vertex bottleneck (TVB) pair.
+    //   These upper and lower bounds may not actually be present as vertices 
+    //   in the other path.
+    //   At the same, remove all vertices that do not belong to a valid TVB pair.
+    // 
+    //   The lower and bound values are stored in the fields minPairIdx and maxPairIdx.
+    //   Phase D-2 will overwrite these values with indices from the other vertList
+    //   array.
     // ****************************************************
     for (int leftFlag = 0; leftFlag <= 1; leftFlag++) {
         // leftFlag==0 - finding the information for the left path (VertListA)
         // leftFlag==1 - finding the information for the right path (VertListB)
-        const std::vector<pivotInfoPlus>& thisPathPivots = (leftFlag == 0) ? leftPathPivotsBis : rightPathPivotsBis;
-        const std::vector<pivotInfoPlus>& otherPathPivots = (leftFlag == 0) ? rightPathPivotsBis : leftPathPivotsBis;
+        const std::vector<pivotInfoPlus>& thisPathPivots = (leftFlag == 0) ? leftPathPivots : rightPathPivots;
+        const std::vector<pivotInfoPlus>& otherPathPivots = (leftFlag == 0) ? rightPathPivots : leftPathPivots;
         std::vector<VertPairInfo>& vertListX = (leftFlag == 0) ? VertListA : VertListB;
-        if (otherPathPivots.size() == 1) {
-            return 0;                   // No two vertex bottlenexks - Source and sink are three connected.
-        }
         int butLastOtherPathPivotVert = (otherPathPivots.end() - 2)->PivotVert;
         auto otherPathPivot = otherPathPivots.begin();
-        // XXXX int curMaxReachThisToOther = 0;     // Max reachable by a vertex below the curPivot vertex.
         auto curPivot = thisPathPivots.begin();
         for ( ; curPivot->PivotVert != N - 1; curPivot++) {
             while (otherPathPivot->MaxReachOtherPath <= curPivot->PivotVert) {
                 otherPathPivot++;
             }
-            // XXXX int lowerBdPair = curMaxReachThisToOther;
             if (otherPathPivot == otherPathPivots.begin()) {
-                continue;    // Vertex 0 reaches beyong curPivot
+                continue;    // Vertex 0 reached beyond curPivot
             }
             int upperBdPair = (otherPathPivot-1)->PivotVert;
             int lowerBdPair = curPivot->MaxReachOtherPath;   // Max reachable by a vertex below the curPivot vertex.
             if (lowerBdPair <= upperBdPair && (upperBdPair < N - 1 || lowerBdPair <= butLastOtherPathPivotVert)) {
                 vertListX.emplace_back(curPivot->PivotVert, lowerBdPair, upperBdPair, curPivot->MinAncestorOtherPath);
             }
-            // XXX UpdateMax(curMaxReachThisToOther, curPivot->MaxReachOtherPath);
         }
     }
     assert(VertListA.empty() == VertListB.empty());
     if (VertListA.empty()) {
-        return 0;    // No two vertex bottlenexks - Source and sink are three connected
+        return 0;    // No two vertex bottlenecks - Source and sink are three connected
     }
-    int FirstA_nextToRoot = (verts[VertListA[0].vertNum].succ == 0) ? 1 : 0;
-    int FirstB_nextToRoot = (verts[VertListB[0].vertNum].succ == 0) ? 1 : 0;
 
-    return 4 + (FirstA_nextToRoot << 1) + FirstB_nextToRoot;
+    // ****************************************************
+    // Phase D-2. Replace the upper and lower bounds from D-1 on
+    //     vertices that form TVB pairs with indices into the other vertList.
+    //     The result is that vertex VertListA[i] and VertListB[j] form
+    //     a two vertex bottleneck (TVB) pair iff
+    //       VertListA[i].minPairIdx <= j <= VertListA[i].maxPairIdx.
+    //     and iff
+    //       VertListB[j].minPairIdx <= i <= VertListB[j].maxPairIdx.
+    // ****************************************************
+    for (int leftFlag = 0; leftFlag <= 1; leftFlag++) {
+        // leftFlag==0 - computing the information for the left path (VertListA)
+        // leftFlag==1 - computing the information for the right path (VertListB)
+        std::vector<VertPairInfo>& vertListThis = (leftFlag == 0) ? VertListA : VertListB;
+        std::vector<VertPairInfo>& vertListOther = (leftFlag == 0) ? VertListB : VertListA;
+        int minPairI = 0;
+        int maxPairI = 0;
+        int s = (int)vertListOther.size();
+        for (VertPairInfo& vert : vertListThis) {
+            int minpr = vert.minPairIdx;   // The min **vertex number** that can be paired
+            while (vertListOther[minPairI].vertNum < minpr) {
+                minPairI++;
+            }
+            vert.minPairIdx = minPairI; // Set the **index** of the minimum vertex to pair
+            int maxpr = vert.maxPairIdx;   // The max **vertex number** that can be paired
+            while (maxPairI < s - 1 && vertListOther[maxPairI + 1].vertNum <= maxpr) {
+                maxPairI++;
+            }
+            vert.maxPairIdx = maxPairI; // Set the **index** of the maximum vertex to pair
+        }
+    }
+    return 1;       // DIP's were found.
 
  }

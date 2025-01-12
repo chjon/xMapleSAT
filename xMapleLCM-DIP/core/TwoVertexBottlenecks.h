@@ -3,7 +3,7 @@
 //     Version 1.0, January 13, 2023
 //     Version 2.0. October 25, 2023. Major revision, bug fix, and interface change.
 // 
-//     Author: Sam Buss (sbuss@ucsd.edu) with Jonathan Chung, Vijayi Ganesh and Albert Oliveras
+//     Author: Sam Buss (sbuss@ucsd.edu) with Jonathan Chung, Vijay Ganesh and Albert Oliveras
 //     This code has no warranties of correctness or appropriateness.
 //     May be used freely, however acknowledgement of use
 //         is expected and appreciated.
@@ -44,17 +44,10 @@
 //         In this case, predIndex.size must be equal to N.
 //  
 // Output:
-//    Return code:  q > 0  if there is at least one two vertex bottleneck.
+//    Return code:  1 if there is at least one two vertex bottleneck.
 //                  0 if 3 vertex connected and thus there are no 1- or 2-vertex bottlenecks.
-//                 -1 if not 2-vertex connected (Data in SingleVertBottlenext).
+//                 -1 if not 2-vertex connected (Data in SingleVertBottleneck).
 //                 -2 if error condition, invalid input (generates an assert)
-//    The return code q will equal:
-//                  q = 4 + 2a + b
-//    where:  a==1 if the first element of VertPairListA is an immediate
-//                 ancestor of the sink node
-//            b==1 if the first element of VertPairListB is an immediate
-//                 ancestor of the sink node
-//    and a, b are otherwise equal to 0.
 // 
 //    VertListA - list of vertices that can be the "right" member of
 //                 two vertex bottleneck.
@@ -84,14 +77,19 @@
 //          iff the VertListB values allow the pairing.
 //    The minAncestor information is not redundant however.
 // 
-//              
+//    GetPathA() and GetPathB():
+//       PathA & PathB - returned as complete vertex-disjoint complete paths 
+//          from the vertex 0 to vertex N-1.
+//          All TVB pairs have one member from PathA and one member
+//          from PathB.        
 // *********************************************************
 
 #pragma once
 #ifndef TWO_VERTEX_BOTTLENECKS_H
 
 #include <assert.h>
-#include <limits.h>
+#include <limits>
+#include <climits>
 #include <vector>
 
 class TwoVertexBottlenecks
@@ -101,24 +99,27 @@ public:
 
 public:
 
-  int CalcBottlenecks( int N, const int predecessors[], const int predIndex[],  std::vector<int>& pathA, std::vector<int>& pathB, int maxNumGroups = INT_MAX);
-  int CalcBottlenecks(const std::vector<int> predecessors, const std::vector<int> predIndex,  std::vector<int>& pathA, std::vector<int>& pathB, int maxNumGroups = INT_MAX);
+    int CalcBottlenecks( int N, const int predecessors[], const int predIndex[], int maxNumGroups = INT_MAX);
+    int CalcBottlenecks(const std::vector<int> predecessors, const std::vector<int> predIndex, int maxNumGroups = INT_MAX);
 
 public:
     class VertPairInfo {
     public:
         VertPairInfo(int vert, int lowerBdPair, int upperBdPair, int minAncestorOther)
-            : vertNum(vert), minPair(lowerBdPair), maxPair(upperBdPair), minAncestor(minAncestorOther) {}
+            : vertNum(vert), minPairIdx(lowerBdPair), maxPairIdx(upperBdPair), minAncestor(minAncestorOther) {}
 
         int vertNum;        // The index of a vertex as potential member of 2-vertex bottleneck
-        int minPair;        // Lower bound on verts in the other VertPairInfo array which form a two vertex bottleneck;
-        int maxPair;        // Upper bound on verts in teh other VertPairInfo array which form a two vertex bottleneck;
+        int minPairIdx;     // Index of the first vertex in the other path whigh forms a TVB with this vertex.
+        int maxPairIdx;     // Index of the last vertex in the other path whigh forms a TVB with this vertex.
         int minAncestor;    // Lower bound on verts in the other VertPairInfo array which are ancestors
     };
 
 public:
     const std::vector<VertPairInfo>& GetVertListA() const { return VertListA; }
     const std::vector<VertPairInfo>& GetVertListB() const { return VertListB; }
+
+    const std::vector<int>& GetPathA() const { return PathA; }
+    const std::vector<int>& GetPathB() const { return PathB; }
 
     int LengthListA() const { return (int)VertListA.size(); }
     int LengthListB() const { return (int)VertListA.size(); }
@@ -129,8 +130,19 @@ public:    // If not 2-connected (return code -1), this is the single vertex bot
     int SingleVertBottleneck;
 
 private:
+    // VertListA and VertListB hold the two lists of members of PathA and PathB
+    //   that are part of a DIPs. They also old the minVert and maxVert info
+    //   characterizing which vertices they form pairs with.
     std::vector<VertPairInfo> VertListA;
     std::vector<VertPairInfo> VertListB;
+
+    // PathA and PathB are the complete vertex-disjoint paths.
+    //   They also hold the start and end vertices N-1 and 0.
+    // PathA and PathB are reporting information only. Many applications
+    //   may not need them.  In any event, the complete paths are not
+    //   unique. Nor are they needed internally for computation by CalcBottlenecks.
+    std::vector<int> PathA;
+    std::vector<int> PathB;
 
     void Clear() { VertListA.clear(); VertListB.clear(); }
 
@@ -140,10 +152,10 @@ private:
 // Main routine for calculating the two-vertex bottlenecks
 //   This is just a wrapper to accept std::vector's as inputs.
 inline int TwoVertexBottlenecks::CalcBottlenecks(
-						 const std::vector<int> predecessors, const std::vector<int> predIndex,     std::vector<int>& pathA, std::vector<int>& pathB, int maxNumGroups)
+    const std::vector<int> predecessors, const std::vector<int> predIndex, int maxNumGroups)
 {
-    assert(predecessors.size() == predIndex.back());
-    return CalcBottlenecks((int)predIndex.size(), predecessors.data(), predIndex.data(), pathA, pathB, maxNumGroups);
+    assert((int)predecessors.size() == predIndex.back());
+    return CalcBottlenecks((int)predIndex.size(), predecessors.data(), predIndex.data(), maxNumGroups);
 }
 
 #endif // TWO_VERTEX_BOTTLENECKS_H

@@ -22,10 +22,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "core/ConflictAnalyzer.h"
 #include "core/Solver.h"
+#include "core/RandomNumberGenerator.h"
 #include <set>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include "core/MostActiveDIP.h"
+#include "core/RandomTVB.h"
 
 using namespace Minisat;
 using namespace std;
@@ -89,6 +92,12 @@ ConflictAnalyzer::ConflictAnalyzer(Solver& s)
   }  
 }
 
+int RandGenTVB(int size) {
+  return rand()%size;
+}
+
+int write_SRB = 1;  // 1 - causes extra output -- value is updated below!
+
 /*_________________________________________________________________________________________________
 |
 |  analyze1UIP : (confl : Clause*) (out_learnt : vec<Lit>&) (out_btlevel : int&)  ->  [void]
@@ -134,12 +143,12 @@ void ConflictAnalyzer::analyze1UIP(CRef confl, vec<Lit>& out_learnt, int& out_bt
     // Clean up
     // TODO: can this be moved before updating the branching heuristic?
     // it is currently polluted by simplifyClause
-    for (int j = 0; j < toClear.size(); j++)
+    for (int j = 0; j < (int)toClear.size(); j++)
         seen[toClear[j]] = false;
     toClear.clear();
 
     // Clear 'seen[]'
-    for (int j = 0; j < mainLearnedClause.size(); j++)
+    for (int j = 0; j < (int)mainLearnedClause.size(); j++)
         seen[var(mainLearnedClause[j])] = false;
 }
 
@@ -162,7 +171,7 @@ inline void ConflictAnalyzer::getFirstUIPClause(CRef confl, vec<Lit>& out_learnt
         solver.clauseDatabase.handleEventClauseInConflictGraph(confl, solver.conflicts);
 
         // Iterate through every literal that participates in the conflict graph
-        for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+        for (int j = (p == lit_Undef) ? 0 : 1; j < (int)c.size(); j++) {
             Lit q = c[j];
             if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
@@ -247,12 +256,12 @@ bool ConflictAnalyzer::analyze (CRef confl, vec<Lit>& out_learnt, int& out_btlev
   // Clean up
   // TODO (ALREADY FROM JONATHAN): can this be moved before updating the branching heuristic?
   // it is currently polluted by simplifyClause
-  for (int j = 0; j < toClear.size(); j++)
+  for (int j = 0; j < (int)toClear.size(); j++)
     seen[toClear[j]] = false;
   toClear.clear();
 
   // Clear 'seen[]'
-  for (int j = 0; j < mainLearnedClause.size(); j++) 
+  for (int j = 0; j < (int)mainLearnedClause.size(); j++) 
     seen[var(mainLearnedClause[j])] = false;
 
   assert(checkSeen());
@@ -288,7 +297,7 @@ void ConflictAnalyzer::analyzeFinal(Lit p, vec<Lit>& out_conflict) {
       out_conflict.push(~assignmentTrail[i]);
     } else {
       Clause& c = ca[assignmentTrail.reason(x)];
-      for (int j = c.size() == 2 ? 0 : 1; j < c.size(); j++)
+      for (int j = c.size() == 2 ? 0 : 1; (int)j < c.size(); j++)
 	if (assignmentTrail.level(var(c[j])) > 0) 
 	  seen[var(c[j])] = 1;
     }
@@ -308,7 +317,7 @@ static inline void enforceBinaryClauseInvariant(const AssignmentTrail& at, C& c)
 
 template <class C, class F>
 static inline void forNonRootVariables(const AssignmentTrail& at, const C& c, int start, F f) {
-  for (int i = start; i < c.size(); i++) {
+  for (int i = start; i < (int)c.size(); i++) {
     if (at.level(var(c[i])) != 0) {
       f(var(c[i]));
     }
@@ -324,7 +333,7 @@ bool ConflictAnalyzer::collectFirstUIP(CRef confl) {
   int totalPathCount = 0;
 
   // cout << "Iterate over conflict: ";
-  // for (int k = 0; k < ca[confl].size(); ++k) {
+  // for (int k = 0; k < (int)ca[confl].size(); ++k) {
   //   Lit l = ca[confl][k];
   //   cout << l << " [" << assignmentTrail.value(l) << ",dl " << assignmentTrail.level(var(l)) << "] ";
   // }
@@ -374,7 +383,7 @@ bool ConflictAnalyzer::collectFirstUIP(CRef confl) {
     enforceBinaryClauseInvariant(assignmentTrail, rc);
 
     // cout << "Iterate over reason for " << p << ": ";
-    // for (int k = 0; k < rc.size(); ++k) {
+    // for (int k = 0; k < (int)rc.size(); ++k) {
     //   Lit l = rc[k];
     //   cout << l << "[" << assignmentTrail.value(l) << ", dl" << assignmentTrail.level(var(l)) << "] ";
     // }
@@ -418,7 +427,7 @@ void ConflictAnalyzer::simpleAnalyze(
 	enforceBinaryClauseInvariant(assignmentTrail, c);
 
       // if True_confl==true, then choose p begin with the 1th index of c;
-      for (int j = (p == lit_Undef && True_confl == false) ? 0 : 1; j < c.size(); j++){
+      for (int j = (p == lit_Undef && True_confl == false) ? 0 : 1; j < (int)c.size(); j++){
 	Lit q = c[j];
 	if (!seen[var(q)]){
 	  seen[var(q)] = 1;
@@ -451,14 +460,14 @@ void ConflictAnalyzer::simpleAnalyze(
 bool ConflictAnalyzer::binResMinimize(vec<Lit>& out_learnt) {
   // Preparation: remember which false variables we have in 'out_learnt'.
   counter++;
-  for (int i = 1; i < out_learnt.size(); i++)
+  for (int i = 1; i < (int)out_learnt.size(); i++)
     seen2[var(out_learnt[i])] = counter;
 
   // Get the list of binary clauses containing 'out_learnt[0]'.
   const vec<Watcher>& ws = solver.unitPropagator.getBinWatchers(~out_learnt[0]);
 
   int to_remove = 0;
-  for (int i = 0; i < ws.size(); i++) {
+  for (int i = 0; i < (int)ws.size(); i++) {
     Lit the_other = ws[i].blocker;
     // Does 'the_other' appear negatively in 'out_learnt'?
     if (seen2[var(the_other)] == counter && assignmentTrail.value(the_other) == l_True){
@@ -470,7 +479,7 @@ bool ConflictAnalyzer::binResMinimize(vec<Lit>& out_learnt) {
   // Shrink.
   if (to_remove > 0) {
     int last = out_learnt.size() - 1;
-    for (int i = 1; i < out_learnt.size() - to_remove; i++)
+    for (int i = 1; i < (int)out_learnt.size() - to_remove; i++)
       if (seen2[var(out_learnt[i])] != counter)
 	out_learnt[i--] = out_learnt[last--];
     out_learnt.shrink(to_remove);
@@ -497,7 +506,7 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
     }
 
     // Iterate through unique reason variables that are not assigned at the root level
-    for (int i = 1; i < c.size(); i++) {
+    for (int i = 1; i < (int)c.size(); i++) {
       const Var v = var(c[i]);
       if (seen[v] || assignmentTrail.level(v) == 0) continue;
 
@@ -509,7 +518,7 @@ bool ConflictAnalyzer::litRedundant(Lit p, uint32_t abstract_levels) {
 	  (assignmentTrail.abstractLevel(v) & abstract_levels) == 0
 	  ) {
 	// Clean up
-	for (int j = top; j < toClear.size(); j++) 
+	for (int j = top; j < (int)toClear.size(); j++) 
 	  seen[toClear[j]] = false;
 
 	toClear.shrink(toClear.size() - top);
@@ -553,7 +562,7 @@ bool ConflictAnalyzer::ok_DIP (Lit dip1, Lit dip2, Lit UIP, CRef confl) {
   assert(confl != CRef_Undef);
   stack<Lit> S;
   Clause& c = ca[confl];
-  for (int i = 0; i < c.size(); ++i) {
+  for (int i = 0; i < (int)c.size(); ++i) {
     if (assignmentTrail.level(var(c[i])) == assignmentTrail.decisionLevel()) {
       S.push(c[i]);
       //cout << "Start with " << c[i] << " at DL " << assignmentTrail.level(var(c[i])) << endl;
@@ -568,7 +577,7 @@ bool ConflictAnalyzer::ok_DIP (Lit dip1, Lit dip2, Lit UIP, CRef confl) {
     CRef r = assignmentTrail.reason(var(l));
     assert(r != CRef_Undef);
     Clause& reason = ca[r];
-    for (int i = 0; i < reason.size(); ++i) {
+    for (int i = 0; i < (int)reason.size(); ++i) {
       Lit l2 = reason[i];
       if (var(l2) == var(l)) continue;
       if (assignmentTrail.level(var(l2)) != assignmentTrail.decisionLevel()) continue;
@@ -578,78 +587,64 @@ bool ConflictAnalyzer::ok_DIP (Lit dip1, Lit dip2, Lit UIP, CRef confl) {
   return true;
 }
 
-bool ConflictAnalyzer::computeRandomDIP (int a, int b, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
-  // a == 1 if the first element of VertPairListA is an immediate ancestor of the conflict node
-  // b == 1 if the first element of VertPairListB is an immediate ancestor of the conflict node
-  
-  vector<TwoVertexBottlenecks::VertPairInfo> listA = info.GetVertListA();
-  int idxA;
-  if (a == 1) {
-    if (listA.size() == 1) return false;
-    else idxA = rand()%(listA.size()-1) + 1;
-  }
-  else idxA = rand()%listA.size();
-  
-  x = encoder.Sam2Solver(listA[idxA].vertNum);
+bool ConflictAnalyzer::computeRandomDIP (bool avoidFirsts, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
 
-  vector<TwoVertexBottlenecks::VertPairInfo> listB = info.GetVertListB();  
-  vector<Lit> candidatesY;
-  for (int i = 0; i < listB.size(); ++i){
-    if (b == 1 and i == 0) continue;
-    if (listA[idxA].minPair <= listB[i].vertNum and
-	listB[i].vertNum <= listA[idxA].maxPair)
-      {
-	if (listA[idxA].minAncestor <= listB[i].vertNum) { // skip ancestors (I do not think this is necessary)
-	  //cout << "Skip candidate " << encoder.Sam2Solver(listB[i].vertNum) << " because it is an ancestor of " << x << endl;
-	}
-	else candidatesY.push_back(encoder.Sam2Solver(listB[i].vertNum));
-      }
-  }
+  // avoidFirsts is true if the first literals on Path A and Path B should
+  //    not be paired in a DIP (due to forming a two-clause)
 
-  if (candidatesY.size() == 0) return false;
-  y = candidatesY[rand()%candidatesY.size()];
+  const vector<TwoVertexBottlenecks::VertPairInfo>& listA = info.GetVertListA();
+  const vector<TwoVertexBottlenecks::VertPairInfo>& listB = info.GetVertListB();  
+  int lit1, lit2;
+  if (!ChooseRandomTVB(listA, listB, lit1, lit2, avoidFirsts)) {
+    return false;
+  }
+  x = encoder.Sam2Solver(listA[lit1].vertNum);
+  y = encoder.Sam2Solver(listB[lit2].vertNum);
+
+  if (write_SRB) {
+     cout << "RANDOM:: DIP: (" << x << "," << y << ").   [Using lit1/2 :- (" << lit1 << "," << lit2 << ") ] " << endl;
+  }
 
   return true;
 }
 
-bool ConflictAnalyzer::computeClosestDIPToConflict (int a, int b, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
+bool ConflictAnalyzer::computeClosestDIPToConflict (bool avoidFirsts, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
+
+  // avoidFirsts is true if the first literals on Path A and Path B should
+  //    not be paired in a DIP (due to forming a two-clause)
+  
   const vector<TwoVertexBottlenecks::VertPairInfo>& listA = info.GetVertListA();
+  const vector<TwoVertexBottlenecks::VertPairInfo>& listB = info.GetVertListB();
 
-  // a == 1 if the first element of VertPairListA is an immediate ancestor of the conflict node
-  // b == 1 if the first element of VertPairListB is an immediate ancestor of the conflict node
+  int idxA = 0;
+  int idxB = 0;
+  int szA = (int)listA.size();
+  int szB = (int)listB.size();
 
-  // Closest to the conflict
-  int idxA;
-  if (a == 1) {
-    if (listA.size() == 1) return false;
-    else idxA = 1;
+  if ( avoidFirsts ) {
+    if (szA == 1 && szB == 1) return false;
+    if ( szB > 1 && listA[0].maxPairIdx >= 1 ) idxB = 1;
+    if ( szA > 1 && listB[0].maxPairIdx >= 1 ) idxA = 1;
   }
-  else idxA = 0;
-
-  const vector<TwoVertexBottlenecks::VertPairInfo>& listB = info.GetVertListB();    
-  int idxB = -1;
-  for (int i = 0; i < listB.size(); ++i) {
-    if (b == 1 and i == 0) continue;
-    if (listA[idxA].minPair <= listB[i].vertNum and
-	listB[i].vertNum <= listA[idxA].maxPair and
-	listA[idxA].minAncestor > listB[i].vertNum) { // avoid ancestors but I believe is not necessary
-      idxB = i;
-    }
-  }
-
-  if (idxB == -1) return false;
 
   x = encoder.Sam2Solver(listA[idxA].vertNum);
   y = encoder.Sam2Solver(listB[idxB].vertNum);
+  
+  if (write_SRB) {
+     cout << "CLOSEST:: DIP: (" << x << "," << y << ").   " << endl;
+  }
+
 
   return true;
 }
 
-bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, const vector<int>& pathA, const vector<int>& pathB, Lit& x, Lit& y) {
+bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
 
-  if (pathA.size() <= 3 and pathB.size() <= 3) return false; // does not seem interesting
   
-  
+  const vector<int> pathA = info.GetPathA();
+  const vector<int> pathB = info.GetPathB();
+  if (pathA.size() + pathB.size() <= 5) return false; // does not seem interesting
+    
   const vector<TwoVertexBottlenecks::VertPairInfo>& listA = info.GetVertListA();
   const vector<TwoVertexBottlenecks::VertPairInfo>& listB = info.GetVertListB();
 
@@ -660,7 +655,7 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
   // 3) Having chosen DIP_A, choose DIP_B a vertex in pathB that, among the ones that form a DIP with DIP_A,
   //    is the one which is closes to the middle position inside pathB
   
-  // Determine who is longest/shortest
+  // Determine who is longest/shortest -- based on pathA/B sizes only (not listA/B sizes)
   const vector<int>& longestPath = (pathA.size() > pathB.size() ? pathA : pathB);
   const vector<int>& shortestPath = (pathA.size() > pathB.size() ? pathB : pathA);
   const vector<TwoVertexBottlenecks::VertPairInfo>& longestList = (pathA.size() > pathB.size() ? listA : listB);
@@ -674,17 +669,15 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
 
   // Remember that pathA, pathB both start with the 1UIP (largest vertex) and finish with the conflict (vertex 0).
   // We know that both paths are strictly ordered from large to small
-  // However, note that longest/shortest List are ordered strictly from smaller to larger
-  for (int i = 0, j = longestPath.size() - 1; i < longestList.size(); ++i) {
+  // However, longest/shortest List are ordered strictly from smaller to larger
+  for (int i = 0, j = (int)longestPath.size() - 1; i < (int)longestList.size(); ++i) {
     while (longestPath[j] != longestList[i].vertNum) --j;
     posInLongestPath[i] = j;
-    //cout << "Pos of " << longestList[i].vertNum << " in longestPath is " << j << endl;
   }
 
-  for (int i = 0, j = shortestPath.size() - 1; i < shortestList.size(); ++i) {
+  for (int i = 0, j = (int)shortestPath.size() - 1; i < (int)shortestList.size(); ++i) {
     while (shortestPath[j] != shortestList[i].vertNum) --j;
     posInShortestPath[i] = j;
-    //cout << "Pos of " << shortestList[i].vertNum << " in shortestPath is " << j << endl;
   }
 
   int medianLongest = longestPath.size()/2;
@@ -695,45 +688,48 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
   int longestDistToMedian  = abs(medianLongest - posInLongestPath[0]);
   // Look for the one closest to the middle (DIP_A in the description)
   int k = 1;
-  while (k < posInLongestPath.size() and longestDistToMedian > 0) {
+  while (k < (int)posInLongestPath.size() and longestDistToMedian > 0) {
     int dist = abs(medianLongest - posInLongestPath[k]);
     if (dist < longestDistToMedian) {
       longestDistToMedian = dist;
       idxLongest = k;
     }
+    else
+      break;
     ++k;
   }
 
   //cout << "For longest we choose DIP " << longestList[idxLongest].vertNum << " at position " << posInLongestPath[idxLongest] << endl;
 
-  // minV and maxV tell that any number inside [minV, maxV] is DIP-compatible with DIP_A
-  int minV = longestList[idxLongest].minPair;
-  int maxV = longestList[idxLongest].maxPair;
+  // OLD_SRB minV and maxV tell that any number inside [minV, maxV] is DIP-compatible with DIP_A
+  // int minV = longestList[idxLongest].minPair;
+  // int maxV = longestList[idxLongest].maxPair;
+  int minVindex = longestList[idxLongest].minPairIdx;
+  int maxVindex = longestList[idxLongest].maxPairIdx;
 
   int idxShortest = -1;
   int shortestDistToMedian = 1e9;
   
-  k = 0;
-  while (k < posInShortestPath.size() and shortestDistToMedian > 0) {
-    if (shortestList[k].vertNum < minV or shortestList[k].vertNum > maxV) {++k; continue;}
+  k = minVindex;
+  while (k <= maxVindex and shortestDistToMedian > 0) {
+    // OLD_SRB if (shortestList[k].vertNum < minV or shortestList[k].vertNum > maxV) {++k; continue;}
     int dist = abs(medianShortest - posInShortestPath[k]);
     if (dist < shortestDistToMedian) {
       shortestDistToMedian = dist;
       idxShortest = k;
     }
+    else
+      break;
     ++k;
   }
 
   assert(idxShortest >= 0);
-  // if (idxShortest < 0) {  // Just in case. If assertion fails sometime, add this code
-  //   return false; 
-  // }
-
+ 
   //cout << "For shortest we choose DIP " << shortestList[idxShortest].vertNum << " at position " << posInShortestPath[idxShortest] << endl;
 
 
-  if (posInShortestPath[idxShortest] == shortestPath.size() - 2 and
-      posInLongestPath[idxLongest] == longestPath.size() - 2)
+  if (posInShortestPath[idxShortest] == (int)shortestPath.size() - 2 and
+      posInLongestPath[idxLongest] == (int)longestPath.size() - 2)
     {
       //cout << "TWO IMMEDIATE ANCESTORS" << endl;
       return false;}
@@ -742,27 +738,91 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
   x = encoder.Sam2Solver(longestList[idxLongest].vertNum);
   y = encoder.Sam2Solver(shortestList[idxShortest].vertNum);
 
+  if (write_SRB) {
+     cout << "MIDDLE:: DIP: (" << x << "," << y << ").   ";
+     cout << "DIP Indices: (" << longestList[idxLongest].vertNum << "," << shortestList[idxShortest].vertNum << ")" << endl;
+  }
 
   return true;
 
 }
 
+// Finds the DIP pair with the highest product of activity levels.
 // Returns whether a DIP has been found
 // INPUT: a, b (return values of DIP computation)
 //        info --> class that computed all DIPs
 //        encoder --> mapping between ints in the DIP computation algorithm and literals
-//        pathA, pathB --> paths in the DIP computation
 // OUTPUT: x, y --> DIP pair
-//
-// I would recommend to have a look at computeBestMiddleDIP. It uses all these data structures for computing
-// another type of DIP
-bool ConflictAnalyzer::computeHeuristicDIP (int a, int b, const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, const vector<int>& pathA, const vector<int>& pathB, Lit& x, Lit& y) {
-  const vec<double>& acts = branchingHeuristicManager.getActivity(); // indexed by variable
+
+const DIPGraphEncoder* encoderAct;
+const vec<double>* actsPtr;
+bool actsCombineAdd;   // Since there are negative activity values, must use addition!
+template<typename ACTIVITY>
+ACTIVITY ActivityOf(int i) {
+  return (*actsPtr)[var(encoderAct->Sam2Solver(i))];
+}
+template<typename ACTIVITY>
+ACTIVITY CombineActivities(ACTIVITY act1, ACTIVITY act2) {
+  // Not sure whether it is better to add or multiply, in either case.
+  // Maybe try both in experiments.
+  double ret;
+  if (actsCombineAdd) {
+    ret =  (act1 / 2) + (act2 / 2);   // Divide by 2 to avoid overflow. (?)
+  }
+  else {
+    assert (act1 >= 0.0 && act2 >= 0.0);
+    ret = sqrt(act1) * sqrt(act2);   // Use sqrt to avoid overflow
+  }
+  return ret;
+}
+
+
+bool ConflictAnalyzer::computeHeuristicDIP (bool avoidFirsts, const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
+  actsPtr = &branchingHeuristicManager.getActivity(); // indexed by variable
+  actsCombineAdd = (branchingHeuristicManager.DISTANCE);
+  if (write_SRB) cout << "CombineAdd = " << (actsCombineAdd ? "TRUE" : "FALSE") << endl;
+  encoderAct = &encoder;
   
+  // avoidFirsts is true if the first literals on Path A and Path B should
+  //    not be paired in a DIP (due to forming a two-clause
   
+  const vector<TwoVertexBottlenecks::VertPairInfo>& listA = info.GetVertListA();
+  const vector<TwoVertexBottlenecks::VertPairInfo>& listB = info.GetVertListB();
+  int idxA;
+  int idxB;
+
+  // ActivityOf<double>() and CombineActivities<double>() are used as callback functions.
+  FindMaxActivityDIP_idx<double>(listA, listB, idxA, idxB);
+
+  if ( avoidFirsts && idxA==0 && idxB==0 ) {
+    return false;
+  }
+
+  if (write_SRB) {
+    cout << "Path A activities (Vert,Act.): ";
+    for ( unsigned int i = 0; i<listA.size(); i++ ) {
+      cout << "(" << listA[i].vertNum << "," << ActivityOf<double>(listA[i].vertNum) << "),";
+    }
+    cout << endl;
+    cout << "Path B activities (Vert,Act.): ";
+    for ( unsigned int i = 0; i<listB.size(); i++ ) {
+      cout << "(" << listB[i].vertNum << "," << ActivityOf<double>(listB[i].vertNum) << "),";
+    }
+    cout << endl;
+  }
+  
+  x = encoder.Sam2Solver(listA[idxA].vertNum);
+  y = encoder.Sam2Solver(listB[idxB].vertNum);
+
+  if (write_SRB) {
+     cout << "HEURISTIC:: DIP: (" << x << "," << y << ").   [Using vertNum's :- (" 
+          << listA[idxA].vertNum << "," << listB[idxB].vertNum << ") ] " << endl;
+  }
+
   return true;
 }
 
+#if 0   // SRB This routine is not used!
 int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
 
   int dipReached = 0;
@@ -781,7 +841,7 @@ int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
     }
 	
     // Iterate through every literal that participates in the conflict graph
-    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+    for (int j = (p == lit_Undef) ? 0 : 1; j < (int)c.size(); j++) {
       Lit q = c[j];
       if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
@@ -789,8 +849,7 @@ int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
       seen3[var(q)] = 1;
 
       // Increment the number of paths if the variable is assigned at the decision level that resulted in conflict
-      if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel())
-	afterLits.push_back(q);
+      if (assignmentTrail.level(var(q)) < assignmentTrail.decisionLevel()) afterLits.push_back(q);
     }
         
     // Select next clause to look at:
@@ -821,7 +880,7 @@ int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
 
   int LBD = 0;
   for (auto z : afterLits) {
-    int lev = assignmentTrail.level(var(x));
+    int lev = assignmentTrail.level(var(z));
     if (levels[lev] != times) {levels[lev] = times; ++LBD;}    
   }
   
@@ -829,26 +888,28 @@ int ConflictAnalyzer::computeLBD_DIP2Conflict (CRef confl, Lit x, Lit y) {
   //solver.branchingHeuristicManager.nextDecisionBestOf(~x,~y); 
 
   // Clear marks
-  for (int i = 0; i < afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
+  for (int i = 0; i < (int)afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
   seen3[var(x)] = seen3[var(y)] = false;
 
   assert(checkSeen3());
   return LBD + 1;
 }
+#endif
 
-bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, vec<Lit>& clause_to_learn, vec<Lit>& clause_to_learn2, Lit UIP, vector<int>& pathA, vector<int>& pathB) {
+bool ConflictAnalyzer::computeDIPClauses (bool avoidFirsts, CRef confl, TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, vec<Lit>& clause_to_learn, vec<Lit>& clause_to_learn2, Lit UIP) {
   assert(clause_to_learn.size() == 0);
 
-  CRef originalConflict = confl;
+  // UNUSED VARIABLE originalConflict:
+  // CRef originalConflict = confl;
     
   Lit x, y; // {x,y} are a DIP
   // 3 DIP computations: random, closest to conflict, the one in the middle
   
   bool dip_found = false;
-  if (dip_type == MIDDLE_DIP) dip_found = computeBestMiddleDIP(info,encoder,pathA,pathB,x,y);
-  else if (dip_type == CLOSEST_TO_CONFLICT) dip_found = computeClosestDIPToConflict(a,b,info,encoder,x,y);
-  else if (dip_type == RANDOM_DIP) dip_found = computeRandomDIP(a,b,info,encoder,x,y);
-  else if (dip_type == HEURISTIC_DIP) dip_found = computeHeuristicDIP(a,b,info,encoder,pathA,pathB,x,y);
+  if (dip_type == MIDDLE_DIP) dip_found = computeBestMiddleDIP(info,encoder,x,y);
+  else if (dip_type == CLOSEST_TO_CONFLICT) dip_found = computeClosestDIPToConflict(avoidFirsts,info,encoder,x,y);
+  else if (dip_type == RANDOM_DIP) dip_found = computeRandomDIP(avoidFirsts,info,encoder,x,y);
+  else if (dip_type == HEURISTIC_DIP) dip_found = computeHeuristicDIP(avoidFirsts, info, encoder, x, y);
   else assert(false);
 
   if (not dip_found) return false;
@@ -895,7 +956,7 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     }
 	
     // Iterate through every literal that participates in the conflict graph
-    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+    for (int j = (p == lit_Undef) ? 0 : 1; j < (int)c.size(); j++) {
       Lit q = c[j];
       if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
@@ -933,7 +994,7 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
   //solver.branchingHeuristicManager.nextDecisionBestOf(~x,~y); 
 
   // Clear marks
-  for (int i = 0; i < afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
+  for (int i = 0; i < (int)afterLits.size(); ++i) seen3[var(afterLits[i])] = false;
   seen3[var(x)] = seen3[var(y)] = false;
   assert(checkSeen3());
 
@@ -1026,7 +1087,7 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
     }
 
     // Iterate through every literal that participates in the conflict graph
-    for (int j = 1; j < c.size(); j++) {
+    for (int j = 1; j < (int)c.size(); j++) {
       Lit q = c[j];
       if (seen3[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
@@ -1064,7 +1125,7 @@ bool ConflictAnalyzer::computeDIPClauses (int a, int b, CRef confl, TwoVertexBot
   }
 
   // Clear marks
-  for (int i = 0; i < clause_to_learn2.size(); ++i) seen3[var(clause_to_learn2[i])] = false;
+  for (int i = 0; i < (int)clause_to_learn2.size(); ++i) seen3[var(clause_to_learn2[i])] = false;
   seen3[var(p)] = seen3[var(x)] = seen3[var(y)] = false;
   
   assert(checkSeen3());
@@ -1092,7 +1153,7 @@ void ConflictAnalyzer::writeEdgeInGraph (ofstream& out, const Lit& orig, const L
   out << endl;
 }
 
-void ConflictAnalyzer::writeDIPComputationInfo (TwoVertexBottlenecks& info, DIPGraphEncoder& encoder, const vector<int>& predecessors, const vector<Lit>& predecessorsLits, const vector<int>& predIndex, const vector<Lit>& literalsInAnalysis, bool foundDIP, const vector<int>& pathA, const vector<int>& pathB) {
+void ConflictAnalyzer::writeDIPComputationInfo (TwoVertexBottlenecks& info, DIPGraphEncoder& encoder, const vector<int>& predecessors, const vector<Lit>& predecessorsLits, const vector<int>& predIndex, const vector<Lit>& literalsInAnalysis, bool foundDIP) {
   cout << endl;
   cout << endl;
   cout << string(60,'=') << endl;
@@ -1117,6 +1178,8 @@ void ConflictAnalyzer::writeDIPComputationInfo (TwoVertexBottlenecks& info, DIPG
   vector<TwoVertexBottlenecks::VertPairInfo> listA = info.GetVertListA();
   vector<TwoVertexBottlenecks::VertPairInfo> listB = info.GetVertListB();
 
+  const vector<int> pathA = info.GetPathA();
+  const vector<int> pathB = info.GetPathB();
   cout << string(30,'-') << endl;
   cout << "pathA: ";
   for (int x : pathA) cout << x << " ";
@@ -1126,19 +1189,17 @@ void ConflictAnalyzer::writeDIPComputationInfo (TwoVertexBottlenecks& info, DIPG
   cout << endl << endl;
 
   cout << "List A: " << endl;
-  for (int i = 0; i < listA.size(); ++i){
-    cout << "Vertex[" << i << "]: " << listA[i].vertNum << " --> lit " << encoder.Sam2Solver(listA[i].vertNum) << endl;
-    cout << "minPair: " << listA[i].minPair << endl; 
-    cout << "maxPair: " << listA[i].maxPair << endl;
+  for (int i = 0; i < (int)listA.size(); ++i){
+    cout << "Vertex[" << i << "]: " << listA[i].vertNum << " --> lit " << encoder.Sam2Solver(listA[i].vertNum) << "  ";
+    cout << "min&max-PairIdx: " << listA[i].minPairIdx << " - " << listA[i].maxPairIdx << "  "; 
     cout << "minAncestor: " << listA[i].minAncestor << endl;
   }
 
   cout << endl;
   cout << "List B: " << endl;
-  for (int i = 0; i < listB.size(); ++i){
-    cout << "Vertex[" << i << "]: " << listB[i].vertNum << " --> lit " << encoder.Sam2Solver(listB[i].vertNum) << endl;
-    cout << "minPair: " << listB[i].minPair << endl; 
-    cout << "maxPair: " << listB[i].maxPair << endl;
+  for (int i = 0; i < (int)listB.size(); ++i){
+    cout << "Vertex[" << i << "]: " << listB[i].vertNum << " --> lit " << encoder.Sam2Solver(listB[i].vertNum) << "  ";
+    cout << "min&max-PairIdx: " << listB[i].minPairIdx << " - " << listB[i].maxPairIdx << "  "; 
     cout << "minAncestor: " << listB[i].minAncestor << endl;
   }
 }
@@ -1156,7 +1217,9 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
 
   //if (solver.conflicts == 45) exit(1);
   //bool write = solver.conflicts == 44; // To write conflict graph only of a concrete conflict
-#define write 0 // quicker for release mode
+  //#define write 0 // quicker for release mode
+#define write 1 // Write out graphs and etc.
+  write_SRB = write;      // SAM'S DEBUGGING write_SRB is defined globally
   if (write) {
     outAll.open(filename1.c_str(),fstream::out);
     outCurrent.open(filename2.c_str(),fstream::out);
@@ -1184,7 +1247,7 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
   literalsInAnalysis.push_back(mkLit(assignmentTrail.nVars(),false)); // Fake literal corresponding to conflict
   predIndex.push_back(predecessorsLits.size());      
   Clause& confClause = ca[confl];  
-  for (int i = 0; i < confClause.size(); ++i) {
+  for (int i = 0; i < (int)confClause.size(); ++i) {
     if (write) writeEdgeInGraph(outAll,~confClause[i],mkLit(assignmentTrail.nVars(),false),confClause.learnt());
     if (assignmentTrail.level(var(confClause[i])) == assignmentTrail.decisionLevel()) {
       predecessorsLits.push_back(~confClause[i]);       	
@@ -1217,7 +1280,7 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
     solver.clauseDatabase.handleEventClauseInConflictGraph(confl, solver.conflicts);
 
     // Iterate through every literal that participates in the conflict graph
-    for (int j = (p == lit_Undef) ? 0 : 1; j < c.size(); j++) {
+    for (int j = (p == lit_Undef) ? 0 : 1; j < (int)c.size(); j++) {
       Lit q = c[j];
       if (seen[var(q)] || assignmentTrail.level(var(q)) == 0) continue;
 
@@ -1248,7 +1311,7 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
       Clause& cTmp = ca[confl];
       literalsInAnalysis.push_back(p);
       predIndex.push_back(predecessorsLits.size());	    
-      for (int i = 0; i < cTmp.size(); ++i)
+      for (int i = 0; i < (int)cTmp.size(); ++i)
 	if (var(cTmp[i]) != var(p)) {
 	  if (write) writeEdgeInGraph(outAll,~cTmp[i],p,cTmp.learnt());		
 	  if (assignmentTrail.level(var(cTmp[i])) == assignmentTrail.decisionLevel()) {
@@ -1284,54 +1347,45 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
   for (auto lit : literalsInAnalysis) encoder.Solver2Sam(lit); // encode in topological order
   for (auto lit : predecessorsLits) predecessors.push_back(encoder.Solver2Sam(lit)); // map vec<Lit> to vec<int>
   TwoVertexBottlenecks dip;
-  vector<int> pathA, pathB; // the two disjoint paths
-  int res = dip.CalcBottlenecks(predecessors,predIndex,pathA,pathB);
+  int res = dip.CalcBottlenecks(predecessors,predIndex);
   
-  foundDIP =  (res > 0);
+  foundDIP =  (res > 0);	// Return code res == 1 if DIP's were found.
   
   
   if (write) 
-    writeDIPComputationInfo(dip,encoder,predecessors,predecessorsLits,predIndex,literalsInAnalysis,foundDIP,pathA,pathB);
+    writeDIPComputationInfo(dip,encoder,predecessors,predecessorsLits,predIndex,literalsInAnalysis,foundDIP);
   
   if (foundDIP) {
     
     ++conflicts_with_dip;
     
-    // Decode
-    //    The return code res will equal:
-    //                  res = 4 + 2a + b
-    //    where:  a==1 if the first element of VertPairListA is an immediate
-    //                 ancestor of the sink node
-    //            b==1 if the first element of VertPairListB is an immediate
-    //                 ancestor of the sink node
-    //    and a, b are otherwise equal to 0.    
-    res -=4;
-    int b = res%2;
-    res/=2;
-    int a = res;     
+    // True if the first members of the two paths should NOT be used as a DIP:
+    bool avoidFirsts = (ca[origConfl].size() == 2);	
+    if (write_SRB)
+      cout << endl << "Avoid firsts: " << (avoidFirsts ? "TRUE" : "FALSE") << endl;
     
     vec<Lit> dip_clause_to_learn;
     vec<Lit> dip_clause_to_learn2;
     
-    bool ok = computeDIPClauses(a,b,origConfl,dip,encoder,dip_clause_to_learn,dip_clause_to_learn2,UIP,pathA, pathB);
+    bool ok = computeDIPClauses(avoidFirsts,origConfl,dip,encoder,dip_clause_to_learn,dip_clause_to_learn2,UIP);
     // If DIP-clause learning seems a good idea
     if (ok) {
 	// Clear seen marks
-      for (int i = 1; i < out_learnt.size(); ++i) seen[var(out_learnt[i])] = false; // clearing the 1st UIP lemma
-      if (learn_two_DIP_clauses) for (int i = 0; i < dip_clause_to_learn.size(); ++i) seen[var(dip_clause_to_learn[i])] = true;
+      for (int i = 1; i < (int)out_learnt.size(); ++i) seen[var(out_learnt[i])] = false; // clearing the 1st UIP lemma
+      if (learn_two_DIP_clauses) for (int i = 0; i < (int)dip_clause_to_learn.size(); ++i) seen[var(dip_clause_to_learn[i])] = true;
 #if DEBUG
-      for (int k = 1; k < dip_clause_to_learn.size(); ++k)
+      for (int k = 1; k < (int)dip_clause_to_learn.size(); ++k)
 	assert(assignmentTrail.value(dip_clause_to_learn[k]) == l_False);
 #endif 	  
       // Copy dip_clause_to_learn (DIP -> conflict) to out_learnt
       out_learnt.clear();
-      for (int i = 0; i < dip_clause_to_learn.size() ;++i)
+      for (int i = 0; i < (int)dip_clause_to_learn.size() ;++i)
 	out_learnt.push(dip_clause_to_learn[i]);
       
       if (learn_two_DIP_clauses) {
 	// Copy dip_clause_to_learn2 (1UIP -> conflict) to out_learnt_UIP_to_DIP
 	out_learnt_UIP_to_DIP.clear();
-	for (int i = 0; i < dip_clause_to_learn2.size() ;++i)
+	for (int i = 0; i < (int)dip_clause_to_learn2.size() ;++i)
 	  out_learnt_UIP_to_DIP.push(dip_clause_to_learn2[i]);
       }
       
@@ -1370,12 +1424,12 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
 inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& simplified, const vec<Lit>& toSimplify) {
   // Initialize abstraction of levels involved in conflict
   uint32_t abstract_level = 0;
-  for (int i = 1; i < toSimplify.size(); i++)
+  for (int i = 1; i < (int)toSimplify.size(); i++)
     abstract_level |= assignmentTrail.abstractLevel(var(toSimplify[i]));
 
   // Copy non-redundant literals
   simplified.push(toSimplify[0]);
-  for (int i = 1; i < toSimplify.size(); i++) {
+  for (int i = 1; i < (int)toSimplify.size(); i++) {
     if (// Keep decision literals
 	assignmentTrail.reason(var(toSimplify[i])) == CRef_Undef ||
             
@@ -1387,7 +1441,7 @@ inline void ConflictAnalyzer::simplifyClauseDeep(vec<Lit>& simplified, const vec
 
 inline bool ConflictAnalyzer::reasonSubsumed(const Clause& c) {
   // Iterate through every variable in the reason clause, ignoring the propagated variable
-  for (int k = c.size() == 2 ? 0 : 1; k < c.size(); k++) {
+  for (int k = c.size() == 2 ? 0 : 1; k < (int)c.size(); k++) {
     // If a non-root variable is not in the learnt clause, the reason clause is not subsumed!
     if (!seen[var(c[k])] && assignmentTrail.level(var(c[k])) > 0)
       return false;
@@ -1399,7 +1453,7 @@ inline bool ConflictAnalyzer::reasonSubsumed(const Clause& c) {
 inline void ConflictAnalyzer::simplifyClauseBasic(vec<Lit>& simplified, const vec<Lit>& toSimplify) {
   // Iterate through every variable in the learnt clause (excluding the asserting literal)
   simplified.push(toSimplify[0]);
-  for (int i = 1; i < toSimplify.size(); i++){
+  for (int i = 1; i < (int)toSimplify.size(); i++){
     const CRef reason = assignmentTrail.reason(var(toSimplify[i]));
     if (// Keep decision variables
 	reason == CRef_Undef ||
@@ -1424,7 +1478,7 @@ inline void ConflictAnalyzer::enforceWatcherInvariant(vec<Lit>& learntClause) {
 
   // Find the first literal assigned at the next-highest level:
   int max_i = 1;
-  for (int i = 2; i < learntClause.size(); i++) {
+  for (int i = 2; i < (int)learntClause.size(); i++) {
     if (assignmentTrail.level(var(learntClause[i])) > assignmentTrail.level(var(learntClause[max_i])))
       max_i = i;
   }
@@ -1439,7 +1493,7 @@ void ConflictAnalyzer::notifyERManager(ERManager* erm) {
 
 bool ConflictAnalyzer::checkSeen ( ){
   int t = 0;
-  for (int i = 0; i < seen.size(); ++i)
+  for (int i = 0; i < (int)seen.size(); ++i)
     if (seen[i] and assignmentTrail.value(mkLit(i)) != l_Undef and assignmentTrail.level(i) != 0) {
       cout << "Error with " << i << endl;
       ++t;
@@ -1449,7 +1503,7 @@ bool ConflictAnalyzer::checkSeen ( ){
 
 bool ConflictAnalyzer::checkSeen3 ( ){
   int t = 0;
-  for (int i = 0; i < seen3.size(); ++i)
+  for (int i = 0; i < (int)seen3.size(); ++i)
     if (seen3[i] and assignmentTrail.value(mkLit(i)) != l_Undef and assignmentTrail.level(i) != 0) {
       cout << "Error3 with " << i << endl;
       ++t;
