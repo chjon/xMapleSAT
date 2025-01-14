@@ -623,8 +623,13 @@ bool ConflictAnalyzer::computeClosestDIPToConflict (bool avoidFirsts, TwoVertexB
 
   if ( avoidFirsts ) {
     if (szA == 1 && szB == 1) return false;
-    if ( szB > 1 && listA[0].maxPairIdx >= 1 ) idxB = 1;
-    if ( szA > 1 && listB[0].maxPairIdx >= 1 ) idxA = 1;
+    if (szB > 1 && listA[0].maxPairIdx >= 1) idxB = 1;
+    if (szA > 1 && listB[0].maxPairIdx >= 1) idxA = 1;
+    else if (idxA == 0 && idxB == 0) {
+      if (write_SRB) cout << "Forced double-jump in conflict graph." << endl;
+      idxA = 1;
+      idxB = 1;
+    }
   }
 
   x = encoder.Sam2Solver(listA[idxA].vertNum);
@@ -1217,9 +1222,18 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
 
   //if (solver.conflicts == 45) exit(1);
   //bool write = solver.conflicts == 44; // To write conflict graph only of a concrete conflict
-  //#define write 0 // quicker for release mode
-#define write 1 // Write out graphs and etc.
+  #define write 0 // quicker for release mode
+  // #define write 1 // Write out graphs and etc.
   write_SRB = write;      // SAM'S DEBUGGING write_SRB is defined globally
+
+  // avoidFirsts is True if the first members of the two paths should NOT be used as a DIP:
+  bool avoidFirsts = (ca[confl].size() == 2);	
+  
+  //bool write = avoidFirsts;
+  //write_SRB = write_SRB || avoidFirsts;
+  if (write_SRB)
+    cout << endl << "Avoid firsts: " << (avoidFirsts ? "TRUE" : "FALSE") << endl;
+ 
   if (write) {
     outAll.open(filename1.c_str(),fstream::out);
     outCurrent.open(filename2.c_str(),fstream::out);
@@ -1268,6 +1282,7 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
   out_learnt.push(); // (leave room for the asserting literal)
 
   do {
+    
     assert(confl != CRef_Undef); // (otherwise should be UIP)
     Clause& c = ca[confl];
 
@@ -1358,12 +1373,7 @@ inline bool ConflictAnalyzer::getDIPLearntClauses (CRef confl, vec<Lit>& out_lea
   if (foundDIP) {
     
     ++conflicts_with_dip;
-    
-    // True if the first members of the two paths should NOT be used as a DIP:
-    bool avoidFirsts = (ca[origConfl].size() == 2);	
-    if (write_SRB)
-      cout << endl << "Avoid firsts: " << (avoidFirsts ? "TRUE" : "FALSE") << endl;
-    
+       
     vec<Lit> dip_clause_to_learn;
     vec<Lit> dip_clause_to_learn2;
     
