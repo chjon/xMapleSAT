@@ -761,7 +761,7 @@ bool ConflictAnalyzer::computeBestMiddleDIP (const TwoVertexBottlenecks& info, c
 
 const DIPGraphEncoder* encoderAct;
 const vec<double>* actsPtr;
-bool actsCombineAdd;   // Since there are negative activity values, must use addition!
+bool actsCombineAdd;   // Since there are negative activity values, must use addition!  (SRB: Negative could indicate a bug!)
 template<typename ACTIVITY>
 ACTIVITY ActivityOf(int i) {
   return (*actsPtr)[var(encoderAct->Sam2Solver(i))];
@@ -781,10 +781,18 @@ ACTIVITY CombineActivities(ACTIVITY act1, ACTIVITY act2) {
   return ret;
 }
 
+int SRB_tempDistFlag = -1;
 
 bool ConflictAnalyzer::computeHeuristicDIP (bool avoidFirsts, const TwoVertexBottlenecks& info, const DIPGraphEncoder& encoder, Lit& x, Lit& y) {
   actsPtr = &branchingHeuristicManager.getActivity(); // indexed by variable
   actsCombineAdd = (branchingHeuristicManager.DISTANCE);
+  if (write_SRB) {
+    int SRB_newDistCode = actsCombineAdd ? 1 : 2;
+    if (SRB_newDistCode != SRB_tempDistFlag) {
+      SRB_tempDistFlag = SRB_newDistCode;
+      cout << "DISTANCE = " << (SRB_tempDistFlag == 1 ? "TRUE" : "FALSE" ) << endl;
+    }
+  }
   if (write_SRB) cout << "CombineAdd = " << (actsCombineAdd ? "TRUE" : "FALSE") << endl;
   encoderAct = &encoder;
   
@@ -804,14 +812,14 @@ bool ConflictAnalyzer::computeHeuristicDIP (bool avoidFirsts, const TwoVertexBot
   }
 
   if (write_SRB) {
-    cout << "Path A activities (Vert,Act.): ";
+    cout << "Path A activities (Vert,Var,Act.): ";
     for ( unsigned int i = 0; i<listA.size(); i++ ) {
-      cout << "(" << listA[i].vertNum << "," << ActivityOf<double>(listA[i].vertNum) << "),";
+      cout << "(" << listA[i].vertNum << "," << var(encoderAct->Sam2Solver(listA[i].vertNum)) << "," << ActivityOf<double>(listA[i].vertNum) << "),";
     }
     cout << endl;
-    cout << "Path B activities (Vert,Act.): ";
+    cout << "Path B activities (Vert,Var,Act.): ";
     for ( unsigned int i = 0; i<listB.size(); i++ ) {
-      cout << "(" << listB[i].vertNum << "," << ActivityOf<double>(listB[i].vertNum) << "),";
+      cout << "(" << listB[i].vertNum << "," << var(encoderAct->Sam2Solver(listB[i].vertNum)) << "," << ActivityOf<double>(listB[i].vertNum) << "),";
     }
     cout << endl;
   }

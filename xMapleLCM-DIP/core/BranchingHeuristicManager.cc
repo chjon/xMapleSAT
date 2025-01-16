@@ -26,6 +26,9 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 using namespace Minisat;
 using namespace std;
 
+// #define write_SRB true
+#define write_SRB false
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // OPTIONS
 
@@ -179,7 +182,8 @@ void BranchingHeuristicManager::switchHeuristic(void) {
 }
 
 static inline void getExponentialDecaySeries(
-					     vec<int>& decays,
+					     vec<double>& decays, // SRB: Changed int to double
+					     // SRB: OLD CODE: vec<int>& decays,
 					     int length,
 					     double initialDecay,
 					     double decayFactor
@@ -196,8 +200,17 @@ static inline void bumpActivityDistance(
 					H& heap,
 					Var v,
 					double bump,
-					vec<int>& level_incs
+					vec<double>& level_incs   // SRB: Changed "int" to "double"
+					// SRB: OLD CODE: vec<int>& level_incs
 					) {
+
+  if (write_SRB) {
+    if (v == 12 || v == 13) {
+      cout << "v, oldactivity, bump, newact = " << v << ", "  << activity[v] << ", "
+            << bump << ", "  << activity[v] + bump << endl;
+    }
+  }
+
   // Bump variable activity
   activity[v] += bump;
 
@@ -218,14 +231,29 @@ void BranchingHeuristicManager::updateActivityDistance(
 						       int maxDistance
 						       ) {
   // Compute exponential decay series
-  vec<int> level_incs;
+  // SRC : OLD VERSION: vec<int> level_incs;
+  vec<double> level_incs;   // SRB changed this
   getExponentialDecaySeries(level_incs, maxDistance, var_iLevel_inc, my_var_decay);
 
   // Update variable activities
+  bool negBump_writeSRB = false;
   for (int i = 0; i < involvedVars.size(); i++) {
     Var v = involvedVars[i];
     const double bump = static_cast<double>(varDist[v]) * level_incs[varDist[v] - 1];
+    if ( write_SRB ) {
+      if ( bump <= 0 ) {
+        cout << "bump=" << bump << "; var=" << v << "; varDist[v]=" << varDist[v] 
+             << "; level_inc(.-1)=" << level_incs[varDist[v] - 1] << endl;
+        negBump_writeSRB = true;
+      }
+    }
+
     bumpActivityDistance(activity_distance, order_heap_distance, v, bump, level_incs);
+  }
+
+  if (write_SRB /* && negBump_writeSRB */) {
+    cout << "maxDistance=" << maxDistance << ". There were " << involvedVars.size() << " many variables bumped." << endl;
+    cout << "var_iLevel_inc, my_var_decay = " << var_iLevel_inc << ", " << my_var_decay << endl;
   }
 
   var_iLevel_inc = level_incs.last();
@@ -323,7 +351,7 @@ void BranchingHeuristicManager::notifyDIPCandidateWindow(Lit x, Lit y) {
     lastAddedInDIPWindow = DIPWindow.size() - 1;
   }
   else {
-    assert(DIPWindow.size() == DIP_WINDOW_SIZE);
+    assert((int)DIPWindow.size() == DIP_WINDOW_SIZE);
     int idxToRemove = (lastAddedInDIPWindow + 1)%DIP_WINDOW_SIZE;
     sumActiviesInWindow -= DIPWindow[idxToRemove];
     sumActiviesInWindow += act;
